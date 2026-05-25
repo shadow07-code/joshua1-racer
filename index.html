@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f380f" />
+  <meta name="description" content="Joshua 1 Racer — an 8-bit GameBoy-style top-down racer. Tap to play." />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Joshua1" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="./icons/icon.svg" />
+  <!-- apple-touch-icon.png is optional; generate via tools/generate-icons.html for older iOS -->
+  <link rel="apple-touch-icon" href="./icons/icon.svg" />
+  <title>Joshua 1 Racer</title>
+  <style>
+    :root {
+      --dmg-darkest: #0f380f;
+      --dmg-dark:    #306230;
+      --dmg-light:   #8bac0f;
+      --dmg-lightest:#9bbc0f;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; padding: 0; height: 100%;
+      background: var(--dmg-darkest);
+      overscroll-behavior: none;
+      touch-action: none;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-user-select: none;
+      user-select: none;
+      font-family: ui-monospace, "Courier New", monospace;
+      color: var(--dmg-lightest);
+    }
+    body {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+    #stage {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      flex: 1 1 auto;
+      min-height: 0;
+    }
+    canvas#game {
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+      background: var(--dmg-lightest);
+      display: block;
+      height: 100%;
+      width: auto;
+      max-width: 100%;
+      box-shadow: 0 0 0 4px var(--dmg-dark), 0 0 0 8px var(--dmg-darkest);
+      border-radius: 2px;
+    }
+    /* PWA install banner */
+    #install-banner {
+      position: fixed;
+      left: 50%;
+      bottom: 12px;
+      transform: translateX(-50%);
+      background: var(--dmg-darkest);
+      color: var(--dmg-lightest);
+      border: 2px solid var(--dmg-light);
+      padding: 8px 12px;
+      font-size: 12px;
+      line-height: 1.3;
+      display: none;
+      align-items: center;
+      gap: 10px;
+      max-width: calc(100% - 24px);
+      z-index: 10;
+      letter-spacing: 1px;
+    }
+    #install-banner.show { display: flex; }
+    #install-banner button {
+      background: var(--dmg-light);
+      color: var(--dmg-darkest);
+      border: 2px solid var(--dmg-lightest);
+      padding: 4px 8px;
+      font: inherit;
+      font-weight: bold;
+      cursor: pointer;
+      letter-spacing: 1px;
+    }
+    #install-banner button.ghost {
+      background: transparent;
+      color: var(--dmg-lightest);
+      border-color: var(--dmg-dark);
+    }
+    #install-banner .msg { flex: 1; }
+    /* Mute / pause buttons — placed below canvas, not overlapping it */
+    #toolbar {
+      display: flex;
+      gap: 6px;
+      padding: 4px;
+      z-index: 5;
+    }
+    #toolbar button {
+      background: var(--dmg-darkest);
+      color: var(--dmg-lightest);
+      border: 2px solid var(--dmg-light);
+      width: 40px;
+      height: 32px;
+      font: inherit;
+      font-size: 14px;
+      cursor: pointer;
+      letter-spacing: 1px;
+    }
+    @media (orientation: landscape) and (max-width: 900px) {
+      canvas#game { height: 100vh; }
+    }
+  </style>
+</head>
+<body>
+  <div id="toolbar">
+    <button id="btn-mute" title="Mute (M)" aria-label="Mute">♪</button>
+    <button id="btn-pause" title="Pause (P)" aria-label="Pause">II</button>
+  </div>
+
+  <div id="stage">
+    <canvas id="game" width="160" height="240"></canvas>
+  </div>
+
+  <div id="install-banner" role="dialog" aria-label="Install Joshua 1 Racer">
+    <span class="msg" id="install-msg">📲 ADD TO HOME SCREEN — PLAY OFFLINE</span>
+    <button id="install-yes">INSTALL</button>
+    <button id="install-no" class="ghost">×</button>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>

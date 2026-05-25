@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" shape-rendering="crispEdges">
+  <!-- Maskable: fill 100% with theme; keep important content inside the safe zone (center 80%). -->
+  <rect width="64" height="64" fill="#0f380f"/>
+  <!-- Inner safe zone artwork: a stylized car on a green road, centered. -->
+  <rect x="20" y="8"  width="24" height="48" fill="#306230"/>
+  <rect x="19" y="8"  width="1"  height="48" fill="#0f380f"/>
+  <rect x="44" y="8"  width="1"  height="48" fill="#0f380f"/>
+  <g fill="#8bac0f">
+    <rect x="31" y="12" width="2" height="4"/>
+    <rect x="31" y="22" width="2" height="4"/>
+    <rect x="31" y="32" width="2" height="4"/>
+    <rect x="31" y="42" width="2" height="4"/>
+  </g>
+  <!-- car -->
+  <rect x="24" y="30" width="16" height="2"  fill="#9bbc0f"/>
+  <rect x="22" y="32" width="20" height="2"  fill="#0f380f"/>
+  <rect x="22" y="34" width="20" height="14" fill="#8bac0f"/>
+  <rect x="24" y="36" width="16" height="10" fill="#9bbc0f"/>
+  <rect x="24" y="40" width="16" height="2"  fill="#8bac0f"/>
+  <rect x="26" y="32" width="12" height="2"  fill="#0f380f"/>
+  <rect x="26" y="44" width="12" height="2"  fill="#0f380f"/>
+</svg>

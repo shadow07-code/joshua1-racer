@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" shape-rendering="crispEdges">
+  <!-- DMG palette -->
+  <rect width="64" height="64" fill="#9bbc0f"/>
+  <!-- Road -->
+  <rect x="14" y="0" width="36" height="64" fill="#306230"/>
+  <rect x="13" y="0" width="1"  height="64" fill="#0f380f"/>
+  <rect x="50" y="0" width="1"  height="64" fill="#0f380f"/>
+  <!-- Lane dashes -->
+  <g fill="#8bac0f">
+    <rect x="31" y="4"  width="2" height="6"/>
+    <rect x="31" y="16" width="2" height="6"/>
+    <rect x="31" y="28" width="2" height="6"/>
+    <rect x="31" y="40" width="2" height="6"/>
+    <rect x="31" y="52" width="2" height="6"/>
+  </g>
+  <!-- Player car (centered around 32, 40) -->
+  <g shape-rendering="crispEdges">
+    <!-- roof -->
+    <rect x="24" y="32" width="16" height="2" fill="#9bbc0f"/>
+    <rect x="22" y="34" width="20" height="2" fill="#0f380f"/>
+    <rect x="20" y="36" width="24" height="14" fill="#8bac0f"/>
+    <rect x="22" y="38" width="20" height="10" fill="#9bbc0f"/>
+    <rect x="22" y="42" width="20" height="2" fill="#8bac0f"/>
+    <!-- windows -->
+    <rect x="26" y="34" width="12" height="2" fill="#0f380f"/>
+    <rect x="26" y="46" width="12" height="2" fill="#0f380f"/>
+    <!-- tires -->
+    <rect x="18" y="38" width="2" height="4" fill="#0f380f"/>
+    <rect x="44" y="38" width="2" height="4" fill="#0f380f"/>
+    <rect x="18" y="46" width="2" height="4" fill="#0f380f"/>
+    <rect x="44" y="46" width="2" height="4" fill="#0f380f"/>
+  </g>
+</svg>

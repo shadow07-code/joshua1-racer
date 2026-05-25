@@ -1,0 +1,26 @@
+{
+  "name": "Joshua 1 Racer",
+  "short_name": "Joshua1",
+  "description": "An 8-bit GameBoy-style top-down car racing game. Endless survival, two maps, chiptune music.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f380f",
+  "theme_color": "#0f380f",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    {
+      "src": "./icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-maskable.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

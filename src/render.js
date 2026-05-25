@@ -1,0 +1,118 @@
+// Canvas helpers — draws are constrained to the DMG palette indices 0..3.
+import { PALETTE, W, H } from "./config.js";
+
+export function getCtx(canvas) {
+  const ctx = canvas.getContext("2d", { alpha: false });
+  ctx.imageSmoothingEnabled = false;
+  return ctx;
+}
+
+export function clear(ctx, paletteIdx = 3) {
+  ctx.fillStyle = PALETTE[paletteIdx];
+  ctx.fillRect(0, 0, W, H);
+}
+
+export function rect(ctx, x, y, w, h, paletteIdx) {
+  ctx.fillStyle = PALETTE[paletteIdx];
+  ctx.fillRect(x | 0, y | 0, w | 0, h | 0);
+}
+
+// Draw a sprite (2D array of palette indices, where -1 = transparent).
+// Sprite cell size is 1×1 logical pixel.
+export function drawSprite(ctx, sprite, x, y, flipX = false) {
+  const rows = sprite.length;
+  for (let r = 0; r < rows; r++) {
+    const row = sprite[r];
+    for (let c = 0; c < row.length; c++) {
+      const idx = row[c];
+      if (idx < 0) continue;
+      ctx.fillStyle = PALETTE[idx];
+      const cx = flipX ? (row.length - 1 - c) : c;
+      ctx.fillRect((x + cx) | 0, (y + r) | 0, 1, 1);
+    }
+  }
+}
+
+// 3x5 pixel font — uppercase A-Z, 0-9, plus a few symbols.
+// Each glyph is a 3-wide, 5-tall array of 0/1.
+const FONT_3x5 = (() => {
+  const G = {};
+  const def = (ch, rows) => {
+    G[ch] = rows.map(s => [...s].map(c => (c === "1" ? 1 : 0)));
+  };
+  def(" ", ["000","000","000","000","000"]);
+  def("A", ["010","101","111","101","101"]);
+  def("B", ["110","101","110","101","110"]);
+  def("C", ["011","100","100","100","011"]);
+  def("D", ["110","101","101","101","110"]);
+  def("E", ["111","100","110","100","111"]);
+  def("F", ["111","100","110","100","100"]);
+  def("G", ["011","100","101","101","011"]);
+  def("H", ["101","101","111","101","101"]);
+  def("I", ["111","010","010","010","111"]);
+  def("J", ["001","001","001","101","010"]);
+  def("K", ["101","110","100","110","101"]);
+  def("L", ["100","100","100","100","111"]);
+  def("M", ["101","111","111","101","101"]);
+  def("N", ["101","111","111","111","101"]);
+  def("O", ["010","101","101","101","010"]);
+  def("P", ["110","101","110","100","100"]);
+  def("Q", ["010","101","101","111","011"]);
+  def("R", ["110","101","110","101","101"]);
+  def("S", ["011","100","010","001","110"]);
+  def("T", ["111","010","010","010","010"]);
+  def("U", ["101","101","101","101","011"]);
+  def("V", ["101","101","101","010","010"]);
+  def("W", ["101","101","111","111","101"]);
+  def("X", ["101","101","010","101","101"]);
+  def("Y", ["101","101","010","010","010"]);
+  def("Z", ["111","001","010","100","111"]);
+  def("0", ["010","101","101","101","010"]);
+  def("1", ["010","110","010","010","111"]);
+  def("2", ["110","001","010","100","111"]);
+  def("3", ["110","001","010","001","110"]);
+  def("4", ["101","101","111","001","001"]);
+  def("5", ["111","100","110","001","110"]);
+  def("6", ["011","100","110","101","010"]);
+  def("7", ["111","001","010","010","010"]);
+  def("8", ["010","101","010","101","010"]);
+  def("9", ["010","101","011","001","110"]);
+  def("!", ["010","010","010","000","010"]);
+  def(":", ["000","010","000","010","000"]);
+  def(".", ["000","000","000","000","010"]);
+  def("-", ["000","000","111","000","000"]);
+  def("/", ["001","001","010","100","100"]);
+  def("X", ["101","101","010","101","101"]); // alias
+  def("+", ["000","010","111","010","000"]);
+  def("*", ["000","101","010","101","000"]);
+  def("?", ["110","001","010","000","010"]);
+  return G;
+})();
+
+export function text(ctx, str, x, y, paletteIdx = 0, scale = 1) {
+  const upper = String(str).toUpperCase();
+  let cx = x;
+  for (let i = 0; i < upper.length; i++) {
+    const g = FONT_3x5[upper[i]] || FONT_3x5["?"];
+    for (let r = 0; r < 5; r++) {
+      for (let c = 0; c < 3; c++) {
+        if (g[r][c]) {
+          ctx.fillStyle = PALETTE[paletteIdx];
+          ctx.fillRect((cx + c * scale) | 0, (y + r * scale) | 0, scale, scale);
+        }
+      }
+    }
+    cx += (3 + 1) * scale; // 1px tracking
+  }
+  return cx; // returns next x
+}
+
+export function textCentered(ctx, str, y, paletteIdx = 0, scale = 1) {
+  const w = String(str).length * 4 * scale - scale;
+  text(ctx, str, ((W - w) / 2) | 0, y, paletteIdx, scale);
+}
+
+export function textRight(ctx, str, x, y, paletteIdx = 0, scale = 1) {
+  const w = String(str).length * 4 * scale - scale;
+  text(ctx, str, x - w, y, paletteIdx, scale);
+}
