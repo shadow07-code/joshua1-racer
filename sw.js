@@ -1,6 +1,6 @@
 // Joshua 1 Racer — service worker
 // Cache-first for app shell; network-fallback for everything else.
-const VERSION = "joshua1-v10";
+const VERSION = "joshua1-v12";
 const ASSETS = [
   "./",
   "./index.html",

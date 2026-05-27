@@ -47,26 +47,20 @@ export function drawRoad(ctx, map, playerZ) {
     rect(ctx, (cx + halfW + 1) | 0, y, 2, 1, rIdx);
   }
 
-  // Solid white edge lines
-  rect(ctx, (cx - halfW) | 0, 0, 2, H, 1);
-  rect(ctx, (cx + halfW - 2) | 0, 0, 2, H, 1);
+  // ── Lane markings ──
+  // Just ONE thicker white center dashed line — no edge lines, no side dividers.
+  // The asphalt vs grass color contrast is enough to read the road boundary.
+  const pxPerMeter = PLAYER_Y / VIEW_AHEAD_METERS;
+  const scrollPx = playerZ * pxPerMeter;
 
-  // Two inner dashed dividers + center yellow dash
-  const innerOffset = Math.floor(halfW * 0.5);
-  const shortDash = 6, shortGap = 10;
-  const sPeriod = shortDash + shortGap;
-  const sOff = ((playerZ * 8) % sPeriod + sPeriod) % sPeriod;
-  for (let y = -shortDash; y < H; y += sPeriod) {
-    const top = (y + sOff) | 0;
-    rect(ctx, (cx - innerOffset - 1) | 0, top, 2, shortDash, 1);
-    rect(ctx, (cx + innerOffset - 1) | 0, top, 2, shortDash, 1);
-  }
-  const longDash = 12, longGap = 10;
-  const lPeriod = longDash + longGap;
-  const lOff = ((playerZ * 8) % lPeriod + lPeriod) % lPeriod;
-  for (let y = -longDash; y < H; y += lPeriod) {
-    const top = (y + lOff) | 0;
-    rect(ctx, (cx - 1) | 0, top, 2, longDash, 5);
+  const dashLen = 16;      // longer dashes since it's the only one
+  const dashGap = 12;
+  const dashW = 4;         // thicker than the previous 2px
+  const period = dashLen + dashGap;
+  const offset = ((scrollPx) % period + period) % period;
+  for (let y = -dashLen; y < H; y += period) {
+    const top = (y + offset) | 0;
+    rect(ctx, (cx - dashW / 2) | 0, top, dashW, dashLen, 1);
   }
 }
 

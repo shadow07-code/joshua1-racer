@@ -1,4 +1,8 @@
-// Main game loop + state machine.
+// Main game loop + state machine — ENDLESS SURVIVAL mode.
+//
+// No more AI rivals or finish line. The player has 3 lives. Each crash with a
+// civilian costs one life. Once you reach top speed, traffic density compounds
+// by +5% every 60 seconds, so the game gets harder the longer you survive.
 import { W, H, PHYS, SPAWN, RACE, SCORE } from "./config.js";
 import { getCtx, clear, rect } from "./render.js";
 import { MAPS, MAP_LIST, DIFFICULTY_LIST } from "./maps.js";
@@ -13,14 +17,13 @@ import {
 } from "./audio.js";
 import { drawRoad, distToY } from "./road.js";
 import { makePlayer, updatePlayer, drawPlayer, playerBox, applyCollisionLoss } from "./entities/player.js";
-import { makeAI, updateAI, drawAI, checkAIHit } from "./entities/ai.js";
 import { makeTrafficSystem, updateTraffic, drawTraffic, checkTrafficHit, prepopulateTraffic } from "./entities/traffic.js";
 import { makeOilSystem, drawOilSpills, checkOilHit } from "./entities/oilspills.js";
 import { updateSmoke, drawSmoke } from "./entities/smoke.js";
 import { makeScenerySystem, updateScenery, drawScenery } from "./scenery.js";
 import {
   makeScoreState, startScoring, tickScore,
-  addPassBonus, finalizeScore, bestEverScore,
+  finalizeScore, bestEverScore,
 } from "./scoring.js";
 import {
   drawHud, drawTitleScreen, drawMapSelect, drawDifficultySelect,
@@ -52,15 +55,17 @@ const g = {
   map: null,
   difficulty: "medium",
   player: null,
-  ai: null,
   traffic: null,
   scenery: null,
+  oils: null,
   scoreState: makeScoreState(),
-  endReason: "FINISHED",
-  endFinished: false,
-  endPosition: 0,
-  endTotal: 6,
   isNewHi: false,
+  endReason: "GAME OVER",
+  // Endless mode tracking.
+  raceTime: 0,
+  hitTopSpeed: false,
+  densityMul: 1.0,
+  densityTimer: 0,
   countdownTime: 0,
   countdownLastBeep: -1,
 };
@@ -77,22 +82,27 @@ btnPause.addEventListener("click", () => {
 });
 
 function ensureAudio() { initAudio(); resumeAudio(); }
-function totalRacersCount() { return (g.ai ? g.ai.list.length : 5) + 1; }
+
+function baseRowGapForMap(map) {
+  return map.key === "jungle" ? SPAWN.trafficRowGapJungle : SPAWN.trafficRowGapCity;
+}
 
 function newRaceSetup() {
   g.map = MAPS[MAP_LIST[g.mapIdx]];
   g.difficulty = DIFFICULTY_LIST[g.diffIdx];
   g.player = makePlayer();
-  g.ai = makeAI(SPAWN.aiInitial, g.difficulty, 0, g.map);
-  const rowGap = g.map.key === "jungle" ? SPAWN.trafficRowGapJungle : SPAWN.trafficRowGapCity;
-  g.traffic = makeTrafficSystem({ rowGapZ: rowGap });
+  g.traffic = makeTrafficSystem({ rowGapZ: baseRowGapForMap(g.map) });
   g.oils = makeOilSystem(g.map);
   g.scenery = makeScenerySystem();
-  // Pre-populate scenery and traffic so the road is already busy when the player starts.
   for (let i = 0; i < 25; i++) updateScenery(g.scenery, 0, g.map, 0.016, SPAWN.sceneryPerMeter);
   prepopulateTraffic(g.traffic, g.map, 500);
   startScoring(g.scoreState, g.map.key, g.difficulty, 0);
   startEngine();
+  // Reset endless-mode trackers.
+  g.raceTime = 0;
+  g.hitTopSpeed = false;
+  g.densityMul = 1.0;
+  g.densityTimer = 0;
 }
 
 function beginCountdown() {
@@ -109,19 +119,12 @@ function beginRace() {
   g.state = STATES.RACE;
 }
 
-function endRace(reason, finished = false, position = 0) {
+function endRace(reason) {
   stopMusic();
   stopEngine();
   g.endReason = reason;
-  g.endFinished = finished;
-  g.endPosition = position;
-  g.endTotal = totalRacersCount();
-  if (finished && position >= 1 && position <= 6) {
-    g.scoreState.score += SCORE.placeBonus[position] || 0;
-    if (g.scoreState.score > g.scoreState.hi) g.scoreState.beatHi = true;
-  }
   g.isNewHi = finalizeScore(g.scoreState);
-  if (finished) sfxFinish(); else if (g.isNewHi) playFlourish();
+  if (g.isNewHi) playFlourish();
   g.state = STATES.GAME_OVER;
 }
 
@@ -130,7 +133,8 @@ function updateTitle() {
   if (consumeAnyPress()) {
     ensureAudio();
     sfxMenuSelect();
-    g.state = STATES.MAP_SELECT;
+    // Skip map / difficulty pickers — only one of each.
+    beginCountdown();
   }
 }
 
@@ -184,6 +188,8 @@ function updateRace(dt) {
   if (consumePress("m", "M")) { const m = toggleMute(); btnMute.textContent = m ? "♪×" : "♪"; }
   if (consumePress("Escape")) { stopMusic(); stopEngine(); g.state = STATES.TITLE; return; }
 
+  g.raceTime += dt;
+
   const wasBraking = g.player._wasBraking;
   updatePlayer(g.player, dt, input, g.map, { onAccelAccent: sfxAccelAccent });
   if (input.brake && !wasBraking) sfxBrake();
@@ -193,43 +199,55 @@ function updateRace(dt) {
   setEngine(speed01);
   setMusicTempoFactor(speed01);
 
+  // ── Density scaling ──
+  // Once the player first reaches top speed, start a 60s timer. Each interval,
+  // traffic density grows by +5%. We apply this by shrinking the row spacing.
+  if (!g.hitTopSpeed && g.player.speed >= PHYS.maxSpeed * RACE.topSpeedThreshold) {
+    g.hitTopSpeed = true;
+    g.densityTimer = 0;
+  }
+  if (g.hitTopSpeed) {
+    g.densityTimer += dt;
+    while (g.densityTimer >= RACE.densityStepSeconds) {
+      g.densityTimer -= RACE.densityStepSeconds;
+      g.densityMul = Math.min(RACE.densityMax, g.densityMul * (1 + RACE.densityStepIncrement));
+    }
+  }
+  g.traffic.rowGapZ = baseRowGapForMap(g.map) / g.densityMul;
+
   updateTraffic(g.traffic, dt, g.player.z, g.map, {
     playerX: g.player.x,
-    onPassed: () => { g.scoreState.score += SCORE.trafficPassBonus; },
+    onPassed: () => { g.scoreState.score += SCORE.passBonus; },
     onNearMiss: () => { g.scoreState.score += SCORE.nearMissBonus; sfxPickup(); },
   });
-  updateAI(g.ai, dt, g.player.z, g.map, { list: [] }, () => addPassBonus(g.scoreState), g.oils);
   updateScenery(g.scenery, g.player.z, g.map, dt, SPAWN.sceneryPerMeter);
 
-  // Exhaust smoke trails for player + all AI.
+  // Player exhaust smoke (no more AI smoke — AI gone).
   updateSmoke(g.player, dt);
-  for (const a of g.ai.list) updateSmoke(a, dt);
 
   // Decay player's oil-slip timer.
   if (g.player.oilTimer > 0) g.player.oilTimer = Math.max(0, g.player.oilTimer - dt);
 
-  // Collisions.
+  // ── Collisions ──
   if (g.player.invuln <= 0) {
     const box = playerBox(g.player);
-    // Traffic — solid, slows the player down a lot.
     const t = checkTrafficHit(g.traffic, box);
     if (t) {
       sfxCrash();
-      applyCollisionLoss(g.player, 0.55, 1.0);
+      applyCollisionLoss(g.player, 0.55, 1.5);
+      // Push the player away laterally so they're not stuck inside the car.
       const push = g.player.x > t.x ? 9 : -9;
       g.player.x += push;
-    } else {
-      // AI rivals — just a bump, no slowdown.
-      const aiHit = checkAIHit(g.ai, box);
-      if (aiHit) {
-        sfxBrake();
-        const push = g.player.x > aiHit.x ? 7 : -7;
-        g.player.x += push;
-        g.player.invuln = 0.25;
+      // Mark the hit car so we can't lose two lives to the same car in a row.
+      t.skin = t.skin; // (kept for symmetry — no skin change)
+      g.player.lives -= 1;
+      if (g.player.lives <= 0) {
+        endRace("GAME OVER");
+        return;
       }
     }
   }
-  // Oil spill — applies even during invuln (it's a slip, not a crash).
+  // Oil spill — slip, not a crash. No life cost.
   if (g.player.oilTimer <= 0) {
     const oil = checkOilHit(g.oils, playerBox(g.player));
     if (oil) {
@@ -240,15 +258,8 @@ function updateRace(dt) {
   }
 
   tickScore(g.scoreState, g.player.z, 1);
-
-  if (g.player.z >= RACE.finishZ) {
-    let ahead = 0;
-    for (const a of g.ai.list) if (a.z >= RACE.finishZ) ahead++;
-    const position = ahead + 1;
-    const reason = position === 1 ? "WINNER!" : position === 2 ? "2ND PLACE" : position === 3 ? "3RD PLACE" : "FINISHED";
-    endRace(reason, true, position);
-    return;
-  }
+  // Per-second time bonus accumulated continuously.
+  g.scoreState.score += SCORE.survivalSecondBonus * dt;
 }
 
 function updatePaused() {
@@ -262,42 +273,12 @@ function updateGameOver() {
 }
 
 // ─── Render ──────────────────────────────────────────────────────────────────
-function currentLap() {
-  if (!g.player) return 1;
-  return Math.min(RACE.totalLaps, Math.floor(g.player.z / RACE.lapLength) + 1);
-}
-function playerLivePosition() {
-  let ahead = 0;
-  for (const a of g.ai.list) if (a.z > g.player.z) ahead++;
-  return ahead + 1;
-}
-
-function drawFinishLine() {
-  const dist = RACE.finishZ - g.player.z;
-  if (dist <= 0 || dist > 100) return;
-  const sy = distToY(dist);
-  const cx = (W / 2 + g.map.biasX);
-  const halfW = g.map.roadHalfWidth;
-  for (let r = 0; r < 5; r++) {
-    const y = (sy - r) | 0;
-    for (let x = -halfW; x < halfW; x++) {
-      const sq = ((Math.floor((x + halfW) / 3) + r) % 2) === 0 ? 1 : 0;
-      rect(ctx, (cx + x) | 0, y, 1, 1, sq);
-    }
-  }
-}
-
 function drawWorld() {
   drawRoad(ctx, g.map, g.player.z, g.player.x);
   drawScenery(ctx, g.scenery, g.map, g.player.z);
-  drawFinishLine();
-  // Oil spills sit on the road surface, under the cars.
   drawOilSpills(ctx, g.oils, g.map, g.player.z, g.player.x);
-  // Smoke trails — under cars so the cars sit on top.
   drawSmoke(ctx, g.map, g.player.z, g.player.x, g.player);
-  for (const a of g.ai.list) drawSmoke(ctx, g.map, g.player.z, g.player.x, a);
   drawTraffic(ctx, g.traffic, g.map, g.player.z, g.player.x);
-  drawAI(ctx, g.ai, g.map, g.player.z, g.player.x);
   drawPlayer(ctx, g.player, g.map);
 }
 
@@ -322,11 +303,11 @@ function render() {
     drawHud(ctx, {
       score: g.scoreState.score,
       speed: g.player.speed,
-      position: playerLivePosition(),
-      totalRacers: totalRacersCount(),
       passed: g.traffic.passedCount,
-      lap: currentLap(),
       mapKind: g.map.key,
+      time: g.raceTime,
+      lives: g.player.lives,
+      densityMul: g.densityMul,
     });
     if (g.state === STATES.PAUSED) drawPaused(ctx);
     return;
@@ -337,10 +318,8 @@ function render() {
       hi: g.scoreState.hi,
       isNew: g.isNewHi,
       reason: g.endReason,
-      position: g.endPosition,
-      totalRacers: g.endTotal,
-      passed: g.traffic ? g.traffic.passedCount : null,
-      finished: g.endFinished,
+      passed: g.traffic ? g.traffic.passedCount : 0,
+      time: g.raceTime,
     });
     return;
   }

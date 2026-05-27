@@ -1,4 +1,5 @@
 // HUD — top score strip + bottom icon panel.
+// Endless survival: shows TIME elapsed + LIVES instead of LAP + POS.
 import { W, H, PHYS, RACE } from "./config.js";
 import { rect, text, textRight, drawSprite } from "./render.js";
 import {
@@ -7,6 +8,23 @@ import {
   ICN_SPEED, ICN_FLAG, ICN_TROPHY, ICN_PASS,
 } from "./sprites.js";
 
+// Small heart icon for the LIVES counter.
+const ICN_HEART = [
+  [-1, 6, 6, -1, 6, 6, -1],
+  [ 6, 8, 8,  6, 8, 8,  6],
+  [ 6, 8, 8,  8, 8, 8,  6],
+  [-1, 6, 8,  8, 8, 6, -1],
+  [-1,-1, 6,  8, 6,-1, -1],
+  [-1,-1,-1,  6,-1,-1, -1],
+];
+
+function mmss(seconds) {
+  const s = Math.max(0, Math.floor(seconds));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return (m < 10 ? "0" : "") + m + ":" + (r < 10 ? "0" : "") + r;
+}
+
 function pad(num, len) {
   let s = String(Math.floor(num));
   while (s.length < len) s = "0" + s;
@@ -14,12 +32,17 @@ function pad(num, len) {
 }
 
 export function drawHud(ctx, {
-  score, speed, position, totalRacers, passed, lap, mapKind,
+  score, speed, passed, mapKind, time, lives, densityMul,
 }) {
   // Top thin score strip
   rect(ctx, 0, 0, W, 9, 0);
   rect(ctx, 0, 8, W, 1, 4);
   text(ctx, "SCORE " + pad(score, 6), 4, 2, 5);
+  // Density indicator on the right when traffic is intensified.
+  if (densityMul && densityMul > 1.001) {
+    const pct = Math.round((densityMul - 1) * 100);
+    textRight(ctx, "+" + pct + "%", W - 4, 2, 9);
+  }
 
   // Bottom panel
   const panelTop = H - 22;
@@ -28,23 +51,31 @@ export function drawHud(ctx, {
   rect(ctx, 0, panelTop + 1, W, 1, 2);
   rect(ctx, 0, H - 1, W, 1, 0);
 
-  // Cell 1 — speedometer
+  // Cell 1 — speedometer (peaks at PHYS.topSpeedKmh, currently 250)
   drawSprite(ctx, ICN_SPEED, 3, panelTop + 7);
-  const mph = Math.round(speed / PHYS.maxSpeed * 200);
-  text(ctx, pad(mph, 3), 13, panelTop + 9, 1);
+  const kmh = Math.round(speed / PHYS.maxSpeed * (PHYS.topSpeedKmh || 250));
+  text(ctx, pad(kmh, 3), 13, panelTop + 9, 1);
   text(ctx, "KMH", 13, panelTop + 15, 5);
 
-  // Cell 2 — lap flag
+  // Cell 2 — time elapsed
   drawSprite(ctx, ICN_FLAG, 52, panelTop + 7);
-  text(ctx, Math.min(RACE.totalLaps, lap) + "/" + RACE.totalLaps, 62, panelTop + 9, 1);
-  text(ctx, "LAP", 62, panelTop + 15, 5);
+  text(ctx, mmss(time || 0), 62, panelTop + 9, 1);
+  text(ctx, "TIME", 62, panelTop + 15, 5);
 
-  // Cell 3 — position trophy
-  drawSprite(ctx, ICN_TROPHY, 90, panelTop + 7);
-  text(ctx, position + "/" + totalRacers, 100, panelTop + 9, 1);
-  text(ctx, "POS", 100, panelTop + 15, 5);
+  // Cell 3 — lives (hearts)
+  const livesCount = Math.max(0, lives || 0);
+  for (let i = 0; i < 3; i++) {
+    const x = 92 + i * 8;
+    if (i < livesCount) {
+      drawSprite(ctx, ICN_HEART, x, panelTop + 8);
+    } else {
+      // empty heart slot — drawn dim/dark
+      rect(ctx, x + 1, panelTop + 9, 5, 4, 0);
+    }
+  }
+  text(ctx, "LIVES", 92, panelTop + 15, 5);
 
-  // Cell 4 — cars passed (replaces nitro)
+  // Cell 4 — cars passed
   drawSprite(ctx, ICN_PASS, 130, panelTop + 8);
   text(ctx, pad(passed, 3), 140, panelTop + 9, 1);
   text(ctx, "PASS", 138, panelTop + 15, 5);
@@ -169,15 +200,12 @@ export function drawCountdown(ctx, label) {
   text(ctx, label, ((W - txtW) / 2) | 0, (H/2 - 12) | 0, 1, sz);
 }
 
-export function drawGameOver(ctx, { score, hi, isNew, reason, position, totalRacers, passed, finished }) {
-  rect(ctx, 0, 0, W, H, finished ? 12 : 0);
-  const accent = finished ? (position === 1 ? 5 : 6) : 6;
-  rect(ctx, 0, 30, W, 22, accent);
+export function drawGameOver(ctx, { score, hi, isNew, reason, passed, time }) {
+  rect(ctx, 0, 0, W, H, 0);
+  rect(ctx, 0, 30, W, 22, 6);
   text(ctx, reason, ((W - reason.length * 8) / 2) | 0, 36, 1, 2);
 
-  if (finished && position) {
-    text(ctx, "POSITION " + position + "/" + totalRacers, ((W - 14 * 4) / 2) | 0, 76, 1);
-  }
+  text(ctx, "SURVIVED " + mmss(time || 0), ((W - 14 * 4) / 2) | 0, 76, 1);
   text(ctx, "SCORE " + pad(score, 6), ((W - 12 * 4) / 2) | 0, 100, 1);
   text(ctx, "HI    " + pad(hi, 6), ((W - 12 * 4) / 2) | 0, 114, 5);
   if (passed != null) {

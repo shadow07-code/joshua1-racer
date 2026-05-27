@@ -18,6 +18,7 @@ export function makePlayer() {
     invuln: 0,
     raceTime: 0,     // seconds since race started (drives the speed ramp)
     oilTimer: 0,     // seconds the car is still affected by an oil spill
+    lives: 3,        // endless survival — 3 hits and you're out
     _wasBraking: false,
   };
 }
@@ -41,16 +42,20 @@ export function updatePlayer(p, dt, input, map, callbacks) {
     target = Math.max(target, PHYS.maxSpeed);
     p.boost = Math.max(0, p.boost - dt);
   }
-  if (p.offRoad) target *= 0.55;
 
-  if (input.brake) {
+  if (p.offRoad) {
+    // Rapid deceleration off-road — going off the asphalt drops you to a crawl
+    // within ~0.75s. Get back on the road fast.
+    p.speed = Math.max(0, p.speed - PHYS.offRoadDecel * dt);
+  } else if (input.brake) {
     p.speed -= PHYS.brakeDecel * dt;
   } else if (p.speed < target) {
     p.speed = Math.min(target, p.speed + PHYS.accel * dt);
   } else if (p.speed > target) {
     p.speed = Math.max(target, p.speed - PHYS.drag * dt);
   }
-  if (p.speed < 4) p.speed = 4;
+  // Allow speed to drop to 0 only when off-road; otherwise floor at a slow crawl.
+  if (!p.offRoad && p.speed < 4) p.speed = 4;
   if (p.speed > PHYS.maxSpeed) p.speed = PHYS.maxSpeed;
 
   // Threshold-crossing accent.

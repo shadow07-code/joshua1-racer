@@ -18,7 +18,7 @@ export const PALETTE = [
   "#80D0FC", // 13 light blue (windshield)
   "#FCBCB0", // 14 pink (skin / blossom)
   "#A05CFC", // 15 purple
-  "#1078E0", // 16 mid blue (sedan body)
+  "#1078E0", // 16 mid blue (kept for cockpit visor)
   "#04A058", // 17 emerald green
   "#B07028", // 18 brown (palm trunk)
   "#6E4814", // 19 dark brown (shadow)
@@ -30,55 +30,63 @@ export const PALETTE = [
   "#E0D8C0", // 25 cream (van / road shoulder dust)
 ];
 
-// Logical canvas — mobile-portrait aspect for the Road Fighter feel.
+// Logical canvas — mobile-portrait aspect.
 export const W = 160;
 export const H = 240;
 
 export const PHYS = {
-  // Slow, gentle ramp — gives the player time to read the traffic before things get fast.
   startSpeed: 14,
-  cruiseSpeed: 72,
-  maxSpeed: 90,        // no nitro now; brief overshoot if you brake-late, otherwise == cruise
-  rampSeconds: 22,
-  accel: 18,
-  brakeDecel: 70,
+  // Internal max-speed value chosen so HUD displays 250 KMH at top
+  // (KMH = speed * (250 / maxSpeed)).
+  maxSpeed: 135,
+  cruiseSpeed: 135,        // legacy — same as max in endless
+  rampSeconds: 50,         // gentle 50s climb to top speed
+  accel: 9,
+  brakeDecel: 80,
   drag: 5,
+  offRoadDecel: 180,       // rapid stop when off the asphalt (135 m/s → 0 in <1s)
   steerSpeed: 120,
   steerSpeedFactor: 0.65,
   carHalfWidth: 7,
   carHalfHeight: 10,
+  // Display: top speed shows as ~250 KMH.
+  topSpeedKmh: 250,
 };
 
 export const PLAYER_Y = H - 36;
 
+// Endless survival mode.
 export const RACE = {
-  lapLength: 800,
-  totalLaps: 3,
-  finishZ: 2400,
+  startLives: 3,
   countdownSeconds: 3,
+  // After player reaches maxSpeed, traffic density scales up by this fraction
+  // every densityStepSeconds, compounding — capped so the road never becomes
+  // unwinnable.
+  densityStepSeconds: 60,
+  densityStepIncrement: 0.05,
+  densityMax: 1.6,           // hard ceiling on the density multiplier
+  topSpeedThreshold: 0.95,
 };
 
 // Spawn rates and traffic-row spacing.
 export const SPAWN = {
-  // Traffic is row-based: each row leaves at least one open lane the player
-  // can steer through. rowGap is the world distance between rows in meters.
-  // Spread rows out so the player has plenty of time to read each pattern.
-  trafficRowGapCity: 95,
-  trafficRowGapJungle: 78,
+  // Slightly denser baseline so there's always meaningful weaving to do.
+  // Row-based — each row leaves one open lane the player can steer to.
+  trafficRowGapCity: 72,
+  trafficRowGapJungle: 70,  // unused (jungle removed) — kept for safety
   sceneryPerMeter: 0.22,
-  aiInitial: 5,
+  aiInitial: 0,
 };
 
 export const SCORE = {
   distanceWeight: 1.0,
-  passBonus: 250,           // pass a rival
-  trafficPassBonus: 25,     // pass a slow traffic car
-  nearMissBonus: 100,       // narrowly avoid a traffic car
+  passBonus: 25,           // per traffic car passed
+  nearMissBonus: 100,
   cityBonus: 1.0,
   jungleBonus: 1.25,
   mediumBonus: 1.0,
   hardBonus: 1.5,
-  placeBonus: [0, 5000, 3000, 2000, 1000, 500, 250],
+  survivalSecondBonus: 10, // per second alive
 };
 
 export const MUSIC = {

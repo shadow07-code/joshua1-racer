@@ -86,11 +86,14 @@ function spawnRow(sys, map) {
       skin,
       z: sys.nextRowZ + jitter,
       x,
+      targetX: x,            // lane-change target — same lane initially
       laneIdx: lane,
       speed,
       passed: false,
       nearMissed: false,
       driftPhase: Math.random() * Math.PI * 2,
+      // Slow occasional lane changes start after a random delay so cars don't all swap at once.
+      laneChangeTimer: 4 + Math.random() * 9,
     });
   }
 
@@ -113,9 +116,30 @@ export function updateTraffic(sys, dt, playerZ, map, cbs) {
     spawnRow(sys, map);
   }
 
+  const halfRoad = map.roadHalfWidth;
   for (const c of sys.list) {
     c.z += c.speed * dt;
     c.driftPhase += dt * 1.2;
+
+    // ── Slow lane change ──
+    // Every 8-16 seconds (varied), pick a new target lane. Lerp toward it slowly
+    // (≈5 px/s) so the player has plenty of time to react. The new target stays
+    // within the road bounds.
+    c.laneChangeTimer -= dt;
+    if (c.laneChangeTimer <= 0) {
+      c.laneChangeTimer = 8 + Math.random() * 8;
+      // 60% chance to actually shift lanes (else hold this lane).
+      if (Math.random() < 0.6) {
+        const shift = (Math.random() < 0.5 ? -1 : 1) * (10 + Math.random() * 14);
+        c.targetX = Math.max(-(halfRoad - 6), Math.min(halfRoad - 6, c.x + shift));
+      }
+    }
+    const LANE_CHANGE_SPEED = 5; // px / sec — deliberately slow
+    const dx = c.targetX - c.x;
+    if (Math.abs(dx) > 0.3) {
+      c.x += Math.sign(dx) * Math.min(Math.abs(dx), LANE_CHANGE_SPEED * dt);
+    }
+
     if (!c.passed && c.z < playerZ - 4) {
       c.passed = true;
       sys.passedCount++;

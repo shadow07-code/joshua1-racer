@@ -1,5 +1,4 @@
-// Per-map config: road geometry, palette indices, scenery mix, music.
-// No more in-road obstacles — the road is for cars only.
+// Single map (city). Difficulty selection removed — always Hard.
 import { ROAD } from "./config.js";
 
 export const MAPS = {
@@ -14,7 +13,7 @@ export const MAPS = {
     roadIdx: 3,          // mid gray asphalt
     roadGrainIdx: 4,     // darker speckle
     shoulderIdx: 4,
-    dashIdx: 5,
+    dashIdx: 1,          // white center dash (was yellow)
     rumbleAIdx: 6,
     rumbleBIdx: 1,
     scenery: [
@@ -25,30 +24,7 @@ export const MAPS = {
     ],
     music: "city",
   },
-
-  jungle: {
-    key: "jungle",
-    name: "JUNGLE",
-    description: "DIRT TRACK",
-    roadHalfWidth: ROAD.jungleHalfWidth,
-    biasX: -2,
-    bgIdx: 11,
-    bgAltIdx: 17,
-    roadIdx: 18,         // brown dirt
-    roadGrainIdx: 19,    // darker brown speckle
-    shoulderIdx: 19,
-    dashIdx: 5,
-    rumbleAIdx: 9,
-    rumbleBIdx: 1,
-    scenery: [
-      { kind: "palm", weight: 6 },
-      { kind: "bush", weight: 3 },
-      { kind: "rock", weight: 2 },
-      { kind: "tree", weight: 2 },
-    ],
-    music: "jungle",
-  },
 };
 
-export const MAP_LIST = ["city", "jungle"];
-export const DIFFICULTY_LIST = ["medium", "hard"];
+export const MAP_LIST = ["city"];
+export const DIFFICULTY_LIST = ["hard"];
