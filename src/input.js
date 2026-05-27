@@ -1,34 +1,36 @@
-// Unified input — keyboard + touch → { steer: -1..1, brake: bool, justPressed: Set }
-import { KEYS, W, H } from "./config.js";
+// Unified input — keyboard + canvas-touch + on-screen steer buttons.
+// No brake handling — game is auto-accelerate.
+import { KEYS } from "./config.js";
 
 const state = {
   steer: 0,
-  brake: false,
-  // Edge-triggered (consumed by main loop each frame).
-  pressed: new Set(),
+  brake: false,                 // legacy: always false now (kept so callers don't break)
+  pressed: new Set(),           // edge-triggered, consumed by main loop
 };
 
 const heldKeys = new Set();
 const touchPoints = new Map(); // identifier -> { x, y, side }
+const btnHeld = { L: false, R: false }; // explicit on-screen-button state
 
 function recompute() {
   let s = 0;
-  // Keyboard
   if (KEYS.left.some(k => heldKeys.has(k))) s -= 1;
   if (KEYS.right.some(k => heldKeys.has(k))) s += 1;
-  // Touch — each active finger on left/right side adds
-  let leftTouch = false, rightTouch = false;
-  for (const t of touchPoints.values()) {
-    if (t.side === "L") leftTouch = true;
-    else if (t.side === "R") rightTouch = true;
+  // On-screen buttons take priority — they're the new "official" mobile controls.
+  if (btnHeld.L && !btnHeld.R) s = -1;
+  else if (btnHeld.R && !btnHeld.L) s = 1;
+  // Canvas-half touch as a fallback (kept for menus and casual taps).
+  else {
+    let leftTouch = false, rightTouch = false;
+    for (const t of touchPoints.values()) {
+      if (t.side === "L") leftTouch = true;
+      else if (t.side === "R") rightTouch = true;
+    }
+    if (leftTouch && !rightTouch) s = -1;
+    else if (rightTouch && !leftTouch) s = 1;
   }
-  if (leftTouch && !rightTouch) s = -1;
-  else if (rightTouch && !leftTouch) s = 1;
   state.steer = Math.max(-1, Math.min(1, s));
-
-  const keyBrake = KEYS.brake.some(k => heldKeys.has(k));
-  const touchBrake = touchPoints.size >= 2;
-  state.brake = keyBrake || touchBrake;
+  state.brake = false;
 }
 
 window.addEventListener("keydown", (e) => {
@@ -105,11 +107,39 @@ function bindPointer(canvas) {
   });
 }
 
+function bindSteerButtons() {
+  const btnL = document.getElementById("btn-steer-left");
+  const btnR = document.getElementById("btn-steer-right");
+  if (!btnL || !btnR) return;
+  const press = (side) => {
+    btnHeld[side] = true;
+    state.pressed.add("Touch");
+    recompute();
+  };
+  const release = (side) => {
+    btnHeld[side] = false;
+    recompute();
+  };
+  // Pointer events cover both touch and mouse in one binding.
+  btnL.addEventListener("pointerdown", (e) => { e.preventDefault(); btnL.setPointerCapture(e.pointerId); press("L"); });
+  btnL.addEventListener("pointerup",   (e) => { e.preventDefault(); release("L"); });
+  btnL.addEventListener("pointercancel",(e)=> { release("L"); });
+  btnL.addEventListener("pointerleave",(e) => { release("L"); });
+  btnR.addEventListener("pointerdown", (e) => { e.preventDefault(); btnR.setPointerCapture(e.pointerId); press("R"); });
+  btnR.addEventListener("pointerup",   (e) => { e.preventDefault(); release("R"); });
+  btnR.addEventListener("pointercancel",(e)=> { release("R"); });
+  btnR.addEventListener("pointerleave",(e) => { release("R"); });
+  // Block native context menu / drag.
+  btnL.addEventListener("contextmenu", (e) => e.preventDefault());
+  btnR.addEventListener("contextmenu", (e) => e.preventDefault());
+}
+
 let _bound = false;
 export function initInput(canvas) {
   if (_bound) return;
   _bound = true;
   bindPointer(canvas);
+  bindSteerButtons();
 }
 
 export function getInput() {

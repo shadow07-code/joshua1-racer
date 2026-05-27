@@ -113,13 +113,17 @@ export function drawTitleScreen(ctx, allTimeBest) {
   text(ctx, "JOSHUA 1", 36, 18, 1, 2);
   text(ctx, "RACING", 56, 32, 7, 1);
 
-  // Bottom info panel
-  rect(ctx, 0, H - 64, W, 64, 4);
-  rect(ctx, 0, H - 64, W, 1, 1);
-  text(ctx, "TAP OR PRESS START", 14, H - 56, 1, 1);
-  text(ctx, "BEST  " + pad(allTimeBest, 6), 30, H - 38, 5, 1);
-  text(ctx, "ARROWS - STEER", 26, H - 24, 13, 1);
-  text(ctx, "DOWN - BRAKE", 32, H - 12, 13, 1);
+  // Bottom info panel — explicit about the controls.
+  rect(ctx, 0, H - 88, W, 88, 4);
+  rect(ctx, 0, H - 88, W, 1, 1);
+  text(ctx, "TAP TO START",        38, H - 82, 5, 1);
+  text(ctx, "BEST  " + pad(allTimeBest, 6),  30, H - 70, 1, 1);
+  // Controls line — tells the player about the on-screen arrows below.
+  text(ctx, "TAP ARROW BUTTONS",   18, H - 54, 13, 1);
+  text(ctx, "TO STEER LEFT/RIGHT", 12, H - 44, 13, 1);
+  text(ctx, "AUTO-ACCELERATE",     22, H - 28, 5, 1);
+  text(ctx, "NO BRAKE  JUST DODGE", 10, H - 18, 5, 1);
+  text(ctx, "3 LIVES  AVOID TRAFFIC", 8, H - 8, 14, 1);
 }
 
 export function drawMapSelect(ctx, selected) {
@@ -201,23 +205,47 @@ export function drawCountdown(ctx, label) {
 }
 
 export function drawGameOver(ctx, { score, hi, isNew, reason, passed, time }) {
+  // Dark backdrop with a bright accent banner.
   rect(ctx, 0, 0, W, H, 0);
-  rect(ctx, 0, 30, W, 22, 6);
-  text(ctx, reason, ((W - reason.length * 8) / 2) | 0, 36, 1, 2);
+  // Top banner
+  rect(ctx, 0, 24, W, 30, 6);
+  rect(ctx, 0, 22, W, 2, 7);
+  rect(ctx, 0, 54, W, 2, 7);
+  text(ctx, reason, ((W - reason.length * 8) / 2) | 0, 32, 1, 2);
 
-  text(ctx, "SURVIVED " + mmss(time || 0), ((W - 14 * 4) / 2) | 0, 76, 1);
-  text(ctx, "SCORE " + pad(score, 6), ((W - 12 * 4) / 2) | 0, 100, 1);
-  text(ctx, "HI    " + pad(hi, 6), ((W - 12 * 4) / 2) | 0, 114, 5);
-  if (passed != null) {
-    text(ctx, "CARS PASSED " + pad(passed, 3), ((W - 15 * 4) / 2) | 0, 128, 13);
-  }
+  // "RESULTS" sub-label
+  text(ctx, "RESULTS", ((W - 7 * 4) / 2) | 0, 68, 5);
+
+  // Stats panel
+  const panelTop = 80;
+  rect(ctx, 8, panelTop, W - 16, 80, 4);
+  rect(ctx, 8, panelTop, W - 16, 1, 1);
+  rect(ctx, 8, panelTop + 79, W - 16, 1, 0);
+
+  text(ctx, "TIME",  14, panelTop + 8,  13);
+  text(ctx, mmss(time || 0), W - 14 - 5 * 4, panelTop + 8, 1);
+
+  text(ctx, "SCORE", 14, panelTop + 22, 13);
+  text(ctx, pad(score, 6), W - 14 - 6 * 4, panelTop + 22, 1);
+
+  text(ctx, "HI",    14, panelTop + 36, 13);
+  text(ctx, pad(hi, 6), W - 14 - 6 * 4, panelTop + 36, 5);
+
+  text(ctx, "PASSED", 14, panelTop + 50, 13);
+  text(ctx, pad(passed != null ? passed : 0, 3), W - 14 - 3 * 4, panelTop + 50, 1);
+
   if (isNew) {
-    if (Math.floor(performance.now() / 400) % 2 === 0) {
-      text(ctx, "NEW HI SCORE!", ((W - 13 * 4) / 2) | 0, 148, 5);
+    if (Math.floor(performance.now() / 350) % 2 === 0) {
+      text(ctx, "NEW HI SCORE!", ((W - 13 * 4) / 2) | 0, panelTop + 66, 5);
+    } else {
+      text(ctx, "NEW HI SCORE!", ((W - 13 * 4) / 2) | 0, panelTop + 66, 9);
     }
   }
-  text(ctx, "TAP OR PRESS START", ((W - 18 * 4) / 2) | 0, H - 36, 1);
-  text(ctx, "ESC FOR MENU", ((W - 12 * 4) / 2) | 0, H - 22, 14);
+
+  // Footer prompt
+  text(ctx, "TAP OR PRESS START",  ((W - 18 * 4) / 2) | 0, H - 36, 1);
+  text(ctx, "TO PLAY AGAIN",       ((W - 13 * 4) / 2) | 0, H - 24, 13);
+  text(ctx, "ESC FOR MENU",        ((W - 12 * 4) / 2) | 0, H - 12, 14);
 }
 
 export function drawPaused(ctx) {

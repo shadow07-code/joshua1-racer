@@ -36,21 +36,24 @@ export const H = 240;
 
 export const PHYS = {
   startSpeed: 14,
-  // Internal max-speed value chosen so HUD displays 250 KMH at top
-  // (KMH = speed * (250 / maxSpeed)).
+  // Internal max-speed; HUD displays km/h via topSpeedKmh / maxSpeed ratio.
   maxSpeed: 135,
-  cruiseSpeed: 135,        // legacy — same as max in endless
-  rampSeconds: 50,         // gentle 50s climb to top speed
-  accel: 9,
-  brakeDecel: 80,
+  cruiseSpeed: 135,
+  // Two-phase ramp:
+  //   0 → phase1 (≈100 km/h equivalent) over `rampPhase1Seconds` — punchy launch.
+  //   phase1 → maxSpeed over `rampPhase2Seconds` — slow grind to the top.
+  rampPhase1Seconds: 4,
+  rampPhase2Seconds: 80,
+  accel: 14,
   drag: 5,
-  offRoadDecel: 180,       // rapid stop when off the asphalt (135 m/s → 0 in <1s)
+  offRoadDecel: 180,       // rapid stop when off the asphalt
   steerSpeed: 120,
   steerSpeedFactor: 0.65,
   carHalfWidth: 7,
   carHalfHeight: 10,
-  // Display: top speed shows as ~250 KMH.
-  topSpeedKmh: 250,
+  // Display: top speed shows as 300 KMH; 100 km/h marker used for ramp phase split.
+  topSpeedKmh: 300,
+  phase1Kmh: 100,
 };
 
 export const PLAYER_Y = H - 36;
@@ -64,8 +67,14 @@ export const RACE = {
   // unwinnable.
   densityStepSeconds: 60,
   densityStepIncrement: 0.05,
-  densityMax: 1.6,           // hard ceiling on the density multiplier
+  densityMax: 1.6,
   topSpeedThreshold: 0.95,
+  // Cop chase: 2 cop cars spawn behind the player when they cross this KMH.
+  // Cops cruise slightly slower than the player's max, so a clean run outruns them.
+  copTriggerKmh: 250,
+  copTopSpeedFrac: 0.92,    // cops max out at 92% of player's max speed
+  copRamSlowdown: 0.35,     // multiplier on player speed when a cop rams from behind
+  copSpawnGapZ: 30,         // initial distance behind the player
 };
 
 // Spawn rates and traffic-row spacing.
@@ -101,10 +110,10 @@ export const ROAD = {
   jungleHalfWidth: 52,
 };
 
+// No brake key — game auto-accelerates throughout. Down arrow is unused.
 export const KEYS = {
   left:  ["ArrowLeft", "a", "A"],
   right: ["ArrowRight", "d", "D"],
-  brake: ["ArrowDown", "s", "S"],
   mute:  ["m", "M"],
   pause: ["p", "P", " "],
   back:  ["Escape"],

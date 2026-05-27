@@ -19,6 +19,7 @@ import { drawRoad, distToY } from "./road.js";
 import { makePlayer, updatePlayer, drawPlayer, playerBox, applyCollisionLoss } from "./entities/player.js";
 import { makeTrafficSystem, updateTraffic, drawTraffic, checkTrafficHit, prepopulateTraffic } from "./entities/traffic.js";
 import { makeOilSystem, drawOilSpills, checkOilHit } from "./entities/oilspills.js";
+import { makeCopsSystem, updateCops, drawCops } from "./entities/cops.js";
 import { updateSmoke, drawSmoke } from "./entities/smoke.js";
 import { makeScenerySystem, updateScenery, drawScenery } from "./scenery.js";
 import {
@@ -93,6 +94,7 @@ function newRaceSetup() {
   g.player = makePlayer();
   g.traffic = makeTrafficSystem({ rowGapZ: baseRowGapForMap(g.map) });
   g.oils = makeOilSystem(g.map);
+  g.cops = makeCopsSystem();
   g.scenery = makeScenerySystem();
   for (let i = 0; i < 25; i++) updateScenery(g.scenery, 0, g.map, 0.016, SPAWN.sceneryPerMeter);
   prepopulateTraffic(g.traffic, g.map, 500);
@@ -190,10 +192,7 @@ function updateRace(dt) {
 
   g.raceTime += dt;
 
-  const wasBraking = g.player._wasBraking;
   updatePlayer(g.player, dt, input, g.map, { onAccelAccent: sfxAccelAccent });
-  if (input.brake && !wasBraking) sfxBrake();
-  g.player._wasBraking = input.brake;
 
   const speed01 = g.player.speed / PHYS.maxSpeed;
   setEngine(speed01);
@@ -219,6 +218,15 @@ function updateRace(dt) {
     playerX: g.player.x,
     onPassed: () => { g.scoreState.score += SCORE.passBonus; },
     onNearMiss: () => { g.scoreState.score += SCORE.nearMissBonus; sfxPickup(); },
+  });
+  // Cops kick in once the player crosses 250 km/h.
+  updateCops(g.cops, dt, g.player.z, g.player.x, g.player.speed, g.map, {
+    onRam: () => {
+      // Cop hit from behind — drop speed sharply, brief invuln, no life loss.
+      g.player.speed = Math.max(PHYS.startSpeed, g.player.speed * RACE.copRamSlowdown);
+      g.player.invuln = Math.max(g.player.invuln, 0.6);
+      sfxCrash();
+    },
   });
   updateScenery(g.scenery, g.player.z, g.map, dt, SPAWN.sceneryPerMeter);
 
@@ -279,6 +287,7 @@ function drawWorld() {
   drawOilSpills(ctx, g.oils, g.map, g.player.z, g.player.x);
   drawSmoke(ctx, g.map, g.player.z, g.player.x, g.player);
   drawTraffic(ctx, g.traffic, g.map, g.player.z, g.player.x);
+  drawCops(ctx, g.cops, g.map, g.player.z, g.player.x);
   drawPlayer(ctx, g.player, g.map);
 }
 

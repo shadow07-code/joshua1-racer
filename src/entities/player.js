@@ -23,14 +23,23 @@ export function makePlayer() {
   };
 }
 
-// Smoothly ramp the player's target speed from startSpeed to maxSpeed.
-// Player tops out at maxSpeed — strictly above any AI's top-speed cap, so a
-// clean run wins.
+// Two-phase target ramp:
+//   Phase 1: punchy linear climb to ~100 km/h equivalent in `rampPhase1Seconds`.
+//   Phase 2: slow smoothstep grind from there up to maxSpeed (300 km/h).
 function rampTarget(raceTime) {
-  const t = Math.max(0, Math.min(1, raceTime / PHYS.rampSeconds));
-  // Smoothstep eases in/out — feels natural.
+  const p1End = PHYS.rampPhase1Seconds;
+  const p2End = p1End + PHYS.rampPhase2Seconds;
+  // Internal m/s value corresponding to the phase-1 ceiling (100 km/h).
+  const phase1Top = PHYS.maxSpeed * (PHYS.phase1Kmh / PHYS.topSpeedKmh);
+
+  if (raceTime <= p1End) {
+    const t = raceTime / p1End;
+    return PHYS.startSpeed + (phase1Top - PHYS.startSpeed) * t;
+  }
+  if (raceTime >= p2End) return PHYS.maxSpeed;
+  const t = (raceTime - p1End) / (p2End - p1End);
   const e = t * t * (3 - 2 * t);
-  return PHYS.startSpeed + (PHYS.maxSpeed - PHYS.startSpeed) * e;
+  return phase1Top + (PHYS.maxSpeed - phase1Top) * e;
 }
 
 export function updatePlayer(p, dt, input, map, callbacks) {
@@ -47,8 +56,6 @@ export function updatePlayer(p, dt, input, map, callbacks) {
     // Rapid deceleration off-road — going off the asphalt drops you to a crawl
     // within ~0.75s. Get back on the road fast.
     p.speed = Math.max(0, p.speed - PHYS.offRoadDecel * dt);
-  } else if (input.brake) {
-    p.speed -= PHYS.brakeDecel * dt;
   } else if (p.speed < target) {
     p.speed = Math.min(target, p.speed + PHYS.accel * dt);
   } else if (p.speed > target) {
