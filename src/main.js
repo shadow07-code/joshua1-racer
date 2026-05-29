@@ -28,7 +28,7 @@ import {
 } from "./scoring.js";
 import {
   drawHud, drawTitleScreen, drawMapSelect, drawDifficultySelect,
-  drawGameOver, drawPaused, drawCountdown,
+  drawGameOver, drawPaused, drawCountdown, drawTutorial, drawSteerHints,
 } from "./hud.js";
 import { registerServiceWorker, initInstallBanner } from "./pwa.js";
 
@@ -42,11 +42,24 @@ const STATES = {
   TITLE: "TITLE",
   MAP_SELECT: "MAP_SELECT",
   DIFFICULTY: "DIFFICULTY",
+  TUTORIAL: "TUTORIAL",
   COUNTDOWN: "COUNTDOWN",
   RACE: "RACE",
   GAME_OVER: "GAME_OVER",
   PAUSED: "PAUSED",
 };
+
+// First-run steering tutorial — shown once, then remembered.
+const TUTORIAL_KEY = "joshua1.tutorialSeen";
+let _tutorialSeen = false;
+function hasSeenTutorial() {
+  if (_tutorialSeen) return true;
+  try { return localStorage.getItem(TUTORIAL_KEY) === "1"; } catch { return false; }
+}
+function markTutorialSeen() {
+  _tutorialSeen = true;
+  try { localStorage.setItem(TUTORIAL_KEY, "1"); } catch {}
+}
 
 const g = {
   state: STATES.TITLE,
@@ -169,7 +182,19 @@ function updateTitle() {
   if (consumeAnyPress()) {
     ensureAudio();
     sfxMenuSelect();
-    // Skip map / difficulty pickers — only one of each.
+    // Skip map / difficulty pickers — only one of each. First-timers see the
+    // steering tutorial card before the countdown.
+    if (hasSeenTutorial()) beginCountdown();
+    else g.state = STATES.TUTORIAL;
+  }
+}
+
+function updateTutorial() {
+  if (consumePress("Escape")) { g.state = STATES.TITLE; return; }
+  if (consumePress("Enter", " ", "Touch")) {
+    ensureAudio();
+    sfxMenuSelect();
+    markTutorialSeen();
     beginCountdown();
   }
 }
@@ -330,6 +355,7 @@ function render() {
   if (g.state === STATES.TITLE) { drawTitleScreen(ctx, bestEverScore()); return; }
   if (g.state === STATES.MAP_SELECT) { drawMapSelect(ctx, g.mapIdx); return; }
   if (g.state === STATES.DIFFICULTY) { drawDifficultySelect(ctx, g.diffIdx); return; }
+  if (g.state === STATES.TUTORIAL) { drawTutorial(ctx); return; }
   if (g.state === STATES.COUNTDOWN) {
     drawWorld();
     const t = g.countdownTime;
@@ -339,6 +365,7 @@ function render() {
     else if (t < 3) label = "1";
     else label = "GO!";
     drawCountdown(ctx, label);
+    drawSteerHints(ctx, 1);   // steer-zone ripples — every race
     return;
   }
   if (g.state === STATES.RACE || g.state === STATES.PAUSED) {
@@ -352,6 +379,11 @@ function render() {
       lives: g.player.lives,
       densityMul: g.densityMul,
     });
+    // Keep the steer-zone ripples for the first moment of the race (when the
+    // player can finally act), fading out over ~1.5s.
+    if (g.state === STATES.RACE && g.raceTime < 1.6) {
+      drawSteerHints(ctx, Math.min(1, (1.6 - g.raceTime) / 0.8));
+    }
     if (g.state === STATES.PAUSED) drawPaused(ctx);
     return;
   }
@@ -385,6 +417,7 @@ function update(dt) {
     case STATES.TITLE: updateTitle(); break;
     case STATES.MAP_SELECT: updateMapSelect(); break;
     case STATES.DIFFICULTY: updateDifficulty(); break;
+    case STATES.TUTORIAL: updateTutorial(); break;
     case STATES.COUNTDOWN: updateCountdown(dt); break;
     case STATES.RACE: updateRace(dt); break;
     case STATES.PAUSED: updatePaused(); break;

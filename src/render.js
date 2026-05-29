@@ -63,6 +63,22 @@ export function disc(ctx, cx, cy, r, paletteIdx) {
   }
 }
 
+// Hollow circle outline (1px) via the midpoint-circle algorithm — used for the
+// pulsing "tap here" ripples in the steering tutorial.
+export function ring(ctx, cx, cy, r, paletteIdx) {
+  if (r < 1) return;
+  ctx.fillStyle = PALETTE[paletteIdx];
+  let x = r, y = 0, err = 1 - r;
+  const p = (px, py) => ctx.fillRect(px | 0, py | 0, 1, 1);
+  while (x >= y) {
+    p(cx + x, cy + y); p(cx - x, cy + y); p(cx + x, cy - y); p(cx - x, cy - y);
+    p(cx + y, cy + x); p(cx - y, cy + x); p(cx + y, cy - x); p(cx - y, cy - x);
+    y++;
+    if (err < 0) { err += 2 * y + 1; }
+    else { x--; err += 2 * (y - x) + 1; }
+  }
+}
+
 // Soft ground shadow beneath a sprite — two stacked dark bars give a grounded,
 // "lifted off the asphalt" look without needing real alpha blending.
 export function groundShadow(ctx, cx, baseY, halfW, paletteIdx = 4) {

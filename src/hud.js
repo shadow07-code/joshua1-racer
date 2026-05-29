@@ -3,7 +3,7 @@
 import { W, H, PHYS, RACE } from "./config.js";
 import {
   rect, text, textRight, textCentered, drawSprite, drawSpriteScaled,
-  disc, groundShadow, textOutlined, textOutlinedCentered,
+  disc, ring, groundShadow, textOutlined, textOutlinedCentered,
 } from "./render.js";
 import {
   SPR_PLAYER, SPR_AI_BLUE, SPR_AI_GREEN, SPR_AI_ORANGE, SPR_PALM, SPR_TREE,
@@ -328,6 +328,85 @@ export function drawCountdown(ctx, label) {
   disc(ctx, W / 2, cy - 1, 23, go ? 11 : 7);
   disc(ctx, W / 2, cy - 1, 18, go ? 17 : 9);
   textOutlinedCentered(ctx, label, cy - 13, go ? 1 : 5, 0, 5, 7);
+}
+
+// Chevron arrow built from a 5-point "<" / ">" shape. dir -1 = left, +1 = right.
+function drawChevron(ctx, cx, cy, dir, sz = 2, fillIdx = 1, shadowIdx = 0) {
+  const pts = [];
+  for (let i = -sz; i <= sz; i++) pts.push([cx + dir * (sz - Math.abs(i)), cy + i]);
+  if (shadowIdx != null) for (const [x, y] of pts) rect(ctx, x + 1, y + 1, 2, 1, shadowIdx);
+  for (const [x, y] of pts) rect(ctx, x, y, 2, 1, fillIdx);
+}
+
+// Per-race steering reminder: pulsing tap-ripples + chevrons in the two bottom
+// quadrants (the active steer zones). Subtle by design — the first-run tutorial
+// card does the real teaching. `vis` (0..1) fades it out at race start.
+export function drawSteerHints(ctx, vis = 1) {
+  if (vis <= 0) return;
+  const t = performance.now();
+  // Blink off as it fades so it disappears gracefully.
+  if (vis < 0.4 && (Math.floor(t / 110) % 2 === 0)) return;
+  const cy = (H * 0.7) | 0;          // bottom half, above the player + HUD
+  const period = 950;
+  const drawZone = (cx, dir) => {
+    for (let k = 0; k < 2; k++) {
+      const ph = ((t + k * period / 2) % period) / period;  // 0..1
+      if (ph < 0.82) ring(ctx, cx, cy, (3 + ph * 9) | 0, 13);
+    }
+    drawChevron(ctx, cx, cy, dir, 2, 1, 0);
+  };
+  drawZone((W * 0.25) | 0, -1);
+  drawZone((W * 0.75) | 0, +1);
+}
+
+// First-run "HOW TO STEER" card shown before the countdown. Diagram makes the
+// bottom-left / bottom-right quadrants explicit; top half is the neutral zone.
+export function drawTutorial(ctx) {
+  const t = performance.now();
+  rect(ctx, 0, 0, W, H, 0);                      // black backdrop
+  rect(ctx, 0, 0, W, 2, 6);                      // thin red top accent
+  rect(ctx, 0, H - 2, W, 2, 6);
+
+  textOutlinedCentered(ctx, "HOW TO STEER", 16, 5, 0, 2, 7);
+
+  // Diagram box, centred vertically.
+  const dw = 124, dh = 108;
+  const dx = ((W - dw) / 2) | 0;
+  const dy = (((H - dh) / 2) | 0) - 6;
+  const midX = dx + (dw / 2 | 0);
+  const midY = dy + (dh / 2 | 0);
+
+  rect(ctx, dx, dy, dw, dh, 4);                  // frame fill (dark gray) = top zone
+  // Bottom quadrants tinted green = "active steer zones".
+  rect(ctx, dx + 1, midY, (dw / 2 - 1) | 0, (dh / 2 - 1) | 0, 11);
+  rect(ctx, midX + 1, midY, (dw / 2 - 2) | 0, (dh / 2 - 1) | 0, 11);
+  // Grid lines + border.
+  rect(ctx, dx, dy, dw, 1, 1); rect(ctx, dx, dy + dh - 1, dw, 1, 1);
+  rect(ctx, dx, dy, 1, dh, 1); rect(ctx, dx + dw - 1, dy, 1, dh, 1);
+  rect(ctx, dx, midY, dw, 1, 1);                 // horizontal split
+  rect(ctx, midX, dy, 1, dh, 1);                 // vertical split
+
+  // Top (neutral) label.
+  textCentered(ctx, "WATCH ROAD", dy + (dh / 4 | 0) - 6, 2, 1);
+  textCentered(ctx, "NO STEER",   dy + (dh / 4 | 0) + 2, 3, 1);
+
+  // Bottom quadrant labels + chevrons.
+  const blX = dx + (dw / 4 | 0), brX = midX + (dw / 4 | 0), qY = midY + (dh / 4 | 0);
+  drawChevron(ctx, blX, qY - 4, -1, 6, 5, 0);
+  textCentered2(ctx, "LEFT", blX, qY + 8, 1);
+  drawChevron(ctx, brX, qY - 4, +1, 6, 5, 0);
+  textCentered2(ctx, "RIGHT", brX, qY + 8, 1);
+
+  // Footer hints.
+  textCentered(ctx, "AUTO GAS  NO BRAKE", dy + dh + 8, 21, 1);
+  const promptIdx = (Math.floor(t / 400) % 2 === 0) ? 5 : 1;
+  textOutlinedCentered(ctx, "TAP TO BEGIN", H - 22, promptIdx, 0, 1);
+}
+
+// Text centred on an arbitrary x (not the screen) — for diagram labels.
+function textCentered2(ctx, str, cx, y, paletteIdx) {
+  const w = String(str).length * 4 - 1;
+  text(ctx, str, (cx - w / 2) | 0, y, paletteIdx, 1);
 }
 
 export function drawGameOver(ctx, { score, hi, isNew, reason, passed, time }) {

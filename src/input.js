@@ -50,9 +50,18 @@ window.addEventListener("keyup", (e) => {
   recompute();
 });
 
+// Only the bottom half of the screen steers — the two bottom quadrants
+// (bottom-left = steer left, bottom-right = steer right). The top half is a
+// neutral "watch the road" zone so high taps don't accidentally steer.
+const STEER_TOP_FRAC = 0.5;
+
 function bindPointer(canvas) {
-  const sideOf = (clientX) => {
+  // Returns "L"/"R" for a touch in the bottom quadrants, or null for a neutral
+  // (top-half) touch. Taps anywhere still count as a menu "Touch" press.
+  const sideOf = (clientX, clientY) => {
     const rect = canvas.getBoundingClientRect();
+    const localY = clientY - rect.top;
+    if (localY < rect.height * STEER_TOP_FRAC) return null;
     const localX = clientX - rect.left;
     return localX < rect.width / 2 ? "L" : "R";
   };
@@ -60,7 +69,7 @@ function bindPointer(canvas) {
   canvas.addEventListener("touchstart", (e) => {
     e.preventDefault();
     for (const t of e.changedTouches) {
-      touchPoints.set(t.identifier, { x: t.clientX, y: t.clientY, side: sideOf(t.clientX) });
+      touchPoints.set(t.identifier, { x: t.clientX, y: t.clientY, side: sideOf(t.clientX, t.clientY) });
     }
     state.pressed.add("Touch");
     recompute();
@@ -69,7 +78,7 @@ function bindPointer(canvas) {
     e.preventDefault();
     for (const t of e.changedTouches) {
       const tp = touchPoints.get(t.identifier);
-      if (tp) { tp.x = t.clientX; tp.y = t.clientY; tp.side = sideOf(t.clientX); }
+      if (tp) { tp.x = t.clientX; tp.y = t.clientY; tp.side = sideOf(t.clientX, t.clientY); }
     }
     recompute();
   }, { passive: false });
@@ -87,13 +96,13 @@ function bindPointer(canvas) {
   canvas.addEventListener("mousedown", (e) => {
     if (e.button !== 0) return;
     mouseDown = true;
-    touchPoints.set(mouseId, { x: e.clientX, y: e.clientY, side: sideOf(e.clientX) });
+    touchPoints.set(mouseId, { x: e.clientX, y: e.clientY, side: sideOf(e.clientX, e.clientY) });
     state.pressed.add("Touch");
     recompute();
   });
   window.addEventListener("mousemove", (e) => {
     if (!mouseDown) return;
-    touchPoints.set(mouseId, { x: e.clientX, y: e.clientY, side: sideOf(e.clientX) });
+    touchPoints.set(mouseId, { x: e.clientX, y: e.clientY, side: sideOf(e.clientX, e.clientY) });
     recompute();
   });
   window.addEventListener("mouseup", () => {
