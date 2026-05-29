@@ -5,7 +5,7 @@
 // most ±1 lane, so the player can ALWAYS thread through with steering alone.
 // Rarely (~5%) a "tough row" shifts the gap by 2, forcing the player to brake
 // to find the gap.
-import { PHYS } from "../config.js";
+import { PHYS, RACE } from "../config.js";
 import { project } from "../road.js";
 import { drawSpriteNN, groundShadow } from "../render.js";
 import { TRAFFIC_SKINS } from "../sprites.js";
@@ -132,8 +132,8 @@ export function updateTraffic(sys, dt, playerZ, map, cbs) {
     c.laneChangeTimer -= dt;
     if (c.laneChangeTimer <= 0) {
       c.laneChangeTimer = 8 + Math.random() * 8;
-      // 60% chance to actually shift lanes (else hold this lane).
-      if (Math.random() < 0.6) {
+      // Chance to actually shift lanes (else hold). Higher = more weaving = harder.
+      if (Math.random() < RACE.trafficSidewaysChance) {
         const shift = (Math.random() < 0.5 ? -1 : 1) * (10 + Math.random() * 14);
         c.targetX = Math.max(-(halfRoad - 6), Math.min(halfRoad - 6, c.x + shift));
       }

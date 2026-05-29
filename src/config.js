@@ -63,8 +63,8 @@ export const PHYS = {
   steerSpeedFactor: 0.65,
   carHalfWidth: 6,    // -20% with the smaller player sprite
   carHalfHeight: 8,
-  // Display: top speed shows as 300 KMH; 100 km/h marker used for ramp phase split.
-  topSpeedKmh: 300,
+  // Display: top speed shows as 250 KMH; 100 km/h marker used for ramp phase split.
+  topSpeedKmh: 250,
   phase1Kmh: 100,
 };
 
@@ -78,8 +78,9 @@ export const RACE = {
   // every densityStepSeconds, compounding — capped so the road never becomes
   // unwinnable.
   densityStepSeconds: 60,
-  densityStepIncrement: 0.05,
-  densityMax: 1.6,
+  densityStepIncrement: 0.10,   // traffic gets +10% denser each interval (was +5%)
+  densityMax: 1.8,              // allow the steeper ramp to keep biting
+  trafficSidewaysChance: 0.8,   // chance a car actually changes lane on its timer (was 0.6)
   topSpeedThreshold: 0.95,
   // Cop chase: 2 cop cars spawn behind the player when they cross this KMH.
   // Cops cruise slightly slower than the player's max, so a clean run outruns them.
