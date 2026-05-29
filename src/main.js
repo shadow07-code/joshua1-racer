@@ -30,13 +30,15 @@ import {
   drawHud, drawTitleScreen, drawMapSelect, drawDifficultySelect,
   drawGameOver, drawPaused, drawCountdown, drawTutorialOverlay, drawSteerHints,
 } from "./hud.js";
-import { registerServiceWorker, initInstallBanner } from "./pwa.js";
+import { registerServiceWorker, initInstallBanner, initInstallButton, setInstallButtonVisible } from "./pwa.js";
 
 const canvas = document.getElementById("game");
 const ctx = getCtx(canvas);
 initInput(canvas);
 registerServiceWorker();
 initInstallBanner();
+initInstallButton();
+let _onHome = null;   // tracks title-screen visibility for the install button
 
 const STATES = {
   TITLE: "TITLE",
@@ -400,6 +402,9 @@ function drawWorld() {
 
 function render() {
   clear(ctx, 12);
+  // Show the permanent "add to phone" button on the home screen only.
+  const onHome = g.state === STATES.TITLE;
+  if (onHome !== _onHome) { setInstallButtonVisible(onHome); _onHome = onHome; }
   if (g.state === STATES.TITLE) { drawTitleScreen(ctx, bestEverScore()); return; }
   if (g.state === STATES.MAP_SELECT) { drawMapSelect(ctx, g.mapIdx); return; }
   if (g.state === STATES.DIFFICULTY) { drawDifficultySelect(ctx, g.diffIdx); return; }
