@@ -8,14 +8,30 @@ const INSTALLED_KEY = "joshua1.installed";
 let stashedPrompt = null;
 
 export function registerServiceWorker() {
-  if ("serviceWorker" in navigator) {
-    // Defer registration until window load to avoid competing with first paint.
-    window.addEventListener("load", () => {
-      navigator.serviceWorker.register("./sw.js").catch(() => {
-        // Non-fatal: SW just won't be available offline.
-      });
+  if (!("serviceWorker" in navigator)) return;
+
+  // If the page was already controlled by a service worker, then a *new* worker
+  // taking control means a fresh deploy just activated — reload once so the new
+  // code/assets are actually used (otherwise the player keeps the old version
+  // until they manually refresh). Guarded so first-ever installs don't reload.
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (reloaded || !hadController) return;
+    reloaded = true;
+    window.location.reload();
+  });
+
+  // Defer registration until window load to avoid competing with first paint.
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").then((reg) => {
+      // Check for an update now, and again periodically while the app is open.
+      reg.update();
+      setInterval(() => reg.update(), 60 * 60 * 1000);
+    }).catch(() => {
+      // Non-fatal: SW just won't be available offline.
     });
-  }
+  });
 }
 
 function isIos() {
