@@ -1,8 +1,11 @@
 // Player car — auto-accelerate with a start-of-race speed ramp, brake, steer, slip.
 import { PHYS, PLAYER_Y, W } from "../config.js";
 import { SPR_PLAYER } from "../sprites.js";
-import { drawSprite, groundShadow } from "../render.js";
+import { drawSpriteNN, groundShadow } from "../render.js";
 import { roadCenterX } from "../road.js";
+
+// Player car drawn 20% smaller than its native 16×24 sprite.
+const PLAYER_SCALE = 0.8;
 
 export function makePlayer() {
   return {
@@ -113,9 +116,12 @@ export function drawPlayer(ctx, p, map) {
   // Slight wobble when slipping on oil or in legacy slip state.
   const slipping = p.oilTimer > 0 || p.slip > 0;
   const wobble = slipping ? Math.sin(performance.now() / 28) * 1 : 0;
-  // Grounding shadow under the car, then the F1 sprite (16w × 24h, centre anchor).
-  groundShadow(ctx, (cx + p.x) | 0, PLAYER_Y + 11, 7);
-  drawSprite(ctx, SPR_PLAYER, (cx + p.x - 8 + wobble) | 0, PLAYER_Y - 12);
+  // Drawn size of the 16×24 sprite at PLAYER_SCALE (centre-anchored on the car).
+  const halfW = 16 * PLAYER_SCALE / 2;   // ≈ 6.4
+  const halfH = 24 * PLAYER_SCALE / 2;   // ≈ 9.6
+  // Grounding shadow under the car, then the (smaller) F1 sprite.
+  groundShadow(ctx, (cx + p.x) | 0, PLAYER_Y + halfH - 1, 6);
+  drawSpriteNN(ctx, SPR_PLAYER, cx + p.x - halfW + wobble, PLAYER_Y - halfH, PLAYER_SCALE);
 }
 
 // Hit box in (z, x) world coords.

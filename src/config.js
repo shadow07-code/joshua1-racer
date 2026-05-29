@@ -61,8 +61,8 @@ export const PHYS = {
   offRoadDecel: 180,       // rapid stop when off the asphalt
   steerSpeed: 120,
   steerSpeedFactor: 0.65,
-  carHalfWidth: 7,
-  carHalfHeight: 10,
+  carHalfWidth: 6,    // -20% with the smaller player sprite
+  carHalfHeight: 8,
   // Display: top speed shows as 300 KMH; 100 km/h marker used for ramp phase split.
   topSpeedKmh: 300,
   phase1Kmh: 100,

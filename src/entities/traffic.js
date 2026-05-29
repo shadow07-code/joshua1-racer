@@ -7,10 +7,14 @@
 // to find the gap.
 import { PHYS } from "../config.js";
 import { project } from "../road.js";
-import { drawSprite, groundShadow } from "../render.js";
+import { drawSpriteNN, groundShadow } from "../render.js";
 import { TRAFFIC_SKINS } from "../sprites.js";
 
 const LANES = 5;
+
+// Drawn (and collision) half-sizes derived from the sprite size × its scale.
+function skinHalfX(skin) { return skin.w * skin.scale / 2; }
+function skinHalfZ(skin) { return skin.h * skin.scale / 2; }
 
 export function makeTrafficSystem(opts = {}) {
   return {
@@ -162,15 +166,17 @@ export function drawTraffic(ctx, sys, map, playerZ, playerX) {
   for (const c of drawList) {
     const p = project(map, playerZ, playerX, c);
     if (!p) continue;
-    groundShadow(ctx, p.sx, p.sy + c.skin.halfZ - 1, c.skin.halfX);
-    drawSprite(ctx, c.skin.spr, p.sx - c.skin.halfX, p.sy - c.skin.halfZ);
+    const hx = skinHalfX(c.skin), hz = skinHalfZ(c.skin);
+    groundShadow(ctx, p.sx, p.sy + hz - 1, hx);
+    drawSpriteNN(ctx, c.skin.spr, p.sx - hx, p.sy - hz, c.skin.scale);
   }
 }
 
 export function checkTrafficHit(sys, box) {
   for (const c of sys.list) {
-    const x1 = c.x - c.skin.halfX, x2 = c.x + c.skin.halfX;
-    const z1 = c.z - c.skin.halfZ * 0.6, z2 = c.z + c.skin.halfZ * 0.6;
+    const hx = skinHalfX(c.skin), hz = skinHalfZ(c.skin);
+    const x1 = c.x - hx, x2 = c.x + hx;
+    const z1 = c.z - hz * 0.6, z2 = c.z + hz * 0.6;
     if (box.x1 < x2 && box.x2 > x1 && box.z1 < z2 && box.z2 > z1) return c;
   }
   return null;

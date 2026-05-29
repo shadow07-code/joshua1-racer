@@ -53,6 +53,42 @@ export function drawSpriteScaled(ctx, sprite, x, y, scale = 1, flipX = false) {
   }
 }
 
+// Nearest-neighbour scaled sprite blit. Caches each sprite to an offscreen
+// canvas once, then draws it at an arbitrary (incl. fractional) scale with
+// smoothing off — lets us render the player/traffic a bit smaller while keeping
+// crisp pixels. Transparent (-1) cells stay transparent.
+const _nnCache = new Map();
+function spriteToCanvas(sprite) {
+  let cv = _nnCache.get(sprite);
+  if (cv) return cv;
+  let w = 0;
+  for (const row of sprite) if (row.length > w) w = row.length;
+  const h = sprite.length;
+  cv = document.createElement("canvas");
+  cv.width = w; cv.height = h;
+  const c = cv.getContext("2d");
+  for (let r = 0; r < h; r++) {
+    const row = sprite[r];
+    for (let x = 0; x < row.length; x++) {
+      const idx = row[x];
+      if (idx < 0) continue;
+      c.fillStyle = PALETTE[idx];
+      c.fillRect(x, r, 1, 1);
+    }
+  }
+  _nnCache.set(sprite, cv);
+  return cv;
+}
+export function drawSpriteNN(ctx, sprite, dx, dy, factor = 1) {
+  const cv = spriteToCanvas(sprite);
+  const w = Math.max(1, Math.round(cv.width * factor));
+  const h = Math.max(1, Math.round(cv.height * factor));
+  const prev = ctx.imageSmoothingEnabled;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(cv, Math.round(dx), Math.round(dy), w, h);
+  ctx.imageSmoothingEnabled = prev;
+}
+
 // Filled disc (Bresenham-ish span fill) — for suns, glows, wheels, dots.
 export function disc(ctx, cx, cy, r, paletteIdx) {
   ctx.fillStyle = PALETTE[paletteIdx];

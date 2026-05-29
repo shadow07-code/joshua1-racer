@@ -191,6 +191,64 @@ export const SPR_BUS_BLACK  = recolorBody(BUS_BASE, 7, 6, 8, 4, 0, 4);
 export const SPR_BUS_WHITE  = recolorBody(BUS_BASE, 7, 6, 8, 2, 1, 2);
 export const SPR_BUS_ORANGE = recolorBody(BUS_BASE, 7, 6, 8, 22, 9, 5);
 
+// MOTORBIKE (Harley cruiser) — 7w × 14h, top-down. Mostly black + chrome with a
+// recolourable fuel tank (slots 6 main / 7 dark / 8 light).
+const MOTO_BASE = [
+  [_,_,_,0,_,_,_],   // 0 — front fender
+  [_,_,0,4,0,_,_],   // 1 — front wheel
+  [_,_,0,4,0,_,_],   // 2 — front wheel
+  [_,0,2,2,2,0,_],   // 3 — handlebars (chrome)
+  [_,_,0,1,0,_,_],   // 4 — headlight
+  [_,0,8,6,8,0,_],   // 5 — fuel tank
+  [_,0,6,6,6,0,_],   // 6 — fuel tank
+  [_,0,7,4,7,0,_],   // 7 — seat
+  [_,_,0,4,0,_,_],   // 8 — rider
+  [_,_,0,4,0,_,_],   // 9 — rider
+  [_,2,0,4,0,2,_],   // 10 — exhaust pipes (chrome)
+  [_,2,0,4,0,2,_],   // 11 — exhaust pipes
+  [_,_,0,4,0,_,_],   // 12 — rear wheel
+  [_,_,0,4,0,_,_],   // 13 — rear wheel
+];
+export const SPR_MOTO_BLACK  = recolorBody(MOTO_BASE, 7, 6, 8, 0, 4, 4);
+export const SPR_MOTO_ORANGE = recolorBody(MOTO_BASE, 7, 6, 8, 22, 9, 5);
+export const SPR_MOTO_WHITE  = recolorBody(MOTO_BASE, 7, 6, 8, 2, 1, 2);
+
+// POLICE HELICOPTER — 14w × 16h, top-down (nose up). Deep-gray body (23),
+// cockpit glass (13), red beacon (6), white tail rotor (1). The spinning main
+// rotor is drawn on top procedurally in cops.js.
+export const SPR_HELI = [
+  [_,_,_,_,_,0,0,0,0,_,_,_,_,_],
+  [_,_,_,_,0,13,13,13,13,0,_,_,_,_],
+  [_,_,_,0,13,13,13,13,13,13,0,_,_,_],
+  [_,_,0,24,13,13,13,13,13,13,24,0,_,_],
+  [_,0,24,23,23,23,23,23,23,23,23,24,0,_],
+  [0,24,23,23,23,6,6,23,23,23,23,23,24,0],
+  [0,23,23,23,23,23,23,23,23,23,23,23,23,0],
+  [0,24,23,23,23,23,23,23,23,23,23,23,24,0],
+  [_,0,24,23,23,23,23,23,23,23,23,24,0,_],
+  [_,_,0,23,23,23,23,23,23,23,23,0,_,_],
+  [_,_,_,0,23,23,23,23,23,23,0,_,_,_],
+  [_,_,_,_,0,23,23,23,23,0,_,_,_,_],
+  [_,_,_,_,_,0,23,23,0,_,_,_,_,_],
+  [_,_,_,_,_,0,23,23,0,_,_,_,_,_],
+  [_,_,_,_,0,4,23,23,4,0,_,_,_,_],
+  [_,_,_,1,1,4,4,4,4,1,1,_,_,_],
+];
+
+// FLAMING BARREL payload — 8w × 9h drum (rust body, dark rings). The fire is
+// drawn flickering on top in cops.js.
+export const SPR_BARREL = [
+  [_,0,0,0,0,0,0,_],
+  [0,2,22,22,22,22,2,0],
+  [0,22,22,9,9,22,22,0],
+  [0,4,4,22,22,4,4,0],
+  [0,22,22,22,22,22,22,0],
+  [0,4,4,22,22,4,4,0],
+  [0,22,22,9,9,22,22,0],
+  [0,2,22,22,22,22,2,0],
+  [_,0,0,0,0,0,0,_],
+];
+
 // Legacy aliases (so any stale HUD/import keeps building).
 export const SPR_SEDAN_BLUE   = SPR_SEDAN_BLACK;
 export const SPR_SEDAN_RED    = SPR_SEDAN_ORANGE;
@@ -205,17 +263,20 @@ export const SPR_BUS_GRAY     = SPR_BUS_BLACK;
 export const SPR_VAN_WHITE    = SPR_SEDAN_WHITE;
 export const SPR_VAN_BROWN    = SPR_SEDAN_BLACK;
 
-// ── Traffic skin table — only black/white/orange in 3 shapes ──────────────────
+// ── Traffic skin table — cars (sedans + pickups) and Harley motorbikes; no buses.
+// `scale` (drawn at this factor by drawTraffic) is the global -10% traffic size.
+// Collision half-sizes are derived from w/h * scale, so hitboxes shrink too.
+const TS = 0.9;
 export const TRAFFIC_SKINS = [
-  { spr: SPR_SEDAN_BLACK,  w: 10, h: 16, halfX: 5, halfZ: 8,  speedMul: 0.28 },
-  { spr: SPR_SEDAN_WHITE,  w: 10, h: 16, halfX: 5, halfZ: 8,  speedMul: 0.30 },
-  { spr: SPR_SEDAN_ORANGE, w: 10, h: 16, halfX: 5, halfZ: 8,  speedMul: 0.32 },
-  { spr: SPR_TRUCK_BLACK,  w: 10, h: 18, halfX: 5, halfZ: 9,  speedMul: 0.22 },
-  { spr: SPR_TRUCK_WHITE,  w: 10, h: 18, halfX: 5, halfZ: 9,  speedMul: 0.24 },
-  { spr: SPR_TRUCK_ORANGE, w: 10, h: 18, halfX: 5, halfZ: 9,  speedMul: 0.24 },
-  { spr: SPR_BUS_BLACK,    w: 10, h: 22, halfX: 5, halfZ: 11, speedMul: 0.18 },
-  { spr: SPR_BUS_WHITE,    w: 10, h: 22, halfX: 5, halfZ: 11, speedMul: 0.18 },
-  { spr: SPR_BUS_ORANGE,   w: 10, h: 22, halfX: 5, halfZ: 11, speedMul: 0.20 },
+  { spr: SPR_SEDAN_BLACK,  w: 10, h: 16, scale: TS, speedMul: 0.28 },
+  { spr: SPR_SEDAN_WHITE,  w: 10, h: 16, scale: TS, speedMul: 0.30 },
+  { spr: SPR_SEDAN_ORANGE, w: 10, h: 16, scale: TS, speedMul: 0.32 },
+  { spr: SPR_TRUCK_BLACK,  w: 10, h: 18, scale: TS, speedMul: 0.22 },
+  { spr: SPR_TRUCK_WHITE,  w: 10, h: 18, scale: TS, speedMul: 0.24 },
+  { spr: SPR_TRUCK_ORANGE, w: 10, h: 18, scale: TS, speedMul: 0.24 },
+  { spr: SPR_MOTO_BLACK,   w: 7,  h: 14, scale: TS, speedMul: 0.34 },
+  { spr: SPR_MOTO_ORANGE,  w: 7,  h: 14, scale: TS, speedMul: 0.36 },
+  { spr: SPR_MOTO_WHITE,   w: 7,  h: 14, scale: TS, speedMul: 0.34 },
 ];
 
 // ─── Scenery ──────────────────────────────────────────────────────────────────

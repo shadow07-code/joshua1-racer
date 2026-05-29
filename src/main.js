@@ -19,7 +19,7 @@ import { drawRoad, distToY } from "./road.js";
 import { makePlayer, updatePlayer, drawPlayer, playerBox, applyCollisionLoss } from "./entities/player.js";
 import { makeTrafficSystem, updateTraffic, drawTraffic, checkTrafficHit, prepopulateTraffic } from "./entities/traffic.js";
 import { makeOilSystem, drawOilSpills, checkOilHit } from "./entities/oilspills.js";
-import { makeCopsSystem, updateCops, drawCops } from "./entities/cops.js";
+import { makeCopsSystem, updateCops, drawCops, checkBarrelHit } from "./entities/cops.js";
 import { updateSmoke, drawSmoke } from "./entities/smoke.js";
 import { makeScenerySystem, updateScenery, drawScenery } from "./scenery.js";
 import {
@@ -317,15 +317,9 @@ function updateRace(dt) {
     onPassed: () => { g.scoreState.score += SCORE.passBonus; },
     onNearMiss: () => { g.scoreState.score += SCORE.nearMissBonus; sfxPickup(); },
   });
-  // Cops kick in once the player crosses 250 km/h.
-  updateCops(g.cops, dt, g.player.z, g.player.x, g.player.speed, g.map, {
-    onRam: () => {
-      // Cop hit from behind — drop speed sharply, brief invuln, no life loss.
-      g.player.speed = Math.max(PHYS.startSpeed, g.player.speed * RACE.copRamSlowdown);
-      g.player.invuln = Math.max(g.player.invuln, 0.6);
-      sfxCrash();
-    },
-  });
+  // Police helicopter kicks in once the player crosses 250 km/h — it drops
+  // flaming barrels on the road ahead (collision handled below, costs a life).
+  updateCops(g.cops, dt, g.player.z, g.player.x, g.player.speed, g.map);
   updateScenery(g.scenery, g.player.z, g.map, dt, SPAWN.sceneryPerMeter);
 
   // Player exhaust smoke (no more AI smoke — AI gone).
@@ -350,6 +344,21 @@ function updateRace(dt) {
       if (g.player.lives <= 0) {
         endRace("GAME OVER");
         return;
+      }
+    }
+    // Flaming barrel from the chopper — costs a life. Skipped if a traffic hit
+    // this frame already granted invuln (avoids double-dipping).
+    if (g.player.invuln <= 0) {
+      const bar = checkBarrelHit(g.cops, playerBox(g.player));
+      if (bar) {
+        bar.hit = true;
+        sfxCrash();
+        applyCollisionLoss(g.player, 0.5, 1.2);
+        g.player.lives -= 1;
+        if (g.player.lives <= 0) {
+          endRace("GAME OVER");
+          return;
+        }
       }
     }
   }
