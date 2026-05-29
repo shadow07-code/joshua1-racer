@@ -7,7 +7,7 @@
 // from civilian crashes).
 import { PHYS, RACE } from "../config.js";
 import { project } from "../road.js";
-import { drawSprite, rect } from "../render.js";
+import { drawSprite, rect, groundShadow } from "../render.js";
 
 // Cop car sprite (built inline). 10w × 16h sedan with a 6w × 2h light bar on
 // top. The light-bar colors flip every ~0.12s for a blinking-siren effect — the
@@ -123,6 +123,7 @@ export function drawCops(ctx, sys, map, playerZ, playerX) {
   for (const c of sys.list) {
     const p = project(map, playerZ, playerX, c);
     if (!p) continue;
+    groundShadow(ctx, p.sx, p.sy + COP_HALF_Z - 1, COP_HALF_W);
     drawSprite(ctx, COP_SPRITE, p.sx - COP_HALF_W, p.sy - COP_HALF_Z);
     // Override light-bar pixels with the blink pattern.
     const left = blinkOn ? 12 : 6;

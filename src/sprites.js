@@ -283,6 +283,30 @@ export const SPR_PALM = [
   [_,_,_,_,_,_,_,_,_,_,_,_,_,_],
 ];
 
+// City buildings — generated office towers with lit/unlit window grids. Used as
+// roadside scenery so the highway reads as an actual city skyline.
+function makeBuilding(w, h, bodyIdx, litIdx) {
+  const rows = [];
+  for (let y = 0; y < h; y++) {
+    const row = [];
+    for (let x = 0; x < w; x++) {
+      let v = bodyIdx;
+      if (x === 0 || x === w - 1) v = 0;        // side outlines
+      else if (y === 0) v = 0;                  // roof line
+      else if (y === 1) v = 4;                  // roof cap
+      else if (x > 1 && x < w - 2 && y > 2 && (y % 3 !== 0) && (x % 2 === 0)) {
+        // Window cells — pseudo-random lit pattern.
+        v = (((x * 7 + y * 13) % 5) < 3) ? litIdx : 3;
+      }
+      row.push(v);
+    }
+    rows.push(row);
+  }
+  return rows;
+}
+export const SPR_BUILDING  = makeBuilding(14, 30, 23, 5);   // tall, deep-gray, gold windows
+export const SPR_BUILDING2 = makeBuilding(11, 22, 4, 13);   // shorter, gray, cool windows
+
 // Lamp post (city)
 export const SPR_LAMP = [
   [_,_,5,5,5,_,_,_],

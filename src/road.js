@@ -26,6 +26,11 @@ export function drawRoad(ctx, map, playerZ) {
   // Asphalt
   rect(ctx, (cx - halfW) | 0, 0, halfW * 2, H, map.roadIdx);
 
+  // Inset edge shadow — a couple of darker columns just inside each road edge.
+  // Reads as a subtle bevel/depth so the road no longer looks like a flat slab.
+  rect(ctx, (cx - halfW) | 0, 0, 2, H, 4);
+  rect(ctx, (cx + halfW - 2) | 0, 0, 2, H, 4);
+
   // Subtle asphalt grain — faint darker speckles that scroll with z, evokes texture
   // without distracting from the cars.
   for (let y = 0; y < H; y += 1) {
@@ -60,6 +65,8 @@ export function drawRoad(ctx, map, playerZ) {
   const offset = ((scrollPx) % period + period) % period;
   for (let y = -dashLen; y < H; y += period) {
     const top = (y + offset) | 0;
+    // 1px drop shadow gives the dash a slightly raised, painted look.
+    rect(ctx, (cx - dashW / 2 + 1) | 0, top + 1, dashW, dashLen, 4);
     rect(ctx, (cx - dashW / 2) | 0, top, dashW, dashLen, 1);
   }
 }

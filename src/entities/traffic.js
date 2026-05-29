@@ -7,7 +7,7 @@
 // to find the gap.
 import { PHYS } from "../config.js";
 import { project } from "../road.js";
-import { drawSprite } from "../render.js";
+import { drawSprite, groundShadow } from "../render.js";
 import { TRAFFIC_SKINS } from "../sprites.js";
 
 const LANES = 5;
@@ -162,6 +162,7 @@ export function drawTraffic(ctx, sys, map, playerZ, playerX) {
   for (const c of drawList) {
     const p = project(map, playerZ, playerX, c);
     if (!p) continue;
+    groundShadow(ctx, p.sx, p.sy + c.skin.halfZ - 1, c.skin.halfX);
     drawSprite(ctx, c.skin.spr, p.sx - c.skin.halfX, p.sy - c.skin.halfZ);
   }
 }

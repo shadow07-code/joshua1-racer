@@ -8,7 +8,7 @@ import { getCtx, clear, rect } from "./render.js";
 import { MAPS, MAP_LIST, DIFFICULTY_LIST } from "./maps.js";
 import { initInput, getInput, consumePress, consumeAnyPress } from "./input.js";
 import {
-  initAudio, resumeAudio, startMusic, stopMusic, setMusicIntensity, setMusicTempoFactor,
+  initAudio, resumeAudio, suspendAudio, startMusic, stopMusic, setMusicIntensity, setMusicTempoFactor,
   playFlourish,
   startEngine, setEngine, stopEngine,
   sfxAccelAccent, sfxBrake, sfxPickup, sfxCrash,
@@ -78,11 +78,44 @@ btnMute.addEventListener("click", () => {
   btnMute.textContent = m ? "♪×" : "♪";
 });
 btnPause.addEventListener("click", () => {
-  if (g.state === STATES.RACE) { g.prevState = g.state; g.state = STATES.PAUSED; }
-  else if (g.state === STATES.PAUSED) { g.state = g.prevState; }
+  if (g.state === STATES.RACE) pauseGame();
+  else if (g.state === STATES.PAUSED) resumeGame();
 });
 
 function ensureAudio() { initAudio(); resumeAudio(); }
+
+// Pause/resume helpers — pausing silences music + engine so audio also stops
+// when the player backgrounds the app. Resuming restarts both.
+function pauseGame() {
+  if (g.state !== STATES.RACE) return;
+  g.prevState = g.state;
+  g.state = STATES.PAUSED;
+  stopMusic();
+  stopEngine();
+}
+function resumeGame() {
+  if (g.state !== STATES.PAUSED) return;
+  g.state = g.prevState || STATES.RACE;
+  if (g.state === STATES.RACE) {
+    startMusic(g.map.music);
+    setMusicIntensity(0);
+    startEngine();
+  }
+}
+
+// Stop the music + engine the instant the tab/app is hidden (minimised on a
+// phone, switched away on desktop), and fully suspend the audio context so no
+// scheduled chiptune notes leak through. A race auto-pauses; everything resumes
+// on return.
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) {
+    if (g.state === STATES.RACE) pauseGame();
+    else { stopMusic(); stopEngine(); }
+    suspendAudio();
+  } else {
+    resumeAudio();
+  }
+});
 
 function baseRowGapForMap(map) {
   return map.key === "jungle" ? SPAWN.trafficRowGapJungle : SPAWN.trafficRowGapCity;
@@ -117,6 +150,7 @@ function beginCountdown() {
 function beginRace() {
   startMusic(g.map.music);
   setMusicIntensity(0);
+  startEngine();              // safe no-op if already running (e.g. from countdown)
   g.player.raceTime = 0;
   g.state = STATES.RACE;
 }
@@ -186,7 +220,7 @@ function updateCountdown(dt) {
 function updateRace(dt) {
   const input = getInput();
 
-  if (consumePress("p", "P")) { g.prevState = g.state; g.state = STATES.PAUSED; return; }
+  if (consumePress("p", "P")) { pauseGame(); return; }
   if (consumePress("m", "M")) { const m = toggleMute(); btnMute.textContent = m ? "♪×" : "♪"; }
   if (consumePress("Escape")) { stopMusic(); stopEngine(); g.state = STATES.TITLE; return; }
 
@@ -271,7 +305,7 @@ function updateRace(dt) {
 }
 
 function updatePaused() {
-  if (consumePress("p", "P", "Enter", " ", "Touch")) g.state = g.prevState;
+  if (consumePress("p", "P", "Enter", " ", "Touch")) { ensureAudio(); resumeGame(); }
   if (consumePress("Escape")) { stopMusic(); stopEngine(); g.state = STATES.TITLE; }
 }
 

@@ -1,7 +1,7 @@
 // Player car — auto-accelerate with a start-of-race speed ramp, brake, steer, slip.
 import { PHYS, PLAYER_Y, W } from "../config.js";
 import { SPR_PLAYER } from "../sprites.js";
-import { drawSprite } from "../render.js";
+import { drawSprite, groundShadow } from "../render.js";
 import { roadCenterX } from "../road.js";
 
 export function makePlayer() {
@@ -113,7 +113,8 @@ export function drawPlayer(ctx, p, map) {
   // Slight wobble when slipping on oil or in legacy slip state.
   const slipping = p.oilTimer > 0 || p.slip > 0;
   const wobble = slipping ? Math.sin(performance.now() / 28) * 1 : 0;
-  // F1 sprite is 16w × 24h. Anchor by center.
+  // Grounding shadow under the car, then the F1 sprite (16w × 24h, centre anchor).
+  groundShadow(ctx, (cx + p.x) | 0, PLAYER_Y + 11, 7);
   drawSprite(ctx, SPR_PLAYER, (cx + p.x - 8 + wobble) | 0, PLAYER_Y - 12);
 }
 

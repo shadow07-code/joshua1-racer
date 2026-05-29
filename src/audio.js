@@ -45,6 +45,9 @@ export function initAudio() {
 }
 
 export function resumeAudio() { if (ctx && ctx.state === "suspended") ctx.resume(); }
+// Suspend all audio output (used when the tab/app is backgrounded so music and
+// the engine drone stop immediately on mobile). Pairs with resumeAudio().
+export function suspendAudio() { if (ctx && ctx.state === "running") { try { ctx.suspend(); } catch {} } }
 
 // ── Song data ─────────────────────────────────────────────────────────────────
 // Each entry: [noteName, octave, duration16ths]. "-" = rest.

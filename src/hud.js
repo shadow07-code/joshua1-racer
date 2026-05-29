@@ -1,7 +1,10 @@
 // HUD — top score strip + bottom icon panel.
 // Endless survival: shows TIME elapsed + LIVES instead of LAP + POS.
 import { W, H, PHYS, RACE } from "./config.js";
-import { rect, text, textRight, drawSprite } from "./render.js";
+import {
+  rect, text, textRight, textCentered, drawSprite, drawSpriteScaled,
+  disc, groundShadow, textOutlined, textOutlinedCentered,
+} from "./render.js";
 import {
   SPR_PLAYER, SPR_AI_BLUE, SPR_AI_GREEN, SPR_AI_ORANGE, SPR_PALM, SPR_TREE,
   SPR_SEDAN_BLUE, SPR_SEDAN_RED, SPR_BUS_YELLOW,
@@ -81,49 +84,165 @@ export function drawHud(ctx, {
   text(ctx, "PASS", 138, panelTop + 15, 5);
 }
 
+// ─── Title screen — layered synthwave sunset + receding road hero shot ─────────
+const TITLE_HORIZON = 104;
+
+// Sunset gradient bands, top → horizon. [yStart, paletteIdx]
+const SKY_BANDS = [
+  [0, 23], [13, 16], [27, 12], [42, 15], [56, 6], [70, 9], [86, 5], [98, 21],
+];
+
+// Deterministic star field (upper sky only).
+const TITLE_STARS = (() => {
+  let s = 0x1a2b3c;
+  const rnd = () => ((s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+  const out = [];
+  for (let i = 0; i < 30; i++) out.push({ x: (rnd() * W) | 0, y: (rnd() * 60) | 0, ph: (rnd() * 1000) | 0 });
+  return out;
+})();
+
+// Deterministic skyline of buildings sitting on the horizon.
+const TITLE_BUILDINGS = (() => {
+  let s = 0x77aa33;
+  const rnd = () => ((s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+  const out = [];
+  let x = -3;
+  while (x < W + 3) {
+    const w = 9 + ((rnd() * 13) | 0);
+    const h = 12 + ((rnd() * 24) | 0);
+    out.push({ x, w, h, dark: rnd() < 0.5 });
+    x += w + 1 + ((rnd() * 2) | 0);
+  }
+  return out;
+})();
+
+function drawTitleSky(ctx) {
+  for (let b = 0; b < SKY_BANDS.length; b++) {
+    const y0 = SKY_BANDS[b][0];
+    const y1 = b + 1 < SKY_BANDS.length ? SKY_BANDS[b + 1][0] : TITLE_HORIZON;
+    rect(ctx, 0, y0, W, y1 - y0, SKY_BANDS[b][1]);
+  }
+}
+
+function drawStars(ctx, t) {
+  for (const st of TITLE_STARS) {
+    const tw = (Math.floor(t / 380) + st.ph) % 5;
+    if (tw === 0) continue;                 // blink off occasionally
+    rect(ctx, st.x, st.y, 1, 1, tw === 1 ? 13 : 1);
+  }
+}
+
+function drawSun(ctx, t) {
+  const cx = 80, cy = 84;
+  // Outer halo + body (classic slatted synthwave sun).
+  disc(ctx, cx, cy, 19, 9);    // orange glow ring
+  disc(ctx, cx, cy, 16, 21);   // light-yellow body
+  disc(ctx, cx, cy, 13, 5);    // yellow core
+  // Horizontal slats over the lower half, colour matched to the bands behind.
+  rect(ctx, cx - 18, cy + 4,  36, 2, 9);
+  rect(ctx, cx - 18, cy + 8,  36, 2, 9);
+  rect(ctx, cx - 18, cy + 12, 36, 3, 9);
+}
+
+function drawSkyline(ctx, t) {
+  for (const b of TITLE_BUILDINGS) {
+    const top = TITLE_HORIZON - b.h;
+    rect(ctx, b.x, top, b.w, b.h, b.dark ? 0 : 23);
+    // Lit windows.
+    for (let wy = top + 2; wy < TITLE_HORIZON - 1; wy += 4) {
+      for (let wx = b.x + 1; wx < b.x + b.w - 1; wx += 3) {
+        let lit = (((wx * 31 + wy * 17) >> 1) & 7) < 3;
+        if (((wx + wy + ((t / 600) | 0)) % 17) === 0) lit = !lit;  // a few twinkle
+        if (lit) rect(ctx, wx, wy, 1, 2, 5);
+      }
+    }
+  }
+}
+
+function drawTitleRoad(ctx, t) {
+  const cx = 80;
+  const top = TITLE_HORIZON, bottom = H;
+  const span = bottom - top;
+  // Grass + asphalt, scanline by scanline so the road tapers in perspective.
+  for (let y = top; y < bottom; y++) {
+    const fr = (y - top) / span;
+    const halfw = 8 + fr * 72;
+    // Scrolling grass bands either side.
+    const band = (Math.floor((fr * 26) + t / 90) % 2) === 0;
+    rect(ctx, 0, y, W, 1, band ? 10 : 20);
+    // Asphalt.
+    rect(ctx, (cx - halfw) | 0, y, (halfw * 2) | 0, 1, 3);
+    // Rumble strips (alternating red/white) hugging the road edge.
+    const rOn = (Math.floor((fr * 26) + t / 90) % 2) === 0;
+    const rw = Math.max(1, (2 + fr * 3) | 0);
+    rect(ctx, (cx - halfw - rw) | 0, y, rw, 1, rOn ? 6 : 1);
+    rect(ctx, (cx + halfw) | 0, y, rw, 1, rOn ? 6 : 1);
+  }
+  // Centre dashes — perspective-spaced and scrolling toward the viewer.
+  const dashPhase = (t / 240) % 1;
+  for (let i = 0; i < 10; i++) {
+    let f = ((i / 10) + dashPhase) % 1;
+    const yy = top + f * f * span;
+    const fr = (yy - top) / span;
+    const dw = Math.max(2, (7 * fr) | 0);
+    const dl = Math.max(2, (12 * fr) | 0);
+    rect(ctx, (cx - dw / 2) | 0, yy | 0, dw, dl, 1);
+  }
+}
+
+function drawHeroCar(ctx, t) {
+  const scale = 2;
+  const wob = Math.sin(t / 420) * 1.2;
+  const topY = 150;
+  const x = (80 - 16 + wob) | 0;          // sprite is 16w → centre at 80
+  groundShadow(ctx, 80, topY + 24 * scale, 18);
+  drawSpriteScaled(ctx, SPR_PLAYER, x, topY, scale);
+  // Flickering exhaust glow at the rear (bottom) of the car.
+  if ((Math.floor(t / 90) % 2) === 0) {
+    disc(ctx, 74, topY + 24 * scale + 2, 2, 9);
+    disc(ctx, 86, topY + 24 * scale + 2, 2, 5);
+  } else {
+    disc(ctx, 74, topY + 24 * scale + 2, 1, 5);
+    disc(ctx, 86, topY + 24 * scale + 2, 2, 9);
+  }
+}
+
 export function drawTitleScreen(ctx, allTimeBest) {
-  // Sky gradient
-  rect(ctx, 0, 0, W, H, 12);
-  rect(ctx, 0, 60, W, 30, 13);
-  // Sun
-  rect(ctx, 100, 40, 16, 16, 5);
-  rect(ctx, 102, 38, 12, 20, 5);
-  rect(ctx, 98, 42, 20, 12, 5);
-  // Road strip
-  rect(ctx, 0, 90, W, 70, 10);
-  rect(ctx, 32, 90, W - 64, 70, 3);
-  rect(ctx, 32, 90, 2, 70, 1);
-  rect(ctx, W - 34, 90, 2, 70, 1);
-  for (let i = 0; i < 6; i++) rect(ctx, W/2 - 1, 96 + i * 12, 2, 6, 5);
-  // Roadside
-  drawSprite(ctx, SPR_TREE, 4, 100);
-  drawSprite(ctx, SPR_TREE, 4, 130);
-  drawSprite(ctx, SPR_TREE, W - 18, 100);
-  drawSprite(ctx, SPR_TREE, W - 18, 130);
-  // Cars on road
-  const bob = Math.floor(performance.now() / 200) % 2;
-  drawSprite(ctx, SPR_PLAYER, W/2 - 7, 130 + bob);
-  drawSprite(ctx, SPR_SEDAN_BLUE, W/2 - 22, 100 - bob);
-  drawSprite(ctx, SPR_BUS_YELLOW, W/2 + 8, 96 + bob);
+  const t = performance.now();
 
-  // Title band
-  rect(ctx, 0, 14, W, 18, 6);
-  rect(ctx, 0, 12, W, 2, 7);
-  rect(ctx, 0, 32, W, 2, 7);
-  text(ctx, "JOSHUA 1", 36, 18, 1, 2);
-  text(ctx, "RACING", 56, 32, 7, 1);
+  // ── Scene ──
+  drawTitleSky(ctx);
+  drawStars(ctx, t);
+  drawSun(ctx, t);
+  drawSkyline(ctx, t);
+  drawTitleRoad(ctx, t);
+  drawHeroCar(ctx, t);
 
-  // Bottom info panel — explicit about the controls.
-  rect(ctx, 0, H - 88, W, 88, 4);
-  rect(ctx, 0, H - 88, W, 1, 1);
-  text(ctx, "TAP TO START",        38, H - 82, 5, 1);
-  text(ctx, "BEST  " + pad(allTimeBest, 6),  30, H - 70, 1, 1);
-  // Controls line — tells the player about the on-screen arrows below.
-  text(ctx, "TAP ARROW BUTTONS",   18, H - 54, 13, 1);
-  text(ctx, "TO STEER LEFT/RIGHT", 12, H - 44, 13, 1);
-  text(ctx, "AUTO-ACCELERATE",     22, H - 28, 5, 1);
-  text(ctx, "NO BRAKE  JUST DODGE", 10, H - 18, 5, 1);
-  text(ctx, "3 LIVES  AVOID TRAFFIC", 8, H - 8, 14, 1);
+  // ── Logo ──
+  textOutlinedCentered(ctx, "JOSHUA 1", 12, 5, 0, 3, 7);   // yellow on black, dk-red shadow
+  textOutlinedCentered(ctx, "RACING",   32, 6, 0, 2, 7);   // red on black
+
+  // ── Best-score chip ──
+  const chipW = 96, chipX = (W - chipW) / 2 | 0, chipY = 48;
+  rect(ctx, chipX, chipY, chipW, 13, 0);
+  rect(ctx, chipX, chipY, chipW, 1, 5);
+  rect(ctx, chipX, chipY + 12, chipW, 1, 9);
+  drawSprite(ctx, ICN_TROPHY, chipX + 4, chipY + 3);
+  text(ctx, "BEST", chipX + 14, chipY + 4, 5, 1);
+  text(ctx, pad(allTimeBest, 6), chipX + 38, chipY + 4, 1, 1);
+
+  // ── "TAP TO START" banner (floating above the hero car) ──
+  const bannerY = 122;
+  rect(ctx, 8, bannerY, W - 16, 18, 0);
+  rect(ctx, 8, bannerY, W - 16, 1, 1);
+  rect(ctx, 8, bannerY + 17, W - 16, 1, 0);
+  const promptIdx = (Math.floor(t / 400) % 2 === 0) ? 5 : 1;
+  textOutlinedCentered(ctx, "TAP TO START", bannerY + 4, promptIdx, 0, 2);
+
+  // ── Control hints (below the car) ──
+  textCentered(ctx, "ARROW BUTTONS STEER", 214, 1, 1);
+  textCentered(ctx, "AUTO GAS  NO BRAKE", 224, 21, 1);
+  textCentered(ctx, "3 LIVES  DODGE TRAFFIC", 232, 14, 1);
 }
 
 export function drawMapSelect(ctx, selected) {
@@ -197,11 +316,16 @@ function drawDiffCard(ctx, x, y, w, h, title, sub, selected, isHard) {
 }
 
 export function drawCountdown(ctx, label) {
-  rect(ctx, 0, H/2 - 28, W, 56, 0);
-  rect(ctx, 0, H/2 - 26, W, 52, 6);
-  const sz = 5;
-  const txtW = label.length * 4 * sz - sz;
-  text(ctx, label, ((W - txtW) / 2) | 0, (H/2 - 12) | 0, 1, sz);
+  const cy = (H / 2) | 0;
+  const go = label === "GO!";
+  // Dark banner across the middle — world stays visible above and below.
+  rect(ctx, 0, cy - 30, W, 60, 0);
+  rect(ctx, 0, cy - 30, W, 2, 5);
+  rect(ctx, 0, cy + 28, W, 2, 5);
+  // Glow disc behind the glyph (green burst on GO!, warm on the count).
+  disc(ctx, W / 2, cy - 1, 23, go ? 11 : 7);
+  disc(ctx, W / 2, cy - 1, 18, go ? 17 : 9);
+  textOutlinedCentered(ctx, label, cy - 13, go ? 1 : 5, 0, 5, 7);
 }
 
 export function drawGameOver(ctx, { score, hi, isNew, reason, passed, time }) {
@@ -211,7 +335,7 @@ export function drawGameOver(ctx, { score, hi, isNew, reason, passed, time }) {
   rect(ctx, 0, 24, W, 30, 6);
   rect(ctx, 0, 22, W, 2, 7);
   rect(ctx, 0, 54, W, 2, 7);
-  text(ctx, reason, ((W - reason.length * 8) / 2) | 0, 32, 1, 2);
+  textOutlinedCentered(ctx, reason, 32, 1, 0, 2, 7);
 
   // "RESULTS" sub-label
   text(ctx, "RESULTS", ((W - 7 * 4) / 2) | 0, 68, 5);
@@ -249,6 +373,12 @@ export function drawGameOver(ctx, { score, hi, isNew, reason, passed, time }) {
 }
 
 export function drawPaused(ctx) {
-  rect(ctx, 0, H/2 - 10, W, 20, 0);
-  text(ctx, "PAUSED", (W - 24) / 2, H/2 - 3, 1, 1);
+  const cy = (H / 2) | 0;
+  rect(ctx, 16, cy - 24, W - 32, 48, 0);
+  rect(ctx, 16, cy - 24, W - 32, 2, 5);
+  rect(ctx, 16, cy + 22, W - 32, 2, 5);
+  textOutlinedCentered(ctx, "PAUSED", cy - 14, 5, 0, 2, 7);
+  if (Math.floor(performance.now() / 450) % 2 === 0) {
+    textCentered(ctx, "TAP TO RESUME", cy + 8, 1, 1);
+  }
 }

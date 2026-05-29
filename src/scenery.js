@@ -1,7 +1,10 @@
 // Roadside scenery — trees / palms / rocks / lamps. Decorative only.
 import { drawSprite } from "./render.js";
 import { distToY } from "./road.js";
-import { SPR_TREE, SPR_PINE, SPR_PALM, SPR_BUSH, SPR_ROCK_SCEN, SPR_LAMP } from "./sprites.js";
+import {
+  SPR_TREE, SPR_PINE, SPR_PALM, SPR_BUSH, SPR_ROCK_SCEN, SPR_LAMP,
+  SPR_BUILDING, SPR_BUILDING2,
+} from "./sprites.js";
 import { W } from "./config.js";
 
 const SPRITES = {
@@ -11,6 +14,8 @@ const SPRITES = {
   bush: { sprite: SPR_BUSH,      w: 8,  h: 6,  halfX: 4, halfZ: 3 },
   rock: { sprite: SPR_ROCK_SCEN, w: 9,  h: 5,  halfX: 4, halfZ: 2 },
   lamp: { sprite: SPR_LAMP,      w: 8,  h: 15, halfX: 4, halfZ: 7 },
+  building:  { sprite: SPR_BUILDING,  w: 14, h: 30, halfX: 7, halfZ: 15 },
+  building2: { sprite: SPR_BUILDING2, w: 11, h: 22, halfX: 5, halfZ: 11 },
 };
 
 export function makeScenerySystem() {

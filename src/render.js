@@ -33,6 +33,40 @@ export function drawSprite(ctx, sprite, x, y, flipX = false) {
   }
 }
 
+// Sprite drawn with each logical pixel scaled up by an integer factor — used for
+// the big "hero" car on the title screen so the art reads at a glance.
+export function drawSpriteScaled(ctx, sprite, x, y, scale = 1, flipX = false) {
+  const rows = sprite.length;
+  for (let r = 0; r < rows; r++) {
+    const row = sprite[r];
+    for (let c = 0; c < row.length; c++) {
+      const idx = row[c];
+      if (idx < 0) continue;
+      ctx.fillStyle = PALETTE[idx];
+      const cx = flipX ? (row.length - 1 - c) : c;
+      ctx.fillRect((x + cx * scale) | 0, (y + r * scale) | 0, scale, scale);
+    }
+  }
+}
+
+// Filled disc (Bresenham-ish span fill) — for suns, glows, wheels, dots.
+export function disc(ctx, cx, cy, r, paletteIdx) {
+  ctx.fillStyle = PALETTE[paletteIdx];
+  const r2 = r * r;
+  for (let dy = -r; dy <= r; dy++) {
+    const dx = Math.floor(Math.sqrt(Math.max(0, r2 - dy * dy)));
+    ctx.fillRect((cx - dx) | 0, (cy + dy) | 0, dx * 2 + 1, 1);
+  }
+}
+
+// Soft ground shadow beneath a sprite — two stacked dark bars give a grounded,
+// "lifted off the asphalt" look without needing real alpha blending.
+export function groundShadow(ctx, cx, baseY, halfW, paletteIdx = 4) {
+  ctx.fillStyle = PALETTE[paletteIdx];
+  ctx.fillRect((cx - halfW) | 0, baseY | 0, (halfW * 2) | 0, 1);
+  ctx.fillRect((cx - halfW + 1) | 0, (baseY + 1) | 0, (halfW * 2 - 2) | 0, 1);
+}
+
 // 3x5 pixel font — uppercase A-Z, 0-9, plus a few symbols.
 // Each glyph is a 3-wide, 5-tall array of 0/1.
 const FONT_3x5 = (() => {
@@ -105,6 +139,26 @@ export function text(ctx, str, x, y, paletteIdx = 0, scale = 1) {
     cx += (3 + 1) * scale; // 1px tracking
   }
   return cx; // returns next x
+}
+
+// Text with a 1px outline + optional drop shadow — gives logo/headline text the
+// chunky arcade-marquee look that reads cleanly over a busy background.
+export function textOutlined(ctx, str, x, y, fillIdx, outlineIdx, scale = 1, shadowIdx = null) {
+  if (shadowIdx != null) text(ctx, str, x + scale, y + scale * 2, shadowIdx, scale);
+  // Crisp 1px keyline in all 8 directions (kept at 1px regardless of glyph scale
+  // so neighbouring characters don't merge).
+  for (let ox = -1; ox <= 1; ox++) {
+    for (let oy = -1; oy <= 1; oy++) {
+      if (ox === 0 && oy === 0) continue;
+      text(ctx, str, x + ox, y + oy, outlineIdx, scale);
+    }
+  }
+  text(ctx, str, x, y, fillIdx, scale);
+}
+
+export function textOutlinedCentered(ctx, str, y, fillIdx, outlineIdx, scale = 1, shadowIdx = null) {
+  const w = String(str).length * 4 * scale - scale;
+  textOutlined(ctx, str, ((W - w) / 2) | 0, y, fillIdx, outlineIdx, scale, shadowIdx);
 }
 
 export function textCentered(ctx, str, y, paletteIdx = 0, scale = 1) {
