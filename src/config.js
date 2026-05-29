@@ -30,9 +30,21 @@ export const PALETTE = [
   "#E0D8C0", // 25 cream (van / road shoulder dust)
 ];
 
-// Logical canvas — mobile-portrait aspect.
+// Logical canvas. Width is fixed (gameplay is tuned around a 160-wide field);
+// height adapts to the device's portrait aspect ratio so the canvas fills the
+// screen edge-to-edge with no letterbox bars and no pixel distortion. A taller
+// screen simply shows more road ahead — the view-ahead distance (metres) is
+// unchanged, so difficulty stays the same. Clamped to a sane band, with a 2:3
+// fallback when there's no window (e.g. off-DOM / tests).
 export const W = 160;
-export const H = 240;
+function computeH() {
+  if (typeof window === "undefined") return 240;
+  const vw = window.innerWidth || 0;
+  const vh = window.innerHeight || 0;
+  if (!vw || !vh) return 240;
+  return Math.max(240, Math.min(380, Math.round(W * (vh / vw))));
+}
+export const H = computeH();
 
 export const PHYS = {
   startSpeed: 14,

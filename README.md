@@ -18,8 +18,8 @@ Then open the printed URL.
 
 ## Controls
 
-- **Desktop:** Left/Right = steer, Down/Back arrow = brake, M = mute, P = pause, Esc = back to menu. Car auto-accelerates.
-- **Mobile:** Tap left/right half of the screen to steer. Two-finger tap to brake. Car auto-accelerates.
+- **Desktop:** Left/Right arrows = steer, M = mute, P = pause, Esc = back to menu. Car auto-accelerates (no brake).
+- **Mobile:** Tap the left/right half of the screen to steer. Car auto-accelerates (no brake).
 
 ## Optional: generate PNG icons for older iOS
 

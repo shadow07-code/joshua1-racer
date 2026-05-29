@@ -190,10 +190,9 @@ function drawTitleRoad(ctx, t) {
   }
 }
 
-function drawHeroCar(ctx, t) {
+function drawHeroCar(ctx, t, topY) {
   const scale = 2;
   const wob = Math.sin(t / 420) * 1.2;
-  const topY = 150;
   const x = (80 - 16 + wob) | 0;          // sprite is 16w → centre at 80
   groundShadow(ctx, 80, topY + 24 * scale, 18);
   drawSpriteScaled(ctx, SPR_PLAYER, x, topY, scale);
@@ -210,13 +209,17 @@ function drawHeroCar(ctx, t) {
 export function drawTitleScreen(ctx, allTimeBest) {
   const t = performance.now();
 
+  // Layout anchored to the bottom so the hero shot fills any screen height.
+  const heroTopY = H - 90;
+  const bannerY = heroTopY - 28;
+
   // ── Scene ──
   drawTitleSky(ctx);
   drawStars(ctx, t);
   drawSun(ctx, t);
   drawSkyline(ctx, t);
   drawTitleRoad(ctx, t);
-  drawHeroCar(ctx, t);
+  drawHeroCar(ctx, t, heroTopY);
 
   // ── Logo ──
   textOutlinedCentered(ctx, "JOSHUA 1", 12, 5, 0, 3, 7);   // yellow on black, dk-red shadow
@@ -232,17 +235,16 @@ export function drawTitleScreen(ctx, allTimeBest) {
   text(ctx, pad(allTimeBest, 6), chipX + 38, chipY + 4, 1, 1);
 
   // ── "TAP TO START" banner (floating above the hero car) ──
-  const bannerY = 122;
   rect(ctx, 8, bannerY, W - 16, 18, 0);
   rect(ctx, 8, bannerY, W - 16, 1, 1);
   rect(ctx, 8, bannerY + 17, W - 16, 1, 0);
   const promptIdx = (Math.floor(t / 400) % 2 === 0) ? 5 : 1;
   textOutlinedCentered(ctx, "TAP TO START", bannerY + 4, promptIdx, 0, 2);
 
-  // ── Control hints (below the car) ──
-  textCentered(ctx, "ARROW BUTTONS STEER", 214, 1, 1);
-  textCentered(ctx, "AUTO GAS  NO BRAKE", 224, 21, 1);
-  textCentered(ctx, "3 LIVES  DODGE TRAFFIC", 232, 14, 1);
+  // ── Control hints (pinned to the bottom edge) ──
+  textCentered(ctx, "TAP SIDES OR ARROWS", H - 26, 1, 1);
+  textCentered(ctx, "AUTO GAS  NO BRAKE", H - 16, 21, 1);
+  textCentered(ctx, "3 LIVES  DODGE TRAFFIC", H - 8, 14, 1);
 }
 
 export function drawMapSelect(ctx, selected) {
@@ -337,11 +339,13 @@ export function drawGameOver(ctx, { score, hi, isNew, reason, passed, time }) {
   rect(ctx, 0, 54, W, 2, 7);
   textOutlinedCentered(ctx, reason, 32, 1, 0, 2, 7);
 
-  // "RESULTS" sub-label
-  text(ctx, "RESULTS", ((W - 7 * 4) / 2) | 0, 68, 5);
+  // Stats panel — vertically centred in the space between the banner and the
+  // footer so taller screens don't leave a big empty gap.
+  const panelTop = Math.max(72, ((H - 80) / 2) | 0);
 
-  // Stats panel
-  const panelTop = 80;
+  // "RESULTS" sub-label
+  text(ctx, "RESULTS", ((W - 7 * 4) / 2) | 0, panelTop - 12, 5);
+
   rect(ctx, 8, panelTop, W - 16, 80, 4);
   rect(ctx, 8, panelTop, W - 16, 1, 1);
   rect(ctx, 8, panelTop + 79, W - 16, 1, 0);

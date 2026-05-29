@@ -2,6 +2,10 @@
 import { PALETTE, W, H } from "./config.js";
 
 export function getCtx(canvas) {
+  // Size the backing store to the computed logical resolution (height adapts to
+  // the device aspect — see config.js). CSS then scales this up crisply.
+  canvas.width = W;
+  canvas.height = H;
   const ctx = canvas.getContext("2d", { alpha: false });
   ctx.imageSmoothingEnabled = false;
   return ctx;
