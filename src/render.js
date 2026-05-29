@@ -63,6 +63,21 @@ export function disc(ctx, cx, cy, r, paletteIdx) {
   }
 }
 
+// Checkerboard ("dither") fill — fills cell-sized blocks in an every-other
+// pattern so an overlay colour reads as ~50% transparent without real alpha
+// (keeps the 8-bit look; lets the road show through the steer-zone highlight).
+// `parity` (0/1) shifts the pattern so it can shimmer when animated.
+export function ditherRect(ctx, x, y, w, h, paletteIdx, parity = 0, cell = 2) {
+  ctx.fillStyle = PALETTE[paletteIdx];
+  x = x | 0; y = y | 0; w = w | 0; h = h | 0;
+  for (let yy = 0; yy < h; yy += cell) {
+    const row = (yy / cell) | 0;
+    for (let xx = (((row + parity) & 1) * cell); xx < w; xx += cell * 2) {
+      ctx.fillRect(x + xx, y + yy, Math.min(cell, w - xx), Math.min(cell, h - yy));
+    }
+  }
+}
+
 // Hollow circle outline (1px) via the midpoint-circle algorithm — used for the
 // pulsing "tap here" ripples in the steering tutorial.
 export function ring(ctx, cx, cy, r, paletteIdx) {

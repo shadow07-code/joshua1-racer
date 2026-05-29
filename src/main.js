@@ -28,7 +28,7 @@ import {
 } from "./scoring.js";
 import {
   drawHud, drawTitleScreen, drawMapSelect, drawDifficultySelect,
-  drawGameOver, drawPaused, drawCountdown, drawTutorial, drawSteerHints,
+  drawGameOver, drawPaused, drawCountdown, drawTutorialOverlay, drawSteerHints,
 } from "./hud.js";
 import { registerServiceWorker, initInstallBanner } from "./pwa.js";
 
@@ -82,6 +82,7 @@ const g = {
   densityTimer: 0,
   countdownTime: 0,
   countdownLastBeep: -1,
+  tut: null,            // first-run steering tutorial sub-state
 };
 
 const btnMute = document.getElementById("btn-mute");
@@ -182,21 +183,59 @@ function updateTitle() {
   if (consumeAnyPress()) {
     ensureAudio();
     sfxMenuSelect();
-    // Skip map / difficulty pickers — only one of each. First-timers see the
-    // steering tutorial card before the countdown.
+    // Skip map / difficulty pickers — only one of each. First-timers get the
+    // interactive steering tutorial before the countdown.
     if (hasSeenTutorial()) beginCountdown();
-    else g.state = STATES.TUTORIAL;
+    else enterTutorial();
   }
 }
 
-function updateTutorial() {
-  if (consumePress("Escape")) { g.state = STATES.TITLE; return; }
-  if (consumePress("Enter", " ", "Touch")) {
-    ensureAudio();
-    sfxMenuSelect();
-    markTutorialSeen();
-    beginCountdown();
+// Build a minimal demo world (road + car + scenery, no traffic/scoring/cops) as
+// the backdrop for the first-run interactive steering tutorial.
+function enterTutorial() {
+  g.map = MAPS[MAP_LIST[g.mapIdx]];
+  g.player = makePlayer();
+  g.scenery = makeScenerySystem();
+  for (let i = 0; i < 25; i++) updateScenery(g.scenery, 0, g.map, 0.016, SPAWN.sceneryPerMeter);
+  g.tut = { phase: "demo", timer: 0, targetX: 0, demoSide: 0, rightDone: false, leftDone: false, nudgeUntil: 0 };
+  g.state = STATES.TUTORIAL;
+}
+
+// Interactive tutorial: a "watch" auto-demo (car weaves while the matching
+// orange zone lights), then a "practice" gate (tap right → nudge ✓, tap left →
+// nudge ✓), then "done" (tap to race). Esc skips. Shown once (localStorage).
+function updateTutorial(dt) {
+  if (consumePress("Escape")) { markTutorialSeen(); beginCountdown(); return; }
+  const tut = g.tut;
+  const input = getInput();
+
+  // Gentle forward scroll so the road + scenery feel alive.
+  g.player.z += 28 * dt;
+  updateScenery(g.scenery, g.player.z, g.map, dt, SPAWN.sceneryPerMeter);
+  tut.timer += dt;
+
+  if (tut.phase === "demo") {
+    if (tut.timer < 1.2) { tut.demoSide = 1; tut.targetX = 26; }
+    else if (tut.timer < 2.4) { tut.demoSide = -1; tut.targetX = -26; }
+    else if (tut.timer < 3.0) { tut.demoSide = 0; tut.targetX = 0; }
+    else { tut.phase = "practice"; tut.targetX = 0; }
+  } else if (tut.phase === "practice") {
+    if (performance.now() > tut.nudgeUntil) tut.targetX = 0;   // ease the nudge back
+    if (!tut.rightDone) {
+      if (input.steer > 0.5) { tut.rightDone = true; tut.targetX = 22; tut.nudgeUntil = performance.now() + 450; ensureAudio(); sfxPickup(); }
+    } else if (!tut.leftDone) {
+      if (input.steer < -0.5) { tut.leftDone = true; tut.targetX = -22; tut.nudgeUntil = performance.now() + 450; ensureAudio(); sfxPickup(); }
+    } else {
+      tut.targetX = 0;
+      consumeAnyPress();          // flush the taps used to complete the gate
+      tut.phase = "done";
+    }
+  } else { // done
+    if (consumePress("Enter", " ", "Touch")) { ensureAudio(); sfxMenuSelect(); markTutorialSeen(); beginCountdown(); return; }
   }
+
+  // Smoothly move the demo car toward its target lateral offset.
+  g.player.x += (tut.targetX - g.player.x) * Math.min(1, dt * 8);
 }
 
 function updateMapSelect() {
@@ -355,7 +394,13 @@ function render() {
   if (g.state === STATES.TITLE) { drawTitleScreen(ctx, bestEverScore()); return; }
   if (g.state === STATES.MAP_SELECT) { drawMapSelect(ctx, g.mapIdx); return; }
   if (g.state === STATES.DIFFICULTY) { drawDifficultySelect(ctx, g.diffIdx); return; }
-  if (g.state === STATES.TUTORIAL) { drawTutorial(ctx); return; }
+  if (g.state === STATES.TUTORIAL) {
+    drawRoad(ctx, g.map, g.player.z);
+    drawScenery(ctx, g.scenery, g.map, g.player.z);
+    drawPlayer(ctx, g.player, g.map);
+    drawTutorialOverlay(ctx, g.tut);
+    return;
+  }
   if (g.state === STATES.COUNTDOWN) {
     drawWorld();
     const t = g.countdownTime;
@@ -417,7 +462,7 @@ function update(dt) {
     case STATES.TITLE: updateTitle(); break;
     case STATES.MAP_SELECT: updateMapSelect(); break;
     case STATES.DIFFICULTY: updateDifficulty(); break;
-    case STATES.TUTORIAL: updateTutorial(); break;
+    case STATES.TUTORIAL: updateTutorial(dt); break;
     case STATES.COUNTDOWN: updateCountdown(dt); break;
     case STATES.RACE: updateRace(dt); break;
     case STATES.PAUSED: updatePaused(); break;

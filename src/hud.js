@@ -3,7 +3,7 @@
 import { W, H, PHYS, RACE } from "./config.js";
 import {
   rect, text, textRight, textCentered, drawSprite, drawSpriteScaled,
-  disc, ring, groundShadow, textOutlined, textOutlinedCentered,
+  disc, ditherRect, groundShadow, textOutlined, textOutlinedCentered,
 } from "./render.js";
 import {
   SPR_PLAYER, SPR_AI_BLUE, SPR_AI_GREEN, SPR_AI_ORANGE, SPR_PALM, SPR_TREE,
@@ -330,83 +330,121 @@ export function drawCountdown(ctx, label) {
   textOutlinedCentered(ctx, label, cy - 13, go ? 1 : 5, 0, 5, 7);
 }
 
-// Chevron arrow built from a 5-point "<" / ">" shape. dir -1 = left, +1 = right.
-function drawChevron(ctx, cx, cy, dir, sz = 2, fillIdx = 1, shadowIdx = 0) {
-  const pts = [];
-  for (let i = -sz; i <= sz; i++) pts.push([cx + dir * (sz - Math.abs(i)), cy + i]);
-  if (shadowIdx != null) for (const [x, y] of pts) rect(ctx, x + 1, y + 1, 2, 1, shadowIdx);
-  for (const [x, y] of pts) rect(ctx, x, y, 2, 1, fillIdx);
+// Big filled-triangle arrow. dir -1 = points left, +1 = points right.
+// Optional 1px keyline drawn as a slightly larger triangle behind the fill.
+// Built from horizontal spans via rect() so it stays within the palette API.
+export function drawBigArrow(ctx, cx, cy, dir, w, h, fillIdx, outlineIdx = null) {
+  const tri = (ww, hh, idx) => {
+    const half = hh / 2;
+    const baseX = cx - dir * (ww / 2);
+    for (let dy = -half; dy <= half; dy++) {
+      const f = 1 - Math.abs(dy) / half;             // 1 at the centre row → 0 at the tips
+      const len = Math.max(1, (ww * f) | 0);
+      const xa = dir > 0 ? baseX : baseX - len;
+      rect(ctx, xa, cy + dy, len, 1, idx);
+    }
+  };
+  if (outlineIdx != null) tri(w + 2, h + 2, outlineIdx);
+  tri(w, h, fillIdx);
 }
 
-// Per-race steering reminder: pulsing tap-ripples + chevrons in the two bottom
-// quadrants (the active steer zones). Subtle by design — the first-run tutorial
-// card does the real teaching. `vis` (0..1) fades it out at race start.
-export function drawSteerHints(ctx, vis = 1) {
+// Text centred on an arbitrary x with a 1px dark drop-shadow (reads on the
+// dithered orange zones). Used for LEFT/RIGHT labels.
+function labelCentered(ctx, str, cx, y, fillIdx = 1) {
+  const w = String(str).length * 4 - 1;
+  const x = (cx - w / 2) | 0;
+  text(ctx, str, x + 1, y + 1, 0, 1);
+  text(ctx, str, x, y, fillIdx, 1);
+}
+
+// Small green checkmark (✓) built from 2px blocks — marks a completed step.
+function drawCheck(ctx, cx, cy, idx = 17) {
+  const pts = [[-5, 0], [-3, 2], [-1, 4], [1, 2], [3, -1], [5, -4], [7, -7]];
+  for (const [dx, dy] of pts) {
+    rect(ctx, cx + dx + 1, cy + dy + 1, 3, 3, 0);   // shadow
+    rect(ctx, cx + dx, cy + dy, 3, 3, idx);
+  }
+}
+
+// Blinking border around a zone — draws attention to the active step.
+function zoneBorder(ctx, x, y, w, h, idx, t) {
+  if (Math.floor(t / 250) % 2 === 0) return;
+  rect(ctx, x, y, w, 2, idx); rect(ctx, x, y + h - 2, w, 2, idx);
+  rect(ctx, x, y, 2, h, idx); rect(ctx, x + w - 2, y, 2, h, idx);
+}
+
+// Orange "steer zone" highlights painted over the ACTUAL bottom quadrants of
+// the play area: bottom-left = steer left, bottom-right = steer right. Shared by
+// the per-race hint and the first-run tutorial overlay.
+const STEER_ZONE_TOP_FRAC = 0.5;
+function steerZoneRect() {
+  const top = (H * STEER_ZONE_TOP_FRAC) | 0;
+  const bottom = H - 22;                 // stop just above the HUD panel
+  return { top, h: Math.max(0, bottom - top), midX: (W / 2) | 0 };
+}
+
+export function drawSteerZones(ctx, { leftLit = true, rightLit = true, pulse = true, vis = 1, arrows = true } = {}) {
   if (vis <= 0) return;
   const t = performance.now();
-  // Blink off as it fades so it disappears gracefully.
-  if (vis < 0.4 && (Math.floor(t / 110) % 2 === 0)) return;
-  const cy = (H * 0.7) | 0;          // bottom half, above the player + HUD
-  const period = 950;
-  const drawZone = (cx, dir) => {
-    for (let k = 0; k < 2; k++) {
-      const ph = ((t + k * period / 2) % period) / period;  // 0..1
-      if (ph < 0.82) ring(ctx, cx, cy, (3 + ph * 9) | 0, 13);
+  if (vis < 0.4 && (Math.floor(t / 110) % 2 === 0)) return;   // blink out as it fades
+  const { top, h, midX } = steerZoneRect();
+  if (h <= 4) return;
+  const parity = pulse ? (Math.floor(t / 180) & 1) : 0;
+  const cyZone = top + (h / 2 | 0);
+  const arrowIdx = (!pulse || Math.floor(t / 350) % 2 === 0) ? 5 : 1;  // yellow / white pulse
+  const aw = 30, ah = 34;
+
+  const paint = (x, w, dir, label) => {
+    ditherRect(ctx, x, top, w, h, 9, parity);     // orange checkerboard
+    rect(ctx, x, top, w, 1, 9);                    // bright top edge
+    if (arrows) {
+      drawBigArrow(ctx, x + (w / 2 | 0), cyZone - 6, dir, aw, ah, arrowIdx, 0);
+      labelCentered(ctx, label, x + (w / 2 | 0), cyZone + 14, 1);
     }
-    drawChevron(ctx, cx, cy, dir, 2, 1, 0);
   };
-  drawZone((W * 0.25) | 0, -1);
-  drawZone((W * 0.75) | 0, +1);
+  if (leftLit) paint(0, midX, -1, "LEFT");
+  if (rightLit) paint(midX, W - midX, +1, "RIGHT");
+  if (leftLit && rightLit) rect(ctx, midX, top, 1, h, 0);   // divider
 }
 
-// First-run "HOW TO STEER" card shown before the countdown. Diagram makes the
-// bottom-left / bottom-right quadrants explicit; top half is the neutral zone.
-export function drawTutorial(ctx) {
+// Per-race steering reminder (every race): both zones lit + pulsing, faded by
+// `vis` at race start. Bold orange, big arrows.
+export function drawSteerHints(ctx, vis = 1) {
+  drawSteerZones(ctx, { leftLit: true, rightLit: true, pulse: true, vis });
+}
+
+// First-run interactive tutorial overlay, drawn over a live road backdrop (the
+// backdrop + car are rendered by main.js). `tut` = { phase, demoSide,
+// rightDone, leftDone }. phases: "demo" → "practice" → "done".
+export function drawTutorialOverlay(ctx, tut) {
   const t = performance.now();
-  rect(ctx, 0, 0, W, H, 0);                      // black backdrop
-  rect(ctx, 0, 0, W, 2, 6);                      // thin red top accent
-  rect(ctx, 0, H - 2, W, 2, 6);
+  const { top, h, midX } = steerZoneRect();
+  const cyZone = top + (h / 2 | 0);
+  const phase = tut.phase;
 
-  textOutlinedCentered(ctx, "HOW TO STEER", 16, 5, 0, 2, 7);
+  if (phase === "demo") {
+    // Light only the side the car is currently drifting toward.
+    drawSteerZones(ctx, { leftLit: tut.demoSide < 0, rightLit: tut.demoSide > 0, pulse: true, vis: 1 });
+  } else {
+    // Practice / done: both zones always visible (steady) so the mechanic reads;
+    // the active step gets a blinking border, completed steps get a ✓.
+    drawSteerZones(ctx, { leftLit: true, rightLit: true, pulse: false, vis: 1 });
+    if (phase === "practice") {
+      if (!tut.rightDone) zoneBorder(ctx, midX, top, W - midX, h, 1, t);
+      else if (!tut.leftDone) zoneBorder(ctx, 0, top, midX, h, 1, t);
+    }
+    if (tut.rightDone) drawCheck(ctx, (W * 0.75) | 0, cyZone - 6, 17);
+    if (tut.leftDone)  drawCheck(ctx, (W * 0.25) | 0, cyZone - 6, 17);
+  }
 
-  // Diagram box, centred vertically.
-  const dw = 124, dh = 108;
-  const dx = ((W - dw) / 2) | 0;
-  const dy = (((H - dh) / 2) | 0) - 6;
-  const midX = dx + (dw / 2 | 0);
-  const midY = dy + (dh / 2 | 0);
-
-  rect(ctx, dx, dy, dw, dh, 4);                  // frame fill (dark gray) = top zone
-  // Bottom quadrants tinted green = "active steer zones".
-  rect(ctx, dx + 1, midY, (dw / 2 - 1) | 0, (dh / 2 - 1) | 0, 11);
-  rect(ctx, midX + 1, midY, (dw / 2 - 2) | 0, (dh / 2 - 1) | 0, 11);
-  // Grid lines + border.
-  rect(ctx, dx, dy, dw, 1, 1); rect(ctx, dx, dy + dh - 1, dw, 1, 1);
-  rect(ctx, dx, dy, 1, dh, 1); rect(ctx, dx + dw - 1, dy, 1, dh, 1);
-  rect(ctx, dx, midY, dw, 1, 1);                 // horizontal split
-  rect(ctx, midX, dy, 1, dh, 1);                 // vertical split
-
-  // Top (neutral) label.
-  textCentered(ctx, "WATCH ROAD", dy + (dh / 4 | 0) - 6, 2, 1);
-  textCentered(ctx, "NO STEER",   dy + (dh / 4 | 0) + 2, 3, 1);
-
-  // Bottom quadrant labels + chevrons.
-  const blX = dx + (dw / 4 | 0), brX = midX + (dw / 4 | 0), qY = midY + (dh / 4 | 0);
-  drawChevron(ctx, blX, qY - 4, -1, 6, 5, 0);
-  textCentered2(ctx, "LEFT", blX, qY + 8, 1);
-  drawChevron(ctx, brX, qY - 4, +1, 6, 5, 0);
-  textCentered2(ctx, "RIGHT", brX, qY + 8, 1);
-
-  // Footer hints.
-  textCentered(ctx, "AUTO GAS  NO BRAKE", dy + dh + 8, 21, 1);
-  const promptIdx = (Math.floor(t / 400) % 2 === 0) ? 5 : 1;
-  textOutlinedCentered(ctx, "TAP TO BEGIN", H - 22, promptIdx, 0, 1);
-}
-
-// Text centred on an arbitrary x (not the screen) — for diagram labels.
-function textCentered2(ctx, str, cx, y, paletteIdx) {
-  const w = String(str).length * 4 - 1;
-  text(ctx, str, (cx - w / 2) | 0, y, paletteIdx, 1);
+  // Title (top) + prompt (just below).
+  textOutlinedCentered(ctx, "HOW TO STEER", 12, 5, 0, 2, 7);
+  let prompt;
+  if (phase === "demo") prompt = "WATCH THE CAR";
+  else if (phase === "practice") prompt = tut.rightDone ? "NOW TAP LEFT SIDE" : "TAP RIGHT SIDE";
+  else prompt = "GREAT!  TAP TO RACE";
+  const blink = Math.floor(t / 400) % 2 === 0;
+  textOutlinedCentered(ctx, prompt, 30, (phase === "done" && !blink) ? 1 : 5, 0, 1);
 }
 
 export function drawGameOver(ctx, { score, hi, isNew, reason, passed, time }) {
