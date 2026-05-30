@@ -4,6 +4,7 @@
 // native install prompt where available (Android/Chrome/Edge), and shows manual
 // "Share → Add to Home Screen" instructions on iOS Safari (which has no prompt).
 // The bottom banner is reused as that instruction popup.
+import { H } from "./config.js";
 
 const IOS_DISMISS_KEY = "joshua1.iosBannerDismissed";
 const INSTALLED_KEY = "joshua1.installed";
@@ -114,7 +115,19 @@ export function initInstallButton() {
 }
 
 // Show the button only where it makes sense (the title screen). main.js calls
-// this on state changes.
+// this on state changes. When showing, position it just above the canvas-space
+// "TAP TO START" banner (which sits at y = H − 118, 18px tall).
 export function setInstallButtonVisible(show) {
-  if (_installBtn) _installBtn.classList.toggle("show", !!show);
+  if (!_installBtn) return;
+  _installBtn.classList.toggle("show", !!show);
+  if (show) {
+    // Canvas fills the viewport (object-fit: contain with matched aspect).
+    // Scale factor = screen px per canvas px.
+    const scale = window.innerHeight / H;
+    // Banner top in canvas space is H-118.  Put the install button's bottom
+    // edge 6 canvas-px above that → offset from viewport bottom = (118+6)*scale
+    // plus the button's own height (handled by CSS bottom = distance to btn bottom).
+    const bottomPx = (118 + 8) * scale;
+    _installBtn.style.bottom = bottomPx + "px";
+  }
 }

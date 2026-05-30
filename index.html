@@ -122,23 +122,26 @@
       border-radius: 3px;
     }
     #toolbar button:active { background: rgba(139, 172, 15, 0.85); color: #0f380f; }
-    /* Permanent "add to phone" button — shown on the home/title screen only. */
+    /* Permanent "add to phone" button — shown centred above "TAP TO START"
+       on the title screen only. Bottom offset set dynamically by pwa.js. */
     #btn-install {
       position: fixed;
-      top: calc(env(safe-area-inset-top) + 6px);
-      left: calc(env(safe-area-inset-left) + 6px);
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: 50%;                     /* fallback; JS overrides per canvas scale */
       display: none;
       align-items: center;
-      gap: 4px;
-      background: rgba(15, 56, 15, 0.72);
+      justify-content: center;
+      gap: 6px;
+      background: rgba(15, 56, 15, 0.85);
       color: var(--dmg-lightest);
       border: 2px solid var(--dmg-light);
-      border-radius: 4px;
-      padding: 5px 9px;
+      border-radius: 6px;
+      padding: 10px 18px;
       font: inherit;
-      font-size: 10px;
+      font-size: 13px;
       font-weight: bold;
-      letter-spacing: 1px;
+      letter-spacing: 1.5px;
       white-space: nowrap;
       cursor: pointer;
       z-index: 9;
