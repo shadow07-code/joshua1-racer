@@ -447,50 +447,88 @@ export function drawTutorialOverlay(ctx, tut) {
   textOutlinedCentered(ctx, prompt, 30, (phase === "done" && !blink) ? 1 : 5, 0, 1);
 }
 
-export function drawGameOver(ctx, { score, hi, isNew, reason, passed, time }) {
-  // Dark backdrop with a bright accent banner.
+export function drawGameOver(ctx, { score, hi, isNew, reason, passed, time, topSpeed, density }) {
+  const t = performance.now();
+  // Dark backdrop.
   rect(ctx, 0, 0, W, H, 0);
-  // Top banner
-  rect(ctx, 0, 24, W, 30, 6);
-  rect(ctx, 0, 22, W, 2, 7);
-  rect(ctx, 0, 54, W, 2, 7);
-  textOutlinedCentered(ctx, reason, 32, 1, 0, 2, 7);
 
-  // Stats panel — vertically centred in the space between the banner and the
-  // footer so taller screens don't leave a big empty gap.
-  const panelTop = Math.max(72, ((H - 80) / 2) | 0);
+  // Total content height calculation for vertical centering.
+  // Banner(26) + gap(8) + [newHi(10+4)] + panel(82) + gap(6) + btn1(20+10) + btn2(16+10)
+  const rowH = 12;
+  const panelH = rowH * 6 + 10;    // 6 stat rows + padding
+  const newHiH = isNew ? 14 : 0;
+  const totalH = 26 + 8 + newHiH + panelH + 6 + 30 + 26;
+  const baseY = Math.max(4, ((H - totalH) / 2) | 0);
 
-  // "RESULTS" sub-label
-  text(ctx, "RESULTS", ((W - 7 * 4) / 2) | 0, panelTop - 12, 5);
+  // ── Top banner — "GAME OVER" ──
+  const bannerY = baseY;
+  rect(ctx, 0, bannerY, W, 26, 6);
+  rect(ctx, 0, bannerY, W, 2, 7);
+  rect(ctx, 0, bannerY + 24, W, 2, 7);
+  textOutlinedCentered(ctx, reason, bannerY + 6, 1, 0, 2, 7);
 
-  rect(ctx, 8, panelTop, W - 16, 80, 4);
-  rect(ctx, 8, panelTop, W - 16, 1, 1);
-  rect(ctx, 8, panelTop + 79, W - 16, 1, 0);
-
-  text(ctx, "TIME",  14, panelTop + 8,  13);
-  text(ctx, mmss(time || 0), W - 14 - 5 * 4, panelTop + 8, 1);
-
-  text(ctx, "SCORE", 14, panelTop + 22, 13);
-  text(ctx, pad(score, 6), W - 14 - 6 * 4, panelTop + 22, 1);
-
-  text(ctx, "HI",    14, panelTop + 36, 13);
-  text(ctx, pad(hi, 6), W - 14 - 6 * 4, panelTop + 36, 5);
-
-  text(ctx, "PASSED", 14, panelTop + 50, 13);
-  text(ctx, pad(passed != null ? passed : 0, 3), W - 14 - 3 * 4, panelTop + 50, 1);
-
+  // ── New high-score flash (just below banner) ──
+  let cursor = bannerY + 34;
   if (isNew) {
-    if (Math.floor(performance.now() / 350) % 2 === 0) {
-      text(ctx, "NEW HI SCORE!", ((W - 13 * 4) / 2) | 0, panelTop + 66, 5);
-    } else {
-      text(ctx, "NEW HI SCORE!", ((W - 13 * 4) / 2) | 0, panelTop + 66, 9);
-    }
+    const flash = Math.floor(t / 300) % 2 === 0;
+    textCentered(ctx, "NEW HI SCORE!", cursor, flash ? 5 : 9, 1);
+    cursor += 14;
   }
 
-  // Footer prompt
-  text(ctx, "TAP OR PRESS START",  ((W - 18 * 4) / 2) | 0, H - 36, 1);
-  text(ctx, "TO PLAY AGAIN",       ((W - 13 * 4) / 2) | 0, H - 24, 13);
-  text(ctx, "ESC FOR MENU",        ((W - 12 * 4) / 2) | 0, H - 12, 14);
+  // ── Stats panel — 6 rows of data ──
+  const statsTop = cursor;
+  rect(ctx, 6, statsTop, W - 12, panelH, 4);
+  rect(ctx, 6, statsTop, W - 12, 1, 1);
+  rect(ctx, 6, statsTop + panelH - 1, W - 12, 1, 0);
+
+  // "RESULTS" label centred inside the panel top edge
+  textCentered(ctx, "RESULTS", statsTop + 4, 5, 1);
+
+  const col1 = 12;                  // label column left edge
+  const col2 = W - 12;             // value column right edge
+  let y = statsTop + 14;
+
+  // Row helpers — label left, value right-aligned
+  const statRow = (label, value, valIdx) => {
+    text(ctx, label, col1, y, 13);
+    textRight(ctx, value, col2, y, valIdx);
+    y += rowH;
+  };
+
+  statRow("SCORE",     pad(score, 6),                        1);
+  statRow("HI SCORE",  pad(hi, 6),                           5);
+  statRow("TIME",      mmss(time || 0),                      1);
+  statRow("PASSED",    pad(passed != null ? passed : 0, 3),  1);
+  statRow("TOP SPEED", (topSpeed || 0) + " KMH",             9);
+
+  // Density — show as percentage increase, or "BASE" if no scaling happened
+  const densityPct = density && density > 1.001
+    ? "+" + Math.round((density - 1) * 100) + "%"
+    : "BASE";
+  statRow("DENSITY",   densityPct,                           14);
+
+  // ── Two-button footer ──
+  const btnW = W - 24;
+  const btnX = 12;
+
+  // "PLAY AGAIN" button — prominent green, pulsing
+  const btn1Y = statsTop + panelH + 6;
+  const btn1H = 20;
+  const pulse1 = Math.floor(t / 500) % 2 === 0;
+  rect(ctx, btnX, btn1Y, btnW, btn1H, pulse1 ? 17 : 11);      // green pulsing
+  rect(ctx, btnX, btn1Y, btnW, 1, 1);                          // highlight
+  rect(ctx, btnX, btn1Y + btn1H - 1, btnW, 1, 0);              // shadow
+  textOutlinedCentered(ctx, "PLAY AGAIN", btn1Y + 5, 1, 0, 2);
+  textCentered(ctx, "ENTER / TAP", btn1Y + btn1H + 3, 13, 1);
+
+  // "EXIT" button — subdued, dark
+  const btn2Y = btn1Y + btn1H + 14;
+  const btn2H = 16;
+  rect(ctx, btnX, btn2Y, btnW, btn2H, 4);
+  rect(ctx, btnX, btn2Y, btnW, 1, 14);
+  rect(ctx, btnX, btn2Y + btn2H - 1, btnW, 1, 0);
+  textOutlinedCentered(ctx, "EXIT", btn2Y + 4, 14, 0, 2);
+  textCentered(ctx, "ESC", btn2Y + btn2H + 3, 14, 1);
 }
 
 export function drawPaused(ctx) {

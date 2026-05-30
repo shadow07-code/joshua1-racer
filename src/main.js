@@ -82,6 +82,7 @@ const g = {
   hitTopSpeed: false,
   densityMul: 1.0,
   densityTimer: 0,
+  topSpeedKmh: 0,
   countdownTime: 0,
   countdownLastBeep: -1,
   tut: null,            // first-run steering tutorial sub-state
@@ -154,6 +155,7 @@ function newRaceSetup() {
   g.hitTopSpeed = false;
   g.densityMul = 1.0;
   g.densityTimer = 0;
+  g.topSpeedKmh = 0;   // track highest speed reached (in km/h display units)
 }
 
 function beginCountdown() {
@@ -297,6 +299,10 @@ function updateRace(dt) {
   const speed01 = g.player.speed / PHYS.maxSpeed;
   setEngine(speed01);
   setMusicTempoFactor(speed01);
+
+  // Track highest speed reached (in display km/h).
+  const currentKmh = Math.round(speed01 * (PHYS.topSpeedKmh || 250));
+  if (currentKmh > g.topSpeedKmh) g.topSpeedKmh = currentKmh;
 
   // ── Density scaling ──
   // Once the player first reaches top speed, start a 60s timer. Each interval,
@@ -454,6 +460,8 @@ function render() {
       reason: g.endReason,
       passed: g.traffic ? g.traffic.passedCount : 0,
       time: g.raceTime,
+      topSpeed: g.topSpeedKmh || 0,
+      density: g.densityMul || 1,
     });
     return;
   }
