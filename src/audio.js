@@ -352,6 +352,25 @@ export function sfxBrake() {
   o.start(t); o.stop(t + 0.28);
 }
 
+// Soft low thud + rubbery noise tap — used when the car bumps a road-edge fence.
+export function sfxBump() {
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  const o = ctx.createOscillator(); o.type = "square";
+  o.frequency.setValueAtTime(180, t);
+  o.frequency.exponentialRampToValueAtTime(70, t + 0.10);
+  const og = ctx.createGain(); og.gain.value = 0.15;
+  og.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+  o.connect(og); og.connect(sfxGain);
+  o.start(t); o.stop(t + 0.16);
+  const src = ctx.createBufferSource(); src.buffer = getNoiseBuf();
+  const filt = ctx.createBiquadFilter(); filt.type = "lowpass"; filt.frequency.value = 900;
+  const ng = ctx.createGain(); ng.gain.value = 0.10;
+  ng.gain.exponentialRampToValueAtTime(0.001, t + 0.10);
+  src.connect(filt); filt.connect(ng); ng.connect(sfxGain);
+  src.start(t); src.stop(t + 0.12);
+}
+
 export function sfxNitrous() {
   if (!ctx) return;
   const t = ctx.currentTime;

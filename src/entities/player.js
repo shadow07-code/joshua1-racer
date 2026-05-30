@@ -14,7 +14,8 @@ export function makePlayer() {
     speed: PHYS.startSpeed,
     boost: 0,        // seconds of nitro remaining
     slip: 0,         // seconds of slip remaining (reverses steering)
-    offRoad: false,
+    edgeContact: 0,  // which fence the car is currently against (-1/0/+1)
+    bounce: 0,       // remaining inward rubber-fence rebound (px)
     multiplier: 1,
     multTime: 0,
     lastSpeedTier: 0,
@@ -55,17 +56,12 @@ export function updatePlayer(p, dt, input, map, callbacks) {
     p.boost = Math.max(0, p.boost - dt);
   }
 
-  if (p.offRoad) {
-    // Rapid deceleration off-road — going off the asphalt drops you to a crawl
-    // within ~0.75s. Get back on the road fast.
-    p.speed = Math.max(0, p.speed - PHYS.offRoadDecel * dt);
-  } else if (p.speed < target) {
+  if (p.speed < target) {
     p.speed = Math.min(target, p.speed + PHYS.accel * dt);
   } else if (p.speed > target) {
     p.speed = Math.max(target, p.speed - PHYS.drag * dt);
   }
-  // Allow speed to drop to 0 only when off-road; otherwise floor at a slow crawl.
-  if (!p.offRoad && p.speed < 4) p.speed = 4;
+  if (p.speed < 4) p.speed = 4;     // never fully stop — always a slow crawl minimum
   if (p.speed > PHYS.maxSpeed) p.speed = PHYS.maxSpeed;
 
   // Threshold-crossing accent.
@@ -85,16 +81,38 @@ export function updatePlayer(p, dt, input, map, callbacks) {
   const steerScale = 1 - (1 - PHYS.steerSpeedFactor) * speedFrac;
   p.x += steer * PHYS.steerSpeed * steerScale * dt;
 
-  // Clamp lateral travel to a little past the shoulders (off-road allowed).
-  const limit = map.roadHalfWidth + 12;
-  if (p.x > limit) p.x = limit;
-  if (p.x < -limit) p.x = -limit;
+  // Rubber-fence boundaries — the car can't leave the asphalt. Driving into an
+  // edge pins it there and shaves a little speed (a one-time bump), then a rubber
+  // spring pushes it back onto the road the moment the player eases off. The bump
+  // (sound + speed loss) is edge-triggered so holding into the fence can't spam it.
+  const bound = map.roadHalfWidth - PHYS.carHalfWidth;
+  const holdingIntoFence =
+    (p.edgeContact > 0 && steer > 0) || (p.edgeContact < 0 && steer < 0);
+  if (Math.abs(p.x) >= bound) {
+    const side = p.x > 0 ? 1 : -1;
+    p.x = side * bound;
+    if (p.edgeContact !== side) {                 // fresh contact with this edge
+      p.edgeContact = side;
+      p.speed = Math.max(PHYS.startSpeed * 0.6, p.speed * PHYS.fenceSpeedKeep);
+      if (callbacks?.onFenceBump) callbacks.onFenceBump();
+    }
+    p.bounce = -side * PHYS.fenceBounce;           // arm the inward rebound
+  }
+
+  // Release the spring only when the player isn't actively pressing into the
+  // fence, so the car bounces back onto the road as soon as they let off.
+  if (p.bounce && !holdingIntoFence) {
+    const step = p.bounce * Math.min(1, dt * 12);
+    p.x += step;
+    p.bounce -= step;
+    if (Math.abs(p.bounce) < 0.1) p.bounce = 0;
+  }
+
+  // Re-arm the bump once the car is clear of the fence and not holding into it.
+  if (Math.abs(p.x) < bound - 2 && !holdingIntoFence) p.edgeContact = 0;
 
   // Forward distance.
   p.z += p.speed * dt;
-
-  // Off-road check.
-  p.offRoad = Math.abs(p.x) > map.roadHalfWidth - PHYS.carHalfWidth;
 
   if (p.multTime > 0) {
     p.multTime = Math.max(0, p.multTime - dt);

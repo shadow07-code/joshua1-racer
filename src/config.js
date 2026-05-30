@@ -58,7 +58,8 @@ export const PHYS = {
   rampPhase2Seconds: 80,
   accel: 14,
   drag: 5,
-  offRoadDecel: 180,       // rapid stop when off the asphalt
+  fenceBounce: 7,          // px the car springs back inward after hitting an edge
+  fenceSpeedKeep: 0.88,    // speed retained on a fence bump (slight reduction)
   steerSpeed: 120,
   steerSpeedFactor: 0.65,
   carHalfWidth: 6,    // -20% with the smaller player sprite

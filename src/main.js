@@ -11,7 +11,7 @@ import {
   initAudio, resumeAudio, suspendAudio, startMusic, stopMusic, setMusicIntensity, setMusicTempoFactor,
   playFlourish,
   startEngine, setEngine, stopEngine,
-  sfxAccelAccent, sfxBrake, sfxPickup, sfxCrash,
+  sfxAccelAccent, sfxBrake, sfxPickup, sfxCrash, sfxBump,
   sfxMenuMove, sfxMenuSelect, sfxFinish, sfxCountdownBeep,
   toggleMute,
 } from "./audio.js";
@@ -345,7 +345,7 @@ function updateRace(dt) {
 
   g.raceTime += dt;
 
-  updatePlayer(g.player, dt, input, g.map, { onAccelAccent: sfxAccelAccent });
+  updatePlayer(g.player, dt, input, g.map, { onAccelAccent: sfxAccelAccent, onFenceBump: sfxBump });
 
   const speed01 = g.player.speed / PHYS.maxSpeed;
   setEngine(speed01);
