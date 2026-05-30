@@ -102,12 +102,15 @@ export function initInstallBanner() {
   if (_no) _no.addEventListener("click", () => hideBanner());
 }
 
-// Permanent "ADD TO PHONE" button on the home screen.
+// Permanent install button on the home screen.
 export function initInstallButton() {
   _installBtn = document.getElementById("btn-install");
   if (!_installBtn) return;
   if (isInstalled()) { removeInstallButton(); return; }
   _installBtn.addEventListener("click", (e) => { e.stopPropagation(); doInstall(); });
+  // The app boots on the title/home screen, so show it right away — don't wait
+  // for the first render() tick (keeps it visible even if the canvas is slow).
+  setInstallButtonVisible(true);
 }
 
 // Show the button only where it makes sense (the title screen). main.js calls
