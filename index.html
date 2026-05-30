@@ -149,6 +149,152 @@
     }
     #btn-install.show { display: inline-flex; }
     #btn-install:active { background: rgba(139, 172, 15, 0.9); color: #0f380f; }
+
+    /* Title LEADERBOARD button — stacked just above the install button.
+       Vertical position is set by ui.js per canvas scale. */
+    #btn-leaderboard {
+      position: fixed;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: 56%;                     /* fallback; JS overrides */
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      background: rgba(15, 56, 15, 0.85);
+      color: var(--dmg-lightest);
+      border: 2px solid var(--dmg-light);
+      border-radius: 6px;
+      padding: 10px 18px;
+      font: inherit;
+      font-size: 13px;
+      font-weight: bold;
+      letter-spacing: 1.5px;
+      white-space: nowrap;
+      cursor: pointer;
+      z-index: 9;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #btn-leaderboard.show { display: inline-flex; }
+    #btn-leaderboard:active { background: rgba(139, 172, 15, 0.9); color: #0f380f; }
+
+    /* Modal panels — name entry + leaderboard. */
+    .panel {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 11;
+      background: rgba(15, 56, 15, 0.55);
+    }
+    .panel.show { display: flex; }
+    .panel-box {
+      width: 100%;
+      max-width: 280px;
+      max-height: 90%;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: var(--dmg-darkest);
+      border: 3px solid var(--dmg-light);
+      border-radius: 8px;
+      padding: 14px;
+    }
+    .panel-title {
+      text-align: center;
+      font-size: 15px;
+      font-weight: bold;
+      letter-spacing: 2px;
+      color: var(--dmg-lightest);
+    }
+    #name-input {
+      width: 100%;
+      text-align: center;
+      text-transform: uppercase;
+      font: inherit;
+      font-size: 20px;
+      letter-spacing: 4px;
+      padding: 10px 8px;
+      background: #0a280a;
+      color: var(--dmg-lightest);
+      border: 2px solid var(--dmg-light);
+      border-radius: 6px;
+      outline: none;
+    }
+    .panel-row { display: flex; gap: 10px; justify-content: center; }
+    .btn-go, .btn-ghost {
+      flex: 1;
+      font: inherit;
+      font-size: 13px;
+      font-weight: bold;
+      letter-spacing: 1px;
+      padding: 11px 8px;
+      border-radius: 6px;
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .btn-go {
+      background: var(--dmg-light);
+      color: var(--dmg-darkest);
+      border: 2px solid var(--dmg-lightest);
+    }
+    .btn-go:active { background: var(--dmg-lightest); }
+    .btn-ghost {
+      background: transparent;
+      color: var(--dmg-lightest);
+      border: 2px solid var(--dmg-dark);
+    }
+    .btn-ghost:active { background: var(--dmg-dark); color: var(--dmg-darkest); }
+
+    /* Leaderboard list. */
+    .lb-status {
+      display: none;
+      text-align: center;
+      font-size: 11px;
+      letter-spacing: 1px;
+      color: var(--dmg-light);
+    }
+    .lb-status.show { display: block; }
+    .lb-list {
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-height: 0;
+    }
+    .lb-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 6px;
+      font-size: 12px;
+      letter-spacing: 1px;
+      color: var(--dmg-lightest);
+      border-bottom: 1px solid rgba(139, 172, 15, 0.18);
+    }
+    .lb-row.me { background: var(--dmg-dark); border-radius: 4px; }
+    .lb-rank { color: var(--dmg-light); min-width: 20px; }
+    .lb-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .lb-score { font-variant-numeric: tabular-nums; }
+
+    /* Game-over action bar — pinned to the bottom of the viewport. */
+    #gameover-actions {
+      position: fixed;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: calc(env(safe-area-inset-bottom) + 10px);
+      width: calc(100% - 24px);
+      max-width: 300px;
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 10;
+    }
+    #gameover-actions.show { display: flex; }
+    #gameover-actions .btn-go, #gameover-actions .btn-ghost { flex: none; }
   </style>
 </head>
 <body>
@@ -158,6 +304,7 @@
   </div>
 
   <button id="btn-install" aria-label="Install game for offline play">📲 ADD TO HOME SCREEN</button>
+  <button id="btn-leaderboard" aria-label="View the leaderboard">🏆 LEADERBOARD</button>
 
   <div id="stage">
     <canvas id="game" width="160" height="240"></canvas>
@@ -167,6 +314,38 @@
     <span class="msg" id="install-msg">📲 ADD TO HOME SCREEN — PLAY OFFLINE</span>
     <button id="install-yes">INSTALL</button>
     <button id="install-no" class="ghost">×</button>
+  </div>
+
+  <!-- Pre-race name entry -->
+  <div id="name-entry" class="panel" role="dialog" aria-label="Enter your name">
+    <div class="panel-box">
+      <div class="panel-title">ENTER NAME</div>
+      <input id="name-input" type="text" maxlength="12" autocomplete="off"
+             autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="AAA" />
+      <div class="panel-row">
+        <button id="name-back" class="btn-ghost">BACK</button>
+        <button id="name-start" class="btn-go">START</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Global leaderboard -->
+  <div id="leaderboard" class="panel" role="dialog" aria-label="Leaderboard">
+    <div class="panel-box">
+      <div class="panel-title">🏆 TOP 20</div>
+      <div id="lb-status" class="lb-status"></div>
+      <div id="lb-list" class="lb-list"></div>
+      <div class="panel-row">
+        <button id="lb-back" class="btn-go">BACK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Game-over action bar -->
+  <div id="gameover-actions">
+    <button id="go-again" class="btn-go">PLAY AGAIN</button>
+    <button id="go-board" class="btn-ghost">LEADERBOARD</button>
+    <button id="go-exit" class="btn-ghost">EXIT</button>
   </div>
 
   <script type="module" src="./src/main.js"></script>

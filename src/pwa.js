@@ -109,9 +109,22 @@ export function initInstallButton() {
   if (!_installBtn) return;
   if (isInstalled()) { removeInstallButton(); return; }
   _installBtn.addEventListener("click", (e) => { e.stopPropagation(); doInstall(); });
+  // Re-anchor on viewport changes (rotation, browser chrome) so it stays aligned
+  // with the canvas-space "TAP TO START" banner.
+  window.addEventListener("resize", () => {
+    if (_installBtn && _installBtn.classList.contains("show")) positionInstallButton();
+  });
   // The app boots on the title/home screen, so show it right away — don't wait
   // for the first render() tick (keeps it visible even if the canvas is slow).
   setInstallButtonVisible(true);
+}
+
+// Anchor the install button just above the canvas-space "TAP TO START" banner
+// (banner top = H-118). Canvas fills the viewport (object-fit: contain, matched
+// aspect), so screen-px-per-canvas-px = innerHeight / H.
+function positionInstallButton() {
+  if (!_installBtn) return;
+  _installBtn.style.bottom = (118 + 8) * (window.innerHeight / H) + "px";
 }
 
 // Show the button only where it makes sense (the title screen). main.js calls
@@ -120,14 +133,5 @@ export function initInstallButton() {
 export function setInstallButtonVisible(show) {
   if (!_installBtn) return;
   _installBtn.classList.toggle("show", !!show);
-  if (show) {
-    // Canvas fills the viewport (object-fit: contain with matched aspect).
-    // Scale factor = screen px per canvas px.
-    const scale = window.innerHeight / H;
-    // Banner top in canvas space is H-118.  Put the install button's bottom
-    // edge 6 canvas-px above that → offset from viewport bottom = (118+6)*scale
-    // plus the button's own height (handled by CSS bottom = distance to btn bottom).
-    const bottomPx = (118 + 8) * scale;
-    _installBtn.style.bottom = bottomPx + "px";
-  }
+  if (show) positionInstallButton();
 }

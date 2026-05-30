@@ -447,18 +447,20 @@ export function drawTutorialOverlay(ctx, tut) {
   textOutlinedCentered(ctx, prompt, 30, (phase === "done" && !blink) ? 1 : 5, 0, 1);
 }
 
-export function drawGameOver(ctx, { score, hi, isNew, reason, passed, time, topSpeed, density }) {
+export function drawGameOver(ctx, { name, score, hi, isNew, reason, passed, time, topSpeed, density }) {
   const t = performance.now();
   // Dark backdrop.
   rect(ctx, 0, 0, W, H, 0);
 
-  // Total content height calculation for vertical centering.
-  // Banner(26) + gap(8) + [newHi(10+4)] + panel(82) + gap(6) + btn1(20+10) + btn2(16+10)
+  // The three action buttons live in an HTML bar pinned to the viewport bottom,
+  // so the canvas only draws the banner + stats. Centre them within the upper
+  // ~62% of the screen so they never sit behind that bar.
   const rowH = 12;
-  const panelH = rowH * 6 + 10;    // 6 stat rows + padding
+  const panelH = rowH * 7 + 10;     // 7 stat rows + padding
   const newHiH = isNew ? 14 : 0;
-  const totalH = 26 + 8 + newHiH + panelH + 6 + 30 + 26;
-  const baseY = Math.max(4, ((H - totalH) / 2) | 0);
+  const totalH = 26 + 8 + newHiH + panelH;
+  const avail = H * 0.62;
+  const baseY = Math.max(4, ((avail - totalH) / 2) | 0);
 
   // ── Top banner — "GAME OVER" ──
   const bannerY = baseY;
@@ -475,7 +477,7 @@ export function drawGameOver(ctx, { score, hi, isNew, reason, passed, time, topS
     cursor += 14;
   }
 
-  // ── Stats panel — 6 rows of data ──
+  // ── Stats panel — 7 rows of data ──
   const statsTop = cursor;
   rect(ctx, 6, statsTop, W - 12, panelH, 4);
   rect(ctx, 6, statsTop, W - 12, 1, 1);
@@ -495,6 +497,7 @@ export function drawGameOver(ctx, { score, hi, isNew, reason, passed, time, topS
     y += rowH;
   };
 
+  statRow("NAME",      (name || "AAA").slice(0, 10),         5);
   statRow("SCORE",     pad(score, 6),                        1);
   statRow("HI SCORE",  pad(hi, 6),                           5);
   statRow("TIME",      mmss(time || 0),                      1);
@@ -506,29 +509,6 @@ export function drawGameOver(ctx, { score, hi, isNew, reason, passed, time, topS
     ? "+" + Math.round((density - 1) * 100) + "%"
     : "BASE";
   statRow("DENSITY",   densityPct,                           14);
-
-  // ── Two-button footer ──
-  const btnW = W - 24;
-  const btnX = 12;
-
-  // "PLAY AGAIN" button — prominent green, pulsing
-  const btn1Y = statsTop + panelH + 6;
-  const btn1H = 20;
-  const pulse1 = Math.floor(t / 500) % 2 === 0;
-  rect(ctx, btnX, btn1Y, btnW, btn1H, pulse1 ? 17 : 11);      // green pulsing
-  rect(ctx, btnX, btn1Y, btnW, 1, 1);                          // highlight
-  rect(ctx, btnX, btn1Y + btn1H - 1, btnW, 1, 0);              // shadow
-  textOutlinedCentered(ctx, "PLAY AGAIN", btn1Y + 5, 1, 0, 2);
-  textCentered(ctx, "ENTER / TAP", btn1Y + btn1H + 3, 13, 1);
-
-  // "EXIT" button — subdued, dark
-  const btn2Y = btn1Y + btn1H + 14;
-  const btn2H = 16;
-  rect(ctx, btnX, btn2Y, btnW, btn2H, 4);
-  rect(ctx, btnX, btn2Y, btnW, 1, 14);
-  rect(ctx, btnX, btn2Y + btn2H - 1, btnW, 1, 0);
-  textOutlinedCentered(ctx, "EXIT", btn2Y + 4, 14, 0, 2);
-  textCentered(ctx, "ESC", btn2Y + btn2H + 3, 14, 1);
 }
 
 export function drawPaused(ctx) {

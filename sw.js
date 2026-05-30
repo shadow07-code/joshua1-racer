@@ -2,7 +2,7 @@
 // Network-first for the app shell (HTML/JS/manifest) so updates roll out the
 // moment the player is online; cache-first for static icons. Falls back to the
 // cache when offline so the installed PWA still launches.
-const VERSION = "joshua1-v24";
+const VERSION = "joshua1-v25";
 const ASSETS = [
   "./",
   "./index.html",
@@ -21,6 +21,8 @@ const ASSETS = [
   "./src/scenery.js",
   "./src/hud.js",
   "./src/pwa.js",
+  "./src/ui.js",
+  "./src/leaderboard.js",
   "./src/entities/player.js",
   "./src/entities/ai.js",
   "./src/entities/traffic.js",
@@ -61,6 +63,9 @@ self.addEventListener("fetch", (event) => {
 
   const url = new URL(req.url);
   const sameOrigin = url.origin === self.location.origin;
+
+  // Leaderboard API — always go to the network, never cache (live data).
+  if (sameOrigin && url.pathname.startsWith("/api/")) return;
 
   // App shell = anything that holds the game's code/markup. Serve it
   // network-first so a fresh deploy is picked up immediately when online.

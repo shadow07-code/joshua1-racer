@@ -31,6 +31,13 @@ import {
   drawGameOver, drawPaused, drawCountdown, drawTutorialOverlay, drawSteerHints,
 } from "./hud.js";
 import { registerServiceWorker, initInstallBanner, initInstallButton, setInstallButtonVisible } from "./pwa.js";
+import {
+  initUI, setLeaderboardButtonVisible, showNameEntry, showGameOverActions,
+  showLeaderboardPanel, renderLeaderboard,
+} from "./ui.js";
+import {
+  getPlayerName, setPlayerName, submitScore, fetchTop, flushPending, cachedTop,
+} from "./leaderboard.js";
 
 const canvas = document.getElementById("game");
 const ctx = getCtx(canvas);
@@ -38,10 +45,12 @@ initInput(canvas);
 registerServiceWorker();
 initInstallBanner();
 initInstallButton();
-let _onHome = null;   // tracks title-screen visibility for the install button
+let _lastUiState = null;   // tracks state changes to sync HTML overlays once per transition
 
 const STATES = {
   TITLE: "TITLE",
+  NAME_ENTRY: "NAME_ENTRY",
+  LEADERBOARD: "LEADERBOARD",
   MAP_SELECT: "MAP_SELECT",
   DIFFICULTY: "DIFFICULTY",
   TUTORIAL: "TUTORIAL",
@@ -86,6 +95,8 @@ const g = {
   countdownTime: 0,
   countdownLastBeep: -1,
   tut: null,            // first-run steering tutorial sub-state
+  playerName: getPlayerName(),   // remembered name, pre-fills the entry panel
+  lbReturnTo: STATES.TITLE,      // where the leaderboard BACK button returns to
 };
 
 const btnMute = document.getElementById("btn-mute");
@@ -179,6 +190,15 @@ function endRace(reason) {
   g.endReason = reason;
   g.isNewHi = finalizeScore(g.scoreState);
   if (g.isNewHi) playFlourish();
+  // Submit to the global board (fire-and-forget; refreshes the local cache so the
+  // leaderboard panel shows this run immediately).
+  submitScore({
+    name: g.playerName || "AAA",
+    score: Math.floor(g.scoreState.score),
+    time: Math.floor(g.raceTime),
+    passed: g.traffic ? g.traffic.passedCount : 0,
+    topSpeed: g.topSpeedKmh || 0,
+  });
   g.state = STATES.GAME_OVER;
 }
 
@@ -187,11 +207,42 @@ function updateTitle() {
   if (consumeAnyPress()) {
     ensureAudio();
     sfxMenuSelect();
-    // Skip map / difficulty pickers — only one of each. First-timers get the
-    // interactive steering tutorial before the countdown.
-    if (hasSeenTutorial()) beginCountdown();
-    else enterTutorial();
+    // Ask for the player's name before each race (pre-filled with the last one).
+    g.state = STATES.NAME_ENTRY;
   }
+}
+
+// Name confirmed in the HTML panel — store it and continue into the race.
+// First-timers still get the interactive steering tutorial first.
+function confirmName(name) {
+  g.playerName = setPlayerName(name);
+  ensureAudio();
+  sfxMenuSelect();
+  if (hasSeenTutorial()) beginCountdown();
+  else enterTutorial();
+}
+
+// Keyboard fallbacks for the name-entry panel (Enter/Esc are also handled by the
+// input element itself; this catches the case where it isn't focused).
+function updateNameEntry() {
+  if (consumePress("Escape")) g.state = STATES.TITLE;
+  consumeAnyPress();   // swallow other stray presses while typing
+}
+
+function openLeaderboard(returnTo) {
+  g.lbReturnTo = returnTo;
+  g.state = STATES.LEADERBOARD;
+}
+
+function updateLeaderboard() {
+  if (consumePress("Escape", "Enter", " ")) g.state = g.lbReturnTo || STATES.TITLE;
+  consumeAnyPress();
+}
+
+function playAgain() {
+  ensureAudio();
+  sfxMenuSelect();
+  beginCountdown();      // reuse the remembered name + current map/difficulty
 }
 
 // Build a minimal demo world (road + car + scenery, no traffic/scoring/cops) as
@@ -391,8 +442,11 @@ function updatePaused() {
 }
 
 function updateGameOver() {
-  if (consumePress("Enter", " ", "Touch")) beginCountdown();
-  if (consumePress("Escape")) g.state = STATES.TITLE;
+  // Taps are handled by the HTML action bar; these are desktop keyboard shortcuts.
+  if (consumePress("Enter", " ")) { playAgain(); return; }
+  if (consumePress("l", "L")) { openLeaderboard(STATES.GAME_OVER); return; }
+  if (consumePress("Escape")) { g.state = STATES.TITLE; return; }
+  consumePress("Touch");   // swallow stray canvas taps so they don't leak
 }
 
 // ─── Render ──────────────────────────────────────────────────────────────────
@@ -406,12 +460,33 @@ function drawWorld() {
   drawPlayer(ctx, g.player, g.map);
 }
 
+// Toggle the HTML overlays once per state change, and kick off the leaderboard
+// fetch when its panel opens. Cheap to call every frame (early-outs if unchanged).
+function syncOverlays() {
+  if (g.state === _lastUiState) return;
+  _lastUiState = g.state;
+  const onTitle = g.state === STATES.TITLE;
+  setInstallButtonVisible(onTitle);
+  setLeaderboardButtonVisible(onTitle);
+  showNameEntry(g.state === STATES.NAME_ENTRY);
+  showGameOverActions(g.state === STATES.GAME_OVER);
+  showLeaderboardPanel(g.state === STATES.LEADERBOARD);
+  if (g.state === STATES.LEADERBOARD) {
+    renderLeaderboard({ entries: cachedTop() }, g.playerName);   // instant from cache
+    fetchTop().then((data) => {
+      if (g.state === STATES.LEADERBOARD) renderLeaderboard(data, g.playerName);
+    });
+  }
+}
+
 function render() {
   clear(ctx, 12);
-  // Show the permanent "add to phone" button on the home screen only.
-  const onHome = g.state === STATES.TITLE;
-  if (onHome !== _onHome) { setInstallButtonVisible(onHome); _onHome = onHome; }
-  if (g.state === STATES.TITLE) { drawTitleScreen(ctx, bestEverScore()); return; }
+  syncOverlays();
+  // Title screen also backs the name-entry and leaderboard modals.
+  if (g.state === STATES.TITLE || g.state === STATES.NAME_ENTRY || g.state === STATES.LEADERBOARD) {
+    drawTitleScreen(ctx, bestEverScore());
+    return;
+  }
   if (g.state === STATES.MAP_SELECT) { drawMapSelect(ctx, g.mapIdx); return; }
   if (g.state === STATES.DIFFICULTY) { drawDifficultySelect(ctx, g.diffIdx); return; }
   if (g.state === STATES.TUTORIAL) {
@@ -454,6 +529,7 @@ function render() {
   }
   if (g.state === STATES.GAME_OVER) {
     drawGameOver(ctx, {
+      name: g.playerName || "AAA",
       score: g.scoreState.score,
       hi: g.scoreState.hi,
       isNew: g.isNewHi,
@@ -482,6 +558,8 @@ function frame(now) {
 function update(dt) {
   switch (g.state) {
     case STATES.TITLE: updateTitle(); break;
+    case STATES.NAME_ENTRY: updateNameEntry(); break;
+    case STATES.LEADERBOARD: updateLeaderboard(); break;
     case STATES.MAP_SELECT: updateMapSelect(); break;
     case STATES.DIFFICULTY: updateDifficulty(); break;
     case STATES.TUTORIAL: updateTutorial(dt); break;
@@ -491,4 +569,17 @@ function update(dt) {
     case STATES.GAME_OVER: updateGameOver(); break;
   }
 }
+// Wire the HTML overlays (name entry, leaderboard, game-over actions) to game state.
+initUI({
+  onNameConfirm: (name) => confirmName(name),
+  onNameBack: () => { g.state = STATES.TITLE; },
+  onOpenLeaderboard: () => { ensureAudio(); sfxMenuSelect(); openLeaderboard(STATES.TITLE); },
+  onLeaderboardBack: () => { g.state = g.lbReturnTo || STATES.TITLE; },
+  onPlayAgain: () => playAgain(),
+  onGameOverLeaderboard: () => openLeaderboard(STATES.GAME_OVER),
+  onExit: () => { g.state = STATES.TITLE; },
+});
+// Retry any leaderboard submission that failed on a previous (offline) run.
+flushPending();
+
 requestAnimationFrame((t) => { lastT = t; requestAnimationFrame(frame); });
