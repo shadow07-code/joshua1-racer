@@ -451,7 +451,7 @@ function updateGameOver() {
 
 // ─── Render ──────────────────────────────────────────────────────────────────
 function drawWorld() {
-  drawRoad(ctx, g.map, g.player.z, g.player.x);
+  drawRoad(ctx, g.map, g.player.z, g.player.speed);
   drawScenery(ctx, g.scenery, g.map, g.player.z);
   drawOilSpills(ctx, g.oils, g.map, g.player.z, g.player.x);
   drawSmoke(ctx, g.map, g.player.z, g.player.x, g.player);

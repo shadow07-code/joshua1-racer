@@ -1,6 +1,7 @@
 // Fixed straight multi-lane road, anchored to the screen.
-// Adds subtle asphalt grain and rumble strips beside the road for richness.
-import { W, H, PLAYER_Y } from "./config.js";
+// Calm rendering tuned to avoid high-speed strobe / eye fatigue: solid grass,
+// static muted edge strips, and a faint center line that fades out with speed.
+import { W, H, PLAYER_Y, PHYS } from "./config.js";
 import { rect } from "./render.js";
 
 const VIEW_AHEAD_METERS = 100;
@@ -11,63 +12,59 @@ export function roadCenterX(map /* unused */, _z, _x, _d) {
 export function yToDist(y) { return ((PLAYER_Y - y) / PLAYER_Y) * VIEW_AHEAD_METERS; }
 export function distToY(dist) { return PLAYER_Y - (dist / VIEW_AHEAD_METERS) * PLAYER_Y; }
 
-export function drawRoad(ctx, map, playerZ) {
-  // Background — grass with banding for forward motion cue
-  for (let y = 0; y < H; y++) {
-    const dist = yToDist(y);
-    const zAbs = playerZ + dist;
-    const stripe = (Math.floor(zAbs / 6) % 2) === 0;
-    rect(ctx, 0, y, W, 1, stripe ? map.bgIdx : map.bgAltIdx);
-  }
+export function drawRoad(ctx, map, playerZ, speed = 0) {
+  // Speed-based "calm" factor — ramps 0→1 between 90 and 150 km/h so fast-moving
+  // road detail fades out before it can strobe and strain the eyes at speed.
+  const kmh = (speed / PHYS.maxSpeed) * (PHYS.topSpeedKmh || 250);
+  const calm = Math.min(1, Math.max(0, (kmh - 90) / 60));
 
   const halfW = map.roadHalfWidth;
   const cx = W / 2 + map.biasX;
 
-  // Asphalt
-  rect(ctx, (cx - halfW) | 0, 0, halfW * 2, H, map.roadIdx);
+  // ── Grass — solid fill (no scrolling bands; those strobed across the whole
+  // screen at speed). A static mid-green band hugs each shoulder for subtle
+  // depth — z-independent, so it never flickers.
+  rect(ctx, 0, 0, W, H, map.bgIdx);
+  const shW = 7;
+  rect(ctx, (cx - halfW - shW) | 0, 0, shW, H, 20);
+  rect(ctx, (cx + halfW) | 0, 0, shW, H, 20);
 
-  // Inset edge shadow — a couple of darker columns just inside each road edge.
-  // Reads as a subtle bevel/depth so the road no longer looks like a flat slab.
+  // ── Asphalt ──
+  rect(ctx, (cx - halfW) | 0, 0, halfW * 2, H, map.roadIdx);
+  // Inset edge shadow — static darker columns just inside each edge (depth bevel).
   rect(ctx, (cx - halfW) | 0, 0, 2, H, 4);
   rect(ctx, (cx + halfW - 2) | 0, 0, 2, H, 4);
 
-  // Subtle asphalt grain — faint darker speckles that scroll with z, evokes texture
-  // without distracting from the cars.
-  for (let y = 0; y < H; y += 1) {
-    const zAbs = (playerZ + yToDist(y)) | 0;
-    // Pseudo-random hash from zAbs — same speckles every frame at the same z so they
-    // appear to scroll uniformly rather than flicker.
-    const seed = (zAbs * 7919) & 0xff;
-    if (seed % 13 === 0) rect(ctx, (cx - halfW + (seed % (halfW * 2 - 4)) + 2) | 0, y, 1, 1, map.roadGrainIdx);
-    if (seed % 17 === 0) rect(ctx, (cx - halfW + ((seed * 5) % (halfW * 2 - 4)) + 2) | 0, y, 1, 1, map.roadGrainIdx);
+  // ── Edge strips — solid, muted, STATIC cream shoulder lines. Replaces the old
+  // alternating magenta/white rumble that flickered hard at the periphery.
+  rect(ctx, (cx - halfW - 3) | 0, 0, 2, H, 25);
+  rect(ctx, (cx + halfW + 1) | 0, 0, 2, H, 25);
+
+  // ── Asphalt grain — faint scrolling speckle, thinned out and faded with speed
+  // so it stops shimmering at pace; skipped entirely once fully calm.
+  if (calm < 1) {
+    const grainSkip = Math.round(calm * 8);   // sparser as speed climbs
+    for (let y = 0; y < H; y += 1) {
+      const zAbs = (playerZ + yToDist(y)) | 0;
+      const seed = (zAbs * 7919) & 0xff;
+      if ((seed % (13 + grainSkip)) === 0)
+        rect(ctx, (cx - halfW + (seed % (halfW * 2 - 4)) + 2) | 0, y, 1, 1, map.roadGrainIdx);
+    }
   }
 
-  // Rumble strips — thin colored bars right outside the road edge
-  for (let y = 0; y < H; y++) {
-    const dist = yToDist(y);
-    const zAbs = playerZ + dist;
-    const rumbleOn = (Math.floor(zAbs / 4) % 2) === 0;
-    const rIdx = rumbleOn ? map.rumbleAIdx : map.rumbleBIdx;
-    rect(ctx, (cx - halfW - 3) | 0, y, 2, 1, rIdx);
-    rect(ctx, (cx + halfW + 1) | 0, y, 2, 1, rIdx);
-  }
-
-  // ── Lane markings ──
-  // Just ONE thicker white center dashed line — no edge lines, no side dividers.
-  // The asphalt vs grass color contrast is enough to read the road boundary.
-  const pxPerMeter = PLAYER_Y / VIEW_AHEAD_METERS;
-  const scrollPx = playerZ * pxPerMeter;
-
-  const dashLen = 16;      // longer dashes since it's the only one
-  const dashGap = 12;
-  const dashW = 4;         // thicker than the previous 2px
-  const period = dashLen + dashGap;
-  const offset = ((scrollPx) % period + period) % period;
-  for (let y = -dashLen; y < H; y += period) {
-    const top = (y + offset) | 0;
-    // 1px drop shadow gives the dash a slightly raised, painted look.
-    rect(ctx, (cx - dashW / 2 + 1) | 0, top + 1, dashW, dashLen, 4);
-    rect(ctx, (cx - dashW / 2) | 0, top, dashW, dashLen, 1);
+  // ── Center line — faint, low-contrast dashes that shrink to nothing as speed
+  // rises. Gone by ~150 km/h (calm = 1), so the high-speed centre stays calm.
+  if (calm < 1) {
+    const pxPerMeter = PLAYER_Y / VIEW_AHEAD_METERS;
+    const scrollPx = playerZ * pxPerMeter;
+    const dashLen = 16, dashGap = 12, dashW = 3;
+    const effLen = Math.max(1, (dashLen * (1 - calm)) | 0);  // dashes shrink with speed
+    const period = dashLen + dashGap;
+    const offset = ((scrollPx) % period + period) % period;
+    for (let y = -dashLen; y < H; y += period) {
+      const top = (y + offset) | 0;
+      rect(ctx, (cx - dashW / 2) | 0, top, dashW, effLen, 2);   // light gray, no white/shadow
+    }
   }
 }
 
