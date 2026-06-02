@@ -116,19 +116,19 @@ export const SPR_SPORTS_PLAYER_LEGACY = SPR_SPORTS;
 // Body slots 6/7/8 recolour; 3 glass, 5 headlight, 9 taillight, 4 tyre, 1 glint.
 const SEDAN_BASE = [
   [_,_,0,0,0,0,0,0,_,_],   //  0 front bumper
-  [_,0,7,6,6,6,6,7,0,_],   //  1 hood, dark fender edges
-  [_,0,5,6,8,8,6,5,0,_],   //  2 headlights (5) + hood glint (8)
-  [4,0,6,6,6,6,6,6,0,4],   //  3 front wheels poke out
-  [4,0,7,6,6,6,6,7,0,4],   //  4 cowl
-  [_,0,8,3,3,3,3,8,0,_],   //  5 windshield, bright A-pillars
-  [_,0,6,3,1,1,3,6,0,_],   //  6 windshield glint (1)
-  [_,0,8,6,6,6,6,8,0,_],   //  7 roof front (glossy shoulders)
-  [_,0,6,6,6,6,6,6,0,_],   //  8 roof
+  [_,0,5,7,6,6,7,5,0,_],   //  1 headlights + dark grille edges
+  [_,0,7,6,8,8,6,7,0,_],   //  2 hood — dark sides, centre gloss
+  [4,0,6,6,8,8,6,6,0,4],   //  3 hood gloss + front wheels
+  [4,0,7,6,6,6,6,7,0,4],   //  4 cowl + wheels
+  [7,0,2,3,3,3,3,2,0,7],   //  5 windshield + chrome pillars + door mirrors
+  [_,0,8,3,1,1,3,8,0,_],   //  6 windshield glint
+  [_,0,8,6,6,6,6,8,0,_],   //  7 roof front (bright shoulders)
+  [_,0,7,6,8,8,6,7,0,_],   //  8 roof centre gloss
   [_,0,8,6,6,6,6,8,0,_],   //  9 roof rear
-  [_,0,6,3,3,3,3,6,0,_],   // 10 rear window
-  [4,0,7,6,6,6,6,7,0,4],   // 11 rear wheels poke out
-  [4,0,8,6,6,6,6,8,0,4],   // 12 trunk glint
-  [_,0,9,9,6,6,9,9,0,_],   // 13 taillights (9)
+  [_,0,2,3,3,3,3,2,0,_],   // 10 rear window + chrome
+  [4,0,7,6,6,6,6,7,0,4],   // 11 rear wheels
+  [4,0,6,6,8,8,6,6,0,4],   // 12 trunk gloss + wheels
+  [_,0,9,9,7,7,9,9,0,_],   // 13 taillights
   [_,_,0,0,0,0,0,0,_,_],   // 14 rear bumper
   [_,_,_,_,_,_,_,_,_,_],   // 15 blank
 ];
@@ -145,20 +145,20 @@ export const SPR_SEDAN_ORANGE = recolorBody(SEDAN_BASE, 7, 6, 8, 22, 9, 5);  // 
 // lower sedan. Same width as the sedan (no bigger).
 const SUV_BASE = [
   [_,_,0,0,0,0,0,0,_,_],   //  0 front bumper
-  [_,0,5,6,6,6,6,5,0,_],   //  1 headlights (wide)
-  [_,0,7,6,8,8,6,7,0,_],   //  2 short hood + glint
-  [4,0,6,6,6,6,6,6,0,4],   //  3 front wheels poke out
-  [4,0,8,3,3,3,3,8,0,4],   //  4 windshield (upright, starts early)
-  [_,0,6,3,1,1,3,6,0,_],   //  5 windshield glint
-  [_,0,8,6,6,6,6,8,0,_],   //  6 roof front + rails (8)
-  [_,0,8,6,6,6,6,8,0,_],   //  7 roof rails
-  [_,0,8,6,6,6,6,8,0,_],   //  8 roof
-  [_,0,8,6,6,6,6,8,0,_],   //  9 roof
-  [_,0,8,6,6,6,6,8,0,_],   // 10 roof rails
-  [_,0,7,3,3,3,3,7,0,_],   // 11 rear window (big, upright)
-  [4,0,6,6,6,6,6,6,0,4],   // 12 rear wheels poke out
-  [4,0,8,6,6,6,6,8,0,4],   // 13 rear quarter glint
-  [_,0,9,9,6,6,9,9,0,_],   // 14 taillights
+  [_,0,5,7,6,6,7,5,0,_],   //  1 headlights + grille
+  [_,0,7,6,8,8,6,7,0,_],   //  2 short hood + centre gloss
+  [4,0,6,6,8,8,6,6,0,4],   //  3 hood gloss + front wheels
+  [7,0,2,3,3,3,3,2,0,7],   //  4 windshield + chrome pillars + mirrors
+  [_,0,8,3,1,1,3,8,0,_],   //  5 windshield glint
+  [_,0,2,6,8,8,6,2,0,_],   //  6 roof front + chrome rails
+  [_,0,2,6,6,6,6,2,0,_],   //  7 roof + rails
+  [_,0,2,6,8,8,6,2,0,_],   //  8 roof centre gloss + rails
+  [_,0,2,6,6,6,6,2,0,_],   //  9 roof + rails
+  [_,0,8,3,3,3,3,8,0,_],   // 10 rear quarter glass
+  [_,0,2,3,3,3,3,2,0,_],   // 11 rear window + chrome
+  [4,0,6,6,8,8,6,6,0,4],   // 12 rear wheels + gloss
+  [4,0,7,6,6,6,6,7,0,4],   // 13 rear quarter + wheels
+  [_,0,9,9,7,7,9,9,0,_],   // 14 taillights
   [_,_,0,0,0,0,0,0,_,_],   // 15 rear bumper
   [_,_,_,_,_,_,_,_,_,_],   // 16 blank
   [_,_,_,_,_,_,_,_,_,_],   // 17 blank
@@ -208,23 +208,45 @@ export const SPR_BUS_ORANGE = recolorBody(BUS_BASE, 7, 6, 8, 22, 9, 5);
 // chrome pipes poking out, and a rider on the seat.
 const MOTO_BASE = [
   [_,_,_,0,_,_,_],   //  0 front fender
-  [_,_,4,4,4,_,_],   //  1 front tyre (fat)
+  [_,_,4,2,4,_,_],   //  1 front tyre + chrome hub
   [_,_,0,4,0,_,_],   //  2 fork
-  [2,2,2,1,2,2,2],   //  3 wide handlebars (chrome) + headlight (1)
+  [2,2,1,1,1,2,2],   //  3 wide chrome bars + bright headlight
   [_,_,0,8,0,_,_],   //  4 tank neck
   [_,0,8,6,8,0,_],   //  5 fuel tank top (glint)
   [_,0,6,6,6,0,_],   //  6 fuel tank
   [_,0,7,6,7,0,_],   //  7 tank base
-  [2,0,4,4,4,0,2],   //  8 V-twin engine + chrome pipes poke out
+  [2,0,4,2,4,0,2],   //  8 V-twin chrome heads + pipes poke out
   [_,0,4,4,4,0,_],   //  9 engine block
   [_,0,7,7,7,0,_],   // 10 seat
   [_,_,0,7,0,_,_],   // 11 rider / sissy bar
-  [_,_,4,4,4,_,_],   // 12 rear tyre (fat)
+  [_,_,4,2,4,_,_],   // 12 rear tyre + chrome hub
   [_,_,0,4,0,_,_],   // 13 rear tyre
 ];
 export const SPR_MOTO_BLACK  = recolorBody(MOTO_BASE, 7, 6, 8, 0, 4, 3);
 export const SPR_MOTO_ORANGE = recolorBody(MOTO_BASE, 7, 6, 8, 22, 9, 5);
 export const SPR_MOTO_WHITE  = recolorBody(MOTO_BASE, 7, 6, 8, 2, 1, 1);
+
+// AUTO-RICKSHAW (tuk-tuk) — 9w × 14h, top-down. The 3-wheeler silhouette reads
+// at a glance: ONE small front wheel up the centre, a domed canopy with open
+// sides, and TWO rear wheels poking at the back corners. Body slots 6/7/8.
+const AUTO_BASE = [
+  [_,_,_,_,0,_,_,_,_],   //  0 pointed nose
+  [_,_,_,0,6,0,_,_,_],   //  1 narrow front cowl
+  [_,_,0,8,5,8,0,_,_],   //  2 headlight + glint (narrow front)
+  [_,_,_,4,4,4,_,_,_],   //  3 single front wheel
+  [_,_,0,6,6,6,0,_,_],   //  4 still narrow (driver)
+  [_,0,6,6,8,6,6,0,_],   //  5 body flares out to the cabin
+  [0,6,2,3,3,3,2,6,0],   //  6 windscreen + chrome posts
+  [0,8,6,6,6,6,6,8,0],   //  7 domed canopy (bright top)
+  [0,6,6,6,6,6,6,6,0],   //  8 canopy roof
+  [0,7,3,4,4,4,3,7,0],   //  9 OPEN SIDES — see-through dark interior
+  [0,6,6,6,6,6,6,6,0],   // 10 rear body (widest)
+  [4,4,0,9,6,9,0,4,4],   // 11 fat rear wheels + taillights
+  [_,0,0,0,0,0,0,0,_],   // 12 rear bumper
+  [_,_,_,_,_,_,_,_,_],   // 13 blank
+];
+export const SPR_AUTO_YELLOW = recolorBody(AUTO_BASE, 7, 6, 8, 22, 21, 1);  // classic yellow
+export const SPR_AUTO_GREEN  = recolorBody(AUTO_BASE, 7, 6, 8, 11, 17, 20); // CNG green
 
 // POLICE HELICOPTER — 14w × 16h, top-down (nose up). Deep-gray body (23),
 // cockpit glass (13), red beacon (6), white tail rotor (1). The spinning main
@@ -295,6 +317,9 @@ export const TRAFFIC_SKINS = [
   { spr: SPR_MOTO_BLACK,   w: 7,  h: 14, scale: TS, speedMul: 0.34, bike: true },
   { spr: SPR_MOTO_ORANGE,  w: 7,  h: 14, scale: TS, speedMul: 0.36, bike: true },
   { spr: SPR_MOTO_WHITE,   w: 7,  h: 14, scale: TS, speedMul: 0.34, bike: true },
+  // Auto-rickshaws (2 colours) — small, slow, putter along
+  { spr: SPR_AUTO_YELLOW,  w: 9,  h: 14, scale: TS, speedMul: 0.18 },
+  { spr: SPR_AUTO_GREEN,   w: 9,  h: 14, scale: TS, speedMul: 0.18 },
 ];
 
 // ─── Scenery ──────────────────────────────────────────────────────────────────

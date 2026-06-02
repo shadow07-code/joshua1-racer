@@ -489,6 +489,9 @@ function syncOverlays() {
   const onTitle = g.state === STATES.TITLE;
   setInstallButtonVisible(onTitle);
   setLeaderboardButtonVisible(onTitle);
+  // Enlarge the music/SFX toggles during gameplay for easy tapping.
+  const playing = g.state === STATES.RACE || g.state === STATES.PAUSED || g.state === STATES.COUNTDOWN;
+  document.getElementById("toolbar").classList.toggle("playing", playing);
   showNameEntry(g.state === STATES.NAME_ENTRY);
   showGameOverActions(g.state === STATES.GAME_OVER);
   showLeaderboardPanel(g.state === STATES.LEADERBOARD);

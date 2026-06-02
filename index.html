@@ -106,24 +106,36 @@
       top: calc(env(safe-area-inset-top) + 6px);
       right: calc(env(safe-area-inset-right) + 6px);
       display: flex;
-      gap: 6px;
+      gap: 8px;
       z-index: 9;
     }
     #toolbar button {
-      background: rgba(15, 56, 15, 0.6);
+      background: rgba(15, 56, 15, 0.78);
       color: var(--dmg-lightest);
       border: 2px solid var(--dmg-light);
-      width: 30px;
-      height: 26px;
+      width: 38px;
+      height: 34px;
       font: inherit;
-      font-size: 13px;
+      font-size: 17px;
       cursor: pointer;
       letter-spacing: 1px;
-      border-radius: 3px;
+      border-radius: 5px;
     }
     #toolbar button:active { background: rgba(139, 172, 15, 0.85); color: #0f380f; }
     /* Dimmed look when a channel is toggled OFF. */
     #toolbar button.off { opacity: 0.4; border-color: var(--dmg-dark); }
+    /* Enlarged, easy-to-tap toggles during gameplay; nudged below the score strip. */
+    #toolbar.playing {
+      top: calc(env(safe-area-inset-top) + 30px);
+      gap: 10px;
+    }
+    #toolbar.playing button {
+      width: 52px;
+      height: 46px;
+      font-size: 24px;
+      border-width: 3px;
+      border-radius: 7px;
+    }
     /* Permanent "add to phone" button — shown centred above "TAP TO START"
        on the title screen only. Bottom offset set dynamically by pwa.js. */
     #btn-install {
