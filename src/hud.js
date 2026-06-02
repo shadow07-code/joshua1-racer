@@ -461,7 +461,8 @@ export function drawCombo(ctx, combo, comboTimer, comboWindow) {
   const x = ((W - w) / 2) | 0;
   rect(ctx, x - 4, y - 2, w + 8, 11, 0);            // dark plate
   rect(ctx, x - 4, y - 2, w + 8, 1, hot ? 9 : 5);   // top accent
-  textCentered(ctx, label, y, idx, 0);
+  rect(ctx, x - 4, y + 8, w + 8, 1, hot ? 9 : 5);   // bottom accent
+  textCentered(ctx, label, y + 1, idx);             // (scale defaults to 1 — was 0 = invisible!)
   const frac = Math.max(0, Math.min(1, comboTimer / (comboWindow || 1)));
   rect(ctx, x - 4, y + 9, w + 8, 1, 4);
   rect(ctx, x - 4, y + 9, ((w + 8) * frac) | 0, 1, hot ? 9 : 17);

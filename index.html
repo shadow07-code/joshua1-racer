@@ -139,27 +139,28 @@
     /* On-screen steering pads — big, translucent, bottom corners. */
     #steer-controls { position: fixed; inset: 0; display: none; z-index: 8; pointer-events: none; }
     #steer-controls.show { display: block; }
+    /* Just the arrows — large invisible tap area, no box. */
     #steer-controls button {
       position: absolute;
-      bottom: calc(env(safe-area-inset-bottom) + 11%);
-      width: 38%;
-      height: 19%;
-      max-height: 160px;
+      bottom: calc(env(safe-area-inset-bottom) + 9%);
+      width: 40%;
+      height: 22%;
+      max-height: 180px;
       pointer-events: auto;
-      background: rgba(15, 56, 15, 0.20);
-      border: 3px solid rgba(139, 172, 15, 0.55);
-      border-radius: 16px;
-      color: rgba(155, 188, 15, 0.82);
-      font-size: 46px;
+      background: transparent;
+      border: none;
+      color: rgba(155, 188, 15, 0.78);
+      font-size: 58px;
       line-height: 1;
       font-weight: bold;
+      text-shadow: 0 2px 2px rgba(0, 0, 0, 0.55);
       display: flex; align-items: center; justify-content: center;
       -webkit-tap-highlight-color: transparent;
       user-select: none; touch-action: none;
     }
-    #btn-steer-left { left: 3%; }
-    #btn-steer-right { right: 3%; }
-    #steer-controls button:active { background: rgba(139, 172, 15, 0.55); color: #0f380f; }
+    #btn-steer-left { left: 2%; }
+    #btn-steer-right { right: 2%; }
+    #steer-controls button:active { color: #9bbc0f; transform: scale(0.9); }
     /* Permanent "add to phone" button — shown centred above "TAP TO START"
        on the title screen only. Bottom offset set dynamically by pwa.js. */
     #btn-install {

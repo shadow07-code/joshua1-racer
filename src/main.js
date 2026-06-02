@@ -4,7 +4,7 @@
 // civilian costs one life. Once you reach top speed, traffic density compounds
 // by +5% every 60 seconds, so the game gets harder the longer you survive.
 import { W, H, PHYS, SPAWN, RACE, SCORE } from "./config.js";
-import { getCtx, clear, rect, vignette } from "./render.js";
+import { getCtx, clear, rect } from "./render.js";
 import { MAPS, MAP_LIST, DIFFICULTY_LIST } from "./maps.js";
 import { initInput, getInput, consumePress, consumeAnyPress } from "./input.js";
 import {
@@ -404,14 +404,20 @@ function updateRace(dt) {
     playerX: g.player.x,
     onPassed: () => { g.scoreState.score += SCORE.passBonus * Math.max(1, g.combo); },
     onNearMiss: () => {
-      // Threading close to a car bumps the combo; score per near-miss scales with
-      // it, so a hot streak of risky dodges is hugely rewarding.
-      g.combo += 1;
-      g.comboBest = Math.max(g.comboBest, g.combo);
-      g.comboTimer = RACE.comboWindow;
-      g.comboFlash = 0.18;
-      g.scoreState.score += SCORE.nearMissBonus * g.combo;
-      sfxCombo(g.combo);
+      // The combo is a HIGH-SPEED thrill — it only builds at 200+ km/h. Below
+      // that a near-miss just pays the flat bonus.
+      const kmh = g.player.speed / PHYS.maxSpeed * (PHYS.topSpeedKmh || 250);
+      if (kmh >= 200) {
+        g.combo += 1;
+        g.comboBest = Math.max(g.comboBest, g.combo);
+        g.comboTimer = RACE.comboWindow;
+        g.comboFlash = 0.18;
+        g.scoreState.score += SCORE.nearMissBonus * g.combo;
+        sfxCombo(g.combo);
+      } else {
+        g.scoreState.score += SCORE.nearMissBonus;
+        sfxPickup();
+      }
     },
   });
 
@@ -503,7 +509,6 @@ function drawWorld() {
   drawTraffic(ctx, g.traffic, g.map, g.player.z, g.player.x);
   drawCops(ctx, g.cops, g.map, g.player.z, g.player.x);
   drawPlayer(ctx, g.player, g.map);
-  vignette(ctx);   // cinematic edge framing (under the HUD)
 }
 
 // Toggle the HTML overlays once per state change, and kick off the leaderboard
@@ -561,12 +566,6 @@ function render() {
   }
   if (g.state === STATES.RACE || g.state === STATES.PAUSED) {
     drawWorld();
-    // Combo "juice" — a brief bright edge flash on each near-miss step.
-    if (g.comboFlash > 0) {
-      const idx = g.combo >= 5 ? 9 : 5;
-      rect(ctx, 0, 9, W, 1, idx); rect(ctx, 0, H - 23, W, 1, idx);
-      rect(ctx, 0, 9, 1, H - 32, idx); rect(ctx, W - 1, 9, 1, H - 32, idx);
-    }
     drawCombo(ctx, g.combo, g.comboTimer, RACE.comboWindow);
     drawHud(ctx, {
       score: g.scoreState.score,
