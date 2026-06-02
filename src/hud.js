@@ -468,7 +468,7 @@ export function drawCombo(ctx, combo, comboTimer, comboWindow) {
   rect(ctx, x - 4, y + 9, ((w + 8) * frac) | 0, 1, hot ? 9 : 17);
 }
 
-export function drawGameOver(ctx, { name, score, hi, isNew, reason, passed, time, topSpeed, density }) {
+export function drawGameOver(ctx, { name, score, hi, isNew, reason, passed, time, topSpeed, density, combo }) {
   const t = performance.now();
   // Dark backdrop.
   rect(ctx, 0, 0, W, H, 0);
@@ -477,7 +477,7 @@ export function drawGameOver(ctx, { name, score, hi, isNew, reason, passed, time
   // so the canvas only draws the banner + stats. Centre them within the upper
   // ~62% of the screen so they never sit behind that bar.
   const rowH = 12;
-  const panelH = rowH * 7 + 10;     // 7 stat rows + padding
+  const panelH = rowH * 8 + 10;     // 8 stat rows + padding
   const newHiH = isNew ? 14 : 0;
   const totalH = 26 + 8 + newHiH + panelH;
   const avail = H * 0.62;
@@ -525,11 +525,20 @@ export function drawGameOver(ctx, { name, score, hi, isNew, reason, passed, time
   statRow("PASSED",    pad(passed != null ? passed : 0, 3),  1);
   statRow("TOP SPEED", (topSpeed || 0) + " KMH",             9);
 
+  statRow("BEST COMBO", "X" + (combo || 0),                   17);
+
   // Density — show as percentage increase, or "BASE" if no scaling happened
   const densityPct = density && density > 1.001
     ? "+" + Math.round((density - 1) * 100) + "%"
     : "BASE";
   statRow("DENSITY",   densityPct,                           14);
+}
+
+// Big transient popup (SHIELD! / SAVED!) centred over the action — blinks.
+export function drawShieldMsg(ctx, msg) {
+  const t = performance.now();
+  const blink = Math.floor(t / 90) % 2 === 0;
+  textOutlinedCentered(ctx, msg, (H * 0.40) | 0, blink ? 17 : 13, 0, 2, 7);
 }
 
 export function drawPaused(ctx) {

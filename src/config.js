@@ -80,9 +80,10 @@ export const RACE = {
   // After player reaches maxSpeed, traffic density scales up by this fraction
   // every densityStepSeconds, compounding — capped so the road never becomes
   // unwinnable.
-  densityStepSeconds: 60,
-  densityStepIncrement: 0.10,   // traffic gets +10% denser each interval (was +5%)
-  densityMax: 1.8,              // allow the steeper ramp to keep biting
+  densityStepSeconds: 50,       // ramp bites a bit sooner
+  densityStepIncrement: 0.10,   // traffic gets +10% denser each interval
+  densityMax: 1.9,
+  density2CarFrom: 1.12,        // above this density, some rows spawn a 2nd car
   trafficSidewaysChance: 0.8,   // chance a car actually changes lane on its timer (was 0.6)
   topSpeedThreshold: 0.95,
   // Cop chase: 2 cop cars spawn behind the player when they cross this KMH.
@@ -91,9 +92,11 @@ export const RACE = {
   copTopSpeedFrac: 0.92,    // cops max out at 92% of player's max speed
   copRamSlowdown: 0.35,     // multiplier on player speed when a cop rams from behind
   copSpawnGapZ: 30,         // initial distance behind the player
-  // Near-miss COMBO: each close shave bumps the multiplier; it resets if you go
-  // this many seconds without another near-miss. Skilful weaving = big score.
-  comboWindow: 2.6,
+  // Near-miss COMBO: each close shave (at 200+ km/h) bumps the multiplier; it
+  // resets if you go this many seconds without another. Skilful weaving = big
+  // score, and every `comboShieldEvery` steps earns a one-hit SHIELD.
+  comboWindow: 2.8,
+  comboShieldEvery: 8,
 };
 
 // Spawn rates and traffic-row spacing.

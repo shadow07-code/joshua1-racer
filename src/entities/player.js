@@ -1,7 +1,7 @@
 // Player car — auto-accelerate with a start-of-race speed ramp, brake, steer, slip.
 import { PHYS, PLAYER_Y, W } from "../config.js";
 import { SPR_PLAYER } from "../sprites.js";
-import { drawSpriteNN, groundShadow } from "../render.js";
+import { drawSpriteNN, groundShadow, ring } from "../render.js";
 import { roadCenterX } from "../road.js";
 
 // Player car drawn 20% smaller than its native 16×24 sprite.
@@ -23,6 +23,7 @@ export function makePlayer() {
     raceTime: 0,     // seconds since race started (drives the speed ramp)
     oilTimer: 0,     // seconds the car is still affected by an oil spill
     lives: 3,        // endless survival — 3 hits and you're out
+    shield: 0,       // one-hit shield earned from combo milestones
     _wasBraking: false,
   };
 }
@@ -140,6 +141,13 @@ export function drawPlayer(ctx, p, map) {
   // Grounding shadow under the car, then the (smaller) F1 sprite.
   groundShadow(ctx, (cx + p.x) | 0, PLAYER_Y + halfH - 3, 6);
   drawSpriteNN(ctx, SPR_PLAYER, cx + p.x - halfW + wobble, PLAYER_Y - halfH, PLAYER_SCALE);
+  // Combo SHIELD — a pulsing emerald/cyan ring around the car while it's active.
+  if (p.shield > 0) {
+    const cxp = (cx + p.x) | 0, cyp = (PLAYER_Y) | 0;
+    const pulse = Math.sin(performance.now() / 90) * 0.5 + 0.5;
+    ring(ctx, cxp, cyp, 11, pulse > 0.5 ? 13 : 17);
+    ring(ctx, cxp, cyp, 12, pulse > 0.5 ? 17 : 13);
+  }
 }
 
 // Hit box in (z, x) world coords.

@@ -481,6 +481,40 @@ export function sfxCombo(level) {
   o2.start(t); o2.stop(t + 0.12);
 }
 
+// Shield EARNED — a bright ascending arpeggio (you powered up).
+export function sfxShieldUp() {
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  [392, 523, 659, 880].forEach((f, i) => {
+    const o = ctx.createOscillator(); o.type = "square"; o.frequency.value = f;
+    const g = ctx.createGain(); g.gain.value = 0;
+    g.gain.linearRampToValueAtTime(0.16, t + i * 0.05 + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.05 + 0.16);
+    o.connect(g); g.connect(sfxGain);
+    o.start(t + i * 0.05); o.stop(t + i * 0.05 + 0.18);
+  });
+}
+
+// Shield ABSORBS a hit — a metallic "whomp" (descending tone + filtered noise).
+export function sfxShieldHit() {
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  const o = ctx.createOscillator(); o.type = "square";
+  o.frequency.setValueAtTime(700, t);
+  o.frequency.exponentialRampToValueAtTime(160, t + 0.22);
+  const g = ctx.createGain(); g.gain.value = 0;
+  g.gain.linearRampToValueAtTime(0.20, t + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.26);
+  o.connect(g); g.connect(sfxGain);
+  o.start(t); o.stop(t + 0.28);
+  const src = ctx.createBufferSource(); src.buffer = getNoiseBuf();
+  const filt = ctx.createBiquadFilter(); filt.type = "bandpass"; filt.frequency.value = 1400; filt.Q.value = 1.5;
+  const ng = ctx.createGain(); ng.gain.value = 0.16;
+  ng.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+  src.connect(filt); filt.connect(ng); ng.connect(sfxGain);
+  src.start(t); src.stop(t + 0.2);
+}
+
 export function sfxCrash() {
   if (!ctx) return;
   const t = ctx.currentTime;

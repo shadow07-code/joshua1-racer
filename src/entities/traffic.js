@@ -22,6 +22,7 @@ export function makeTrafficSystem(opts = {}) {
     nextRowZ: 80,
     lastGapLane: 2,              // start with center lane open
     rowGapZ: opts.rowGapZ || 34, // distance between rows in world meters
+    densityMul: 1.0,             // current difficulty density (set by main.js)
     passedCount: 0,
     rowsSpawned: 0,
   };
@@ -76,9 +77,15 @@ function spawnRow(sys, map) {
     const j = Math.floor(Math.random() * (i + 1));
     [candidateLanes[i], candidateLanes[j]] = [candidateLanes[j], candidateLanes[i]];
   }
-  // Always exactly 1 car per row — keeps the road breathable and never wall-like.
-  // Combined with the wide row spacing this gives plenty of room to weave.
-  const carsInRow = 1;
+  // Cars per row grows with the difficulty density: one car early, and as the
+  // ramp builds, a rising share of rows get a SECOND car (the guaranteed gap
+  // lane is still excluded, so every row stays threadable).
+  let carsInRow = 1;
+  const dm = sys.densityMul || 1;
+  if (!wide && dm > RACE.density2CarFrom) {
+    const p2 = Math.min(0.6, (dm - RACE.density2CarFrom) * 1.1);
+    if (Math.random() < p2) carsInRow = 2;
+  }
   const lanesToFill = candidateLanes.slice(0, Math.min(carsInRow, candidateLanes.length));
 
   for (const lane of lanesToFill) {

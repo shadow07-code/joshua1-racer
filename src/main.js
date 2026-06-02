@@ -12,6 +12,7 @@ import {
   playFlourish,
   startEngine, setEngine, stopEngine,
   sfxAccelAccent, sfxBrake, sfxPickup, sfxCrash, sfxBump, sfxBarrelDrop, sfxCombo,
+  sfxShieldUp, sfxShieldHit,
   sfxMenuMove, sfxMenuSelect, sfxFinish, sfxCountdownBeep,
   setMusicEnabled, setSfxEnabled, isMusicEnabled, isSfxEnabled, applyMix,
 } from "./audio.js";
@@ -28,7 +29,7 @@ import {
 } from "./scoring.js";
 import {
   drawHud, drawTitleScreen, drawMapSelect, drawDifficultySelect,
-  drawGameOver, drawPaused, drawCountdown, drawTutorialOverlay, drawSteerHints, drawCombo,
+  drawGameOver, drawPaused, drawCountdown, drawTutorialOverlay, drawSteerHints, drawCombo, drawShieldMsg,
 } from "./hud.js";
 import { registerServiceWorker, initInstallBanner, initInstallButton, setInstallButtonVisible } from "./pwa.js";
 import {
@@ -96,6 +97,8 @@ const g = {
   comboTimer: 0,        // seconds left before the combo lapses
   comboFlash: 0,        // brief screen-edge flash on each combo step
   comboBest: 0,         // best combo this run (for the game-over stats)
+  shieldMsg: "",        // transient "SHIELD!" / "SAVED!" popup text
+  shieldMsgTimer: 0,
   countdownTime: 0,
   countdownLastBeep: -1,
   tut: null,            // first-run steering tutorial sub-state
@@ -196,6 +199,25 @@ function newRaceSetup() {
   g.comboTimer = 0;
   g.comboFlash = 0;
   g.comboBest = 0;
+  g.shieldMsg = "";
+  g.shieldMsgTimer = 0;
+}
+
+// Take a hit: a combo SHIELD absorbs it (streak survives), otherwise lose a life.
+// Returns true if the run just ended.
+function takeHit(invulnSec) {
+  if (g.player.shield > 0) {
+    g.player.shield = 0;
+    g.player.invuln = Math.max(g.player.invuln, invulnSec + 0.5);
+    g.shieldMsg = "SAVED!"; g.shieldMsgTimer = 1.1;
+    sfxShieldHit();
+    return false;                       // shield ate it — no life lost, combo lives
+  }
+  sfxCrash();
+  g.player.lives -= 1;
+  g.combo = 0; g.comboTimer = 0;        // a real crash breaks the streak
+  if (g.player.lives <= 0) { endRace("GAME OVER"); return true; }
+  return false;
 }
 
 function beginCountdown() {
@@ -399,6 +421,7 @@ function updateRace(dt) {
     }
   }
   g.traffic.rowGapZ = baseRowGapForMap(g.map) / g.densityMul;
+  g.traffic.densityMul = g.densityMul;
 
   updateTraffic(g.traffic, dt, g.player.z, g.map, {
     playerX: g.player.x,
@@ -414,6 +437,12 @@ function updateRace(dt) {
         g.comboFlash = 0.18;
         g.scoreState.score += SCORE.nearMissBonus * g.combo;
         sfxCombo(g.combo);
+        // Risk → reward: every few combo steps earns a one-hit shield.
+        if (g.combo % RACE.comboShieldEvery === 0 && g.player.shield < 1) {
+          g.player.shield = 1;
+          g.shieldMsg = "SHIELD!"; g.shieldMsgTimer = 1.3;
+          sfxShieldUp();
+        }
       } else {
         g.scoreState.score += SCORE.nearMissBonus;
         sfxPickup();
@@ -427,6 +456,7 @@ function updateRace(dt) {
     if (g.comboTimer <= 0) g.combo = 0;
   }
   if (g.comboFlash > 0) g.comboFlash = Math.max(0, g.comboFlash - dt);
+  if (g.shieldMsgTimer > 0) g.shieldMsgTimer = Math.max(0, g.shieldMsgTimer - dt);
   // Police helicopter kicks in once the player crosses 250 km/h — it drops
   // flaming barrels on the road ahead (collision handled below, costs a life).
   updateCops(g.cops, dt, g.player.z, g.player.x, g.player.speed, g.map, { onDrop: sfxBarrelDrop });
@@ -443,32 +473,20 @@ function updateRace(dt) {
     const box = playerBox(g.player);
     const t = checkTrafficHit(g.traffic, box);
     if (t) {
-      sfxCrash();
       applyCollisionLoss(g.player, 0.55, 1.5);
       // Push the player away laterally so they're not stuck inside the car.
       const push = g.player.x > t.x ? 9 : -9;
       g.player.x += push;
-      // Mark the hit car so we can't lose two lives to the same car in a row.
-      t.skin = t.skin; // (kept for symmetry — no skin change)
-      g.player.lives -= 1;
-      if (g.player.lives <= 0) {
-        endRace("GAME OVER");
-        return;
-      }
+      if (takeHit(1.5)) return;
     }
-    // Flaming barrel from the chopper — costs a life. Skipped if a traffic hit
-    // this frame already granted invuln (avoids double-dipping).
+    // Flaming barrel from the chopper. Skipped if a traffic hit this frame
+    // already granted invuln (avoids double-dipping).
     if (g.player.invuln <= 0) {
       const bar = checkBarrelHit(g.cops, playerBox(g.player));
       if (bar) {
         bar.hit = true;
-        sfxCrash();
         applyCollisionLoss(g.player, 0.5, 1.2);
-        g.player.lives -= 1;
-        if (g.player.lives <= 0) {
-          endRace("GAME OVER");
-          return;
-        }
+        if (takeHit(1.2)) return;
       }
     }
   }
@@ -567,6 +585,7 @@ function render() {
   if (g.state === STATES.RACE || g.state === STATES.PAUSED) {
     drawWorld();
     drawCombo(ctx, g.combo, g.comboTimer, RACE.comboWindow);
+    if (g.shieldMsgTimer > 0) drawShieldMsg(ctx, g.shieldMsg);
     drawHud(ctx, {
       score: g.scoreState.score,
       speed: g.player.speed,
@@ -595,6 +614,7 @@ function render() {
       time: g.raceTime,
       topSpeed: g.topSpeedKmh || 0,
       density: g.densityMul || 1,
+      combo: g.comboBest || 0,
     });
     return;
   }
