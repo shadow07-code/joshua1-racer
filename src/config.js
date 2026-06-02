@@ -69,7 +69,9 @@ export const PHYS = {
   phase1Kmh: 100,
 };
 
-export const PLAYER_Y = H - 36;
+// Player car sits in the lower third (not jammed against the bottom edge) so
+// there's foreground road below it and more breathing room to read traffic.
+export const PLAYER_Y = Math.round(H * 0.74);
 
 // Endless survival mode.
 export const RACE = {
@@ -89,6 +91,9 @@ export const RACE = {
   copTopSpeedFrac: 0.92,    // cops max out at 92% of player's max speed
   copRamSlowdown: 0.35,     // multiplier on player speed when a cop rams from behind
   copSpawnGapZ: 30,         // initial distance behind the player
+  // Near-miss COMBO: each close shave bumps the multiplier; it resets if you go
+  // this many seconds without another near-miss. Skilful weaving = big score.
+  comboWindow: 2.6,
 };
 
 // Spawn rates and traffic-row spacing.

@@ -206,7 +206,8 @@ export function drawTraffic(ctx, sys, map, playerZ, playerX) {
     const p = project(map, playerZ, playerX, c);
     if (!p) continue;
     const hx = skinHalfX(c.skin), hz = skinHalfZ(c.skin);
-    groundShadow(ctx, p.sx, p.sy + hz - 1, hx);
+    // Shadow hugs the car's visible base so it looks grounded, not flying.
+    groundShadow(ctx, p.sx, p.sy + hz - 2, hx);
     drawSpriteNN(ctx, c.skin.spr, p.sx - hx, p.sy - hz, c.skin.scale);
   }
 }

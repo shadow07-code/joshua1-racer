@@ -4,14 +4,14 @@
 // civilian costs one life. Once you reach top speed, traffic density compounds
 // by +5% every 60 seconds, so the game gets harder the longer you survive.
 import { W, H, PHYS, SPAWN, RACE, SCORE } from "./config.js";
-import { getCtx, clear, rect } from "./render.js";
+import { getCtx, clear, rect, vignette } from "./render.js";
 import { MAPS, MAP_LIST, DIFFICULTY_LIST } from "./maps.js";
 import { initInput, getInput, consumePress, consumeAnyPress } from "./input.js";
 import {
   initAudio, resumeAudio, suspendAudio, startMusic, stopMusic, setMusicIntensity, setMusicTempoFactor,
   playFlourish,
   startEngine, setEngine, stopEngine,
-  sfxAccelAccent, sfxBrake, sfxPickup, sfxCrash, sfxBump, sfxBarrelDrop,
+  sfxAccelAccent, sfxBrake, sfxPickup, sfxCrash, sfxBump, sfxBarrelDrop, sfxCombo,
   sfxMenuMove, sfxMenuSelect, sfxFinish, sfxCountdownBeep,
   setMusicEnabled, setSfxEnabled, isMusicEnabled, isSfxEnabled, applyMix,
 } from "./audio.js";
@@ -28,7 +28,7 @@ import {
 } from "./scoring.js";
 import {
   drawHud, drawTitleScreen, drawMapSelect, drawDifficultySelect,
-  drawGameOver, drawPaused, drawCountdown, drawTutorialOverlay, drawSteerHints,
+  drawGameOver, drawPaused, drawCountdown, drawTutorialOverlay, drawSteerHints, drawCombo,
 } from "./hud.js";
 import { registerServiceWorker, initInstallBanner, initInstallButton, setInstallButtonVisible } from "./pwa.js";
 import {
@@ -92,6 +92,10 @@ const g = {
   densityMul: 1.0,
   densityTimer: 0,
   topSpeedKmh: 0,
+  combo: 0,             // near-miss combo multiplier
+  comboTimer: 0,        // seconds left before the combo lapses
+  comboFlash: 0,        // brief screen-edge flash on each combo step
+  comboBest: 0,         // best combo this run (for the game-over stats)
   countdownTime: 0,
   countdownLastBeep: -1,
   tut: null,            // first-run steering tutorial sub-state
@@ -188,6 +192,10 @@ function newRaceSetup() {
   g.densityMul = 1.0;
   g.densityTimer = 0;
   g.topSpeedKmh = 0;   // track highest speed reached (in km/h display units)
+  g.combo = 0;
+  g.comboTimer = 0;
+  g.comboFlash = 0;
+  g.comboBest = 0;
 }
 
 function beginCountdown() {
@@ -394,9 +402,25 @@ function updateRace(dt) {
 
   updateTraffic(g.traffic, dt, g.player.z, g.map, {
     playerX: g.player.x,
-    onPassed: () => { g.scoreState.score += SCORE.passBonus; },
-    onNearMiss: () => { g.scoreState.score += SCORE.nearMissBonus; sfxPickup(); },
+    onPassed: () => { g.scoreState.score += SCORE.passBonus * Math.max(1, g.combo); },
+    onNearMiss: () => {
+      // Threading close to a car bumps the combo; score per near-miss scales with
+      // it, so a hot streak of risky dodges is hugely rewarding.
+      g.combo += 1;
+      g.comboBest = Math.max(g.comboBest, g.combo);
+      g.comboTimer = RACE.comboWindow;
+      g.comboFlash = 0.18;
+      g.scoreState.score += SCORE.nearMissBonus * g.combo;
+      sfxCombo(g.combo);
+    },
   });
+
+  // Combo decay — lapse the streak if you go too long without a near-miss.
+  if (g.comboTimer > 0) {
+    g.comboTimer -= dt;
+    if (g.comboTimer <= 0) g.combo = 0;
+  }
+  if (g.comboFlash > 0) g.comboFlash = Math.max(0, g.comboFlash - dt);
   // Police helicopter kicks in once the player crosses 250 km/h — it drops
   // flaming barrels on the road ahead (collision handled below, costs a life).
   updateCops(g.cops, dt, g.player.z, g.player.x, g.player.speed, g.map, { onDrop: sfxBarrelDrop });
@@ -479,6 +503,7 @@ function drawWorld() {
   drawTraffic(ctx, g.traffic, g.map, g.player.z, g.player.x);
   drawCops(ctx, g.cops, g.map, g.player.z, g.player.x);
   drawPlayer(ctx, g.player, g.map);
+  vignette(ctx);   // cinematic edge framing (under the HUD)
 }
 
 // Toggle the HTML overlays once per state change, and kick off the leaderboard
@@ -489,9 +514,11 @@ function syncOverlays() {
   const onTitle = g.state === STATES.TITLE;
   setInstallButtonVisible(onTitle);
   setLeaderboardButtonVisible(onTitle);
-  // Enlarge the music/SFX toggles during gameplay for easy tapping.
+  // Enlarge the music/SFX toggles during gameplay for easy tapping, and show the
+  // on-screen steering pads.
   const playing = g.state === STATES.RACE || g.state === STATES.PAUSED || g.state === STATES.COUNTDOWN;
   document.getElementById("toolbar").classList.toggle("playing", playing);
+  document.getElementById("steer-controls").classList.toggle("show", playing);
   showNameEntry(g.state === STATES.NAME_ENTRY);
   showGameOverActions(g.state === STATES.GAME_OVER);
   showLeaderboardPanel(g.state === STATES.LEADERBOARD);
@@ -534,6 +561,13 @@ function render() {
   }
   if (g.state === STATES.RACE || g.state === STATES.PAUSED) {
     drawWorld();
+    // Combo "juice" — a brief bright edge flash on each near-miss step.
+    if (g.comboFlash > 0) {
+      const idx = g.combo >= 5 ? 9 : 5;
+      rect(ctx, 0, 9, W, 1, idx); rect(ctx, 0, H - 23, W, 1, idx);
+      rect(ctx, 0, 9, 1, H - 32, idx); rect(ctx, W - 1, 9, 1, H - 32, idx);
+    }
+    drawCombo(ctx, g.combo, g.comboTimer, RACE.comboWindow);
     drawHud(ctx, {
       score: g.scoreState.score,
       speed: g.player.speed,

@@ -461,6 +461,26 @@ export function sfxPickup() {
   });
 }
 
+// Near-miss combo blip — pitch climbs a semitone per combo step (caps ~1 octave)
+// with a sparkle harmonic, so a hot streak literally sounds like it's rising.
+export function sfxCombo(level) {
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  const f = 523 * Math.pow(2, Math.min(12, Math.max(0, level - 1)) / 12);
+  const o = ctx.createOscillator(); o.type = "square"; o.frequency.value = f;
+  const g = ctx.createGain(); g.gain.value = 0;
+  g.gain.linearRampToValueAtTime(0.17, t + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+  o.connect(g); g.connect(sfxGain);
+  o.start(t); o.stop(t + 0.17);
+  const o2 = ctx.createOscillator(); o2.type = "square"; o2.frequency.value = f * 2;
+  const g2 = ctx.createGain(); g2.gain.value = 0;
+  g2.gain.linearRampToValueAtTime(0.07, t + 0.01);
+  g2.gain.exponentialRampToValueAtTime(0.001, t + 0.10);
+  o2.connect(g2); g2.connect(sfxGain);
+  o2.start(t); o2.stop(t + 0.12);
+}
+
 export function sfxCrash() {
   if (!ctx) return;
   const t = ctx.currentTime;

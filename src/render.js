@@ -114,6 +114,26 @@ export function ditherRect(ctx, x, y, w, h, paletteIdx, parity = 0, cell = 2) {
   }
 }
 
+// Cinematic edge vignette — dithered black framing that darkens the screen edges
+// and corners so the action pops. Static (no scroll) → no strobe. Draw over the
+// world but under the HUD so panels stay crisp.
+export function vignette(ctx) {
+  // 1px-cell dither reads as a smooth ~50% darkening (not a chunky checkerboard).
+  const b = Math.max(5, (H * 0.04) | 0);
+  ditherRect(ctx, 0, 0, W, b, 0, 0, 1);            // top
+  ditherRect(ctx, 0, H - b, W, b, 0, 0, 1);        // bottom
+  ditherRect(ctx, 0, 0, b, H, 0, 0, 1);            // left
+  ditherRect(ctx, W - b, 0, b, H, 0, 0, 1);        // right
+  // A second, narrower pass at the extreme edge deepens the falloff.
+  const e = Math.max(2, (b * 0.4) | 0);
+  ditherRect(ctx, 0, 0, W, e, 0, 0, 1); ditherRect(ctx, 0, H - e, W, e, 0, 0, 1);
+  ditherRect(ctx, 0, 0, e, H, 0, 0, 1); ditherRect(ctx, W - e, 0, e, H, 0, 0, 1);
+  // Crisp 1px frame to seal the edge.
+  ctx.fillStyle = PALETTE[0];
+  ctx.fillRect(0, 0, W, 1); ctx.fillRect(0, H - 1, W, 1);
+  ctx.fillRect(0, 0, 1, H); ctx.fillRect(W - 1, 0, 1, H);
+}
+
 // Hollow circle outline (1px) via the midpoint-circle algorithm — used for the
 // pulsing "tap here" ripples in the steering tutorial.
 export function ring(ctx, cx, cy, r, paletteIdx) {
@@ -130,12 +150,15 @@ export function ring(ctx, cx, cy, r, paletteIdx) {
   }
 }
 
-// Soft ground shadow beneath a sprite — two stacked dark bars give a grounded,
-// "lifted off the asphalt" look without needing real alpha blending.
+// Soft contact shadow centred on baseY — a 3-row patch (tapered top/bottom) that
+// hugs the underside of a vehicle so it reads as sitting ON the road, not above
+// it. Callers pass baseY at the car's visible base (no gap = no "flying" look).
 export function groundShadow(ctx, cx, baseY, halfW, paletteIdx = 4) {
   ctx.fillStyle = PALETTE[paletteIdx];
-  ctx.fillRect((cx - halfW) | 0, baseY | 0, (halfW * 2) | 0, 1);
-  ctx.fillRect((cx - halfW + 1) | 0, (baseY + 1) | 0, (halfW * 2 - 2) | 0, 1);
+  const w = (halfW * 2) | 0;
+  ctx.fillRect((cx - halfW + 1) | 0, (baseY - 1) | 0, (w - 2) | 0, 1);
+  ctx.fillRect((cx - halfW) | 0, baseY | 0, w | 0, 1);
+  ctx.fillRect((cx - halfW + 1) | 0, (baseY + 1) | 0, (w - 2) | 0, 1);
 }
 
 // 3x5 pixel font — uppercase A-Z, 0-9, plus a few symbols.

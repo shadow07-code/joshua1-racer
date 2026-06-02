@@ -136,6 +136,30 @@
       border-width: 3px;
       border-radius: 7px;
     }
+    /* On-screen steering pads — big, translucent, bottom corners. */
+    #steer-controls { position: fixed; inset: 0; display: none; z-index: 8; pointer-events: none; }
+    #steer-controls.show { display: block; }
+    #steer-controls button {
+      position: absolute;
+      bottom: calc(env(safe-area-inset-bottom) + 11%);
+      width: 38%;
+      height: 19%;
+      max-height: 160px;
+      pointer-events: auto;
+      background: rgba(15, 56, 15, 0.20);
+      border: 3px solid rgba(139, 172, 15, 0.55);
+      border-radius: 16px;
+      color: rgba(155, 188, 15, 0.82);
+      font-size: 46px;
+      line-height: 1;
+      font-weight: bold;
+      display: flex; align-items: center; justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none; touch-action: none;
+    }
+    #btn-steer-left { left: 3%; }
+    #btn-steer-right { right: 3%; }
+    #steer-controls button:active { background: rgba(139, 172, 15, 0.55); color: #0f380f; }
     /* Permanent "add to phone" button — shown centred above "TAP TO START"
        on the title screen only. Bottom offset set dynamically by pwa.js. */
     #btn-install {
@@ -315,6 +339,12 @@
   <div id="toolbar">
     <button id="btn-music" title="Music on/off (M)" aria-label="Toggle music">♪</button>
     <button id="btn-sfx" title="Sound effects on/off" aria-label="Toggle sound effects">🔊</button>
+  </div>
+
+  <!-- On-screen steering pads (shown during gameplay; wired by input.js) -->
+  <div id="steer-controls" aria-hidden="true">
+    <button id="btn-steer-left" aria-label="Steer left">◀</button>
+    <button id="btn-steer-right" aria-label="Steer right">▶</button>
   </div>
 
   <button id="btn-install" aria-label="Install game for offline play">📲 ADD TO HOME SCREEN</button>

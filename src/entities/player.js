@@ -138,7 +138,7 @@ export function drawPlayer(ctx, p, map) {
   const halfW = 16 * PLAYER_SCALE / 2;   // ≈ 6.4
   const halfH = 24 * PLAYER_SCALE / 2;   // ≈ 9.6
   // Grounding shadow under the car, then the (smaller) F1 sprite.
-  groundShadow(ctx, (cx + p.x) | 0, PLAYER_Y + halfH - 1, 6);
+  groundShadow(ctx, (cx + p.x) | 0, PLAYER_Y + halfH - 3, 6);
   drawSpriteNN(ctx, SPR_PLAYER, cx + p.x - halfW + wobble, PLAYER_Y - halfH, PLAYER_SCALE);
 }
 

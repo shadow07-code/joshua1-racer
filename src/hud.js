@@ -447,6 +447,26 @@ export function drawTutorialOverlay(ctx, tut) {
   textOutlinedCentered(ctx, prompt, 30, (phase === "done" && !blink) ? 1 : 5, 0, 1);
 }
 
+// Near-miss combo banner — appears at the top once the multiplier is ≥2, pulses
+// hotter as it climbs, with a draining timer bar. Pure "juice" for close dodges.
+export function drawCombo(ctx, combo, comboTimer, comboWindow) {
+  if (!combo || combo < 2) return;
+  const t = performance.now();
+  const y = 13;
+  const hot = combo >= 5;
+  const blink = Math.floor(t / 110) % 2 === 0;
+  const idx = hot ? (blink ? 5 : 9) : 5;            // yellow, flickering orange when hot
+  const label = "COMBO x" + combo;
+  const w = label.length * 4 - 1;
+  const x = ((W - w) / 2) | 0;
+  rect(ctx, x - 4, y - 2, w + 8, 11, 0);            // dark plate
+  rect(ctx, x - 4, y - 2, w + 8, 1, hot ? 9 : 5);   // top accent
+  textCentered(ctx, label, y, idx, 0);
+  const frac = Math.max(0, Math.min(1, comboTimer / (comboWindow || 1)));
+  rect(ctx, x - 4, y + 9, w + 8, 1, 4);
+  rect(ctx, x - 4, y + 9, ((w + 8) * frac) | 0, 1, hot ? 9 : 17);
+}
+
 export function drawGameOver(ctx, { name, score, hi, isNew, reason, passed, time, topSpeed, density }) {
   const t = performance.now();
   // Dark backdrop.
