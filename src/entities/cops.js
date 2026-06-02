@@ -13,76 +13,130 @@ import { SPR_HELI, SPR_BARREL } from "../sprites.js";
 
 const HELI_W = 14, HELI_H = 16;
 const HELI_HALF_W = HELI_W / 2, HELI_HALF_H = HELI_H / 2;
-const HELI_SCREEN_Y = 52;            // hovers in the upper road (the "marked area")
-const DROP_INTERVAL = 15;            // seconds between payloads
-const AIM_TIME = 1.1;                // reticle telegraph before each drop
+const HELI_HOVER_Y = 52;             // hover height once on station
+const HELI_OFFSCREEN_Y = -20;        // parked above the top edge (out of frame)
+const AIM_TIME = 1.1;                // reticle telegraph before a drop
+const ENTER_TIME = 1.7;              // fly-in duration
+const EXIT_TIME = 1.7;               // fly-out duration
+const RELOAD_TIME = 30;              // seconds off-screen between sorties ("reloading")
+const FIRST_DELAY = 3;               // first appearance after the chase engages
+const SINGLE_SORTIES = 3;            // first N sorties use one chopper, then a pair
+const SECOND_DROP_DELAY = 1.8;       // 2nd chopper drops this much later than the 1st
 const BARREL_HALF_X = 4;
 const BARREL_HALF_Z = 4;
 
 function triggerSpeed() { return PHYS.maxSpeed * (RACE.copTriggerKmh / PHYS.topSpeedKmh); }
 function leaveSpeed()   { return PHYS.maxSpeed * ((RACE.copTriggerKmh - 15) / PHYS.topSpeedKmh); }
-function dropDist()     { return yToDist(HELI_SCREEN_Y); }
+function dropDist()     { return yToDist(HELI_HOVER_Y); }
+const clampBound = (x, b) => Math.max(-b, Math.min(b, x));
+
+function makeHeli(spawnX, dropDelay) {
+  return {
+    x: spawnX, homeX: spawnX,
+    y: HELI_OFFSCREEN_Y,
+    dropDelay,            // seconds into the AIM phase before THIS chopper drops
+    aiming: false,
+    dropped: false,
+    lockX: 0,
+    rotorPhase: Math.random() * 6,
+    bobPhase: Math.random() * 6,
+    beaconPhase: Math.random() * 6,
+  };
+}
 
 export function makeCopsSystem() {
   return {
     active: false,
-    x: 0,                 // chopper lateral offset (road px), like an entity x
-    dropTimer: 4,         // first payload ~4s after it appears
-    aiming: false,
-    lockX: 0,
+    phase: "wait",        // wait → enter → aim → exit → wait …
+    phaseT: FIRST_DELAY,  // countdown in wait/enter/exit; counts UP in aim
+    sortie: 0,            // how many sorties flown (decides single vs double)
+    helis: [],
     barrels: [],
-    rotorPhase: 0,
-    bobPhase: 0,
-    beaconPhase: 0,
   };
 }
 
+// One sortie = choppers fly in, drop, fly out. After SINGLE_SORTIES single runs,
+// every run sends TWO choppers whose drops are staggered. Between runs they sit
+// off-screen for RELOAD_TIME (they're "reloading"), so barrels aren't unlimited.
 export function updateCops(sys, dt, playerZ, playerX, playerSpeed, map, cbs) {
-  sys.rotorPhase += dt;
-  sys.bobPhase += dt;
-  sys.beaconPhase += dt;
-
-  // Activate / deactivate with a little hysteresis.
-  if (!sys.active && playerSpeed >= triggerSpeed()) {
-    sys.active = true;
-    sys.dropTimer = 4;
-    sys.aiming = false;
-    sys.x = playerX;
-  } else if (sys.active && playerSpeed < leaveSpeed()) {
-    sys.active = false;
-  }
-
-  const halfRoad = map.roadHalfWidth;
-  const bound = halfRoad - 8;
-
-  if (sys.active) {
-    sys.dropTimer -= dt;
-
-    // Aiming: lock onto the player's current lane and telegraph the drop spot.
-    if (!sys.aiming && sys.dropTimer <= AIM_TIME) {
-      sys.aiming = true;
-      sys.lockX = Math.max(-bound, Math.min(bound, playerX));
-    }
-
-    // Steer the chopper: drift toward the player's column, plus a gentle sweep.
-    // While aiming it homes onto the locked x so the drop reads as deliberate.
-    const sweep = Math.sin(sys.bobPhase * 0.8) * halfRoad * 0.25;
-    const targetX = sys.aiming ? sys.lockX : Math.max(-bound, Math.min(bound, playerX * 0.6 + sweep));
-    const dx = targetX - sys.x;
-    sys.x += Math.sign(dx) * Math.min(Math.abs(dx), 45 * dt);
-
-    // Drop the payload.
-    if (sys.dropTimer <= 0) {
-      sys.barrels.push({ x: sys.lockX, z: playerZ + dropDist(), flame: Math.random() * 6.28, hit: false });
-      sys.dropTimer = DROP_INTERVAL;
-      sys.aiming = false;
-      cbs?.onDrop?.();
-    }
-  }
-
-  // Barrels are static world hazards — advance their flame anim, cull when passed.
+  // Barrels are static world hazards — always advance their flame + cull.
   for (const b of sys.barrels) b.flame += dt;
   sys.barrels = sys.barrels.filter(b => !b.hit && b.z > playerZ - 16);
+
+  // Engage / disengage the chase by speed (with hysteresis).
+  if (!sys.active && playerSpeed >= triggerSpeed()) {
+    sys.active = true;
+    sys.phase = "wait";
+    sys.phaseT = FIRST_DELAY;
+    sys.sortie = 0;
+    sys.helis = [];
+  } else if (sys.active && playerSpeed < leaveSpeed()) {
+    sys.active = false;
+    sys.helis = [];               // they peel away (existing barrels remain)
+  }
+  if (!sys.active) return;
+
+  const bound = map.roadHalfWidth - 8;
+  for (const h of sys.helis) { h.rotorPhase += dt; h.bobPhase += dt; h.beaconPhase += dt; }
+
+  if (sys.phase === "wait") {
+    sys.phaseT -= dt;
+    if (sys.phaseT <= 0) {
+      const dbl = sys.sortie >= SINGLE_SORTIES;
+      sys.helis = dbl
+        ? [makeHeli(-bound * 0.55, 0), makeHeli(bound * 0.55, SECOND_DROP_DELAY)]
+        : [makeHeli(clampBound(playerX, bound), 0)];
+      sys.phase = "enter";
+      sys.phaseT = ENTER_TIME;
+    }
+  } else if (sys.phase === "enter") {
+    sys.phaseT -= dt;
+    const f = 1 - Math.max(0, sys.phaseT) / ENTER_TIME;        // 0 → 1
+    for (const h of sys.helis) {
+      h.y = HELI_OFFSCREEN_Y + (HELI_HOVER_Y - HELI_OFFSCREEN_Y) * f;
+      const tx = clampBound(playerX * 0.5 + h.homeX * 0.5, bound);
+      h.x += (tx - h.x) * Math.min(1, dt * 2);
+    }
+    if (sys.phaseT <= 0) { sys.phase = "aim"; sys.phaseT = 0; }
+  } else if (sys.phase === "aim") {
+    sys.phaseT += dt;                                          // counts up
+    let allDropped = true;
+    for (const h of sys.helis) {
+      h.y = HELI_HOVER_Y + Math.sin(h.bobPhase * 2) * 1.5;    // hover bob
+      if (h.dropped) {
+        // ease back toward its home column after dropping (declutters a pair)
+        h.x += (h.homeX - h.x) * Math.min(1, dt * 1.5);
+        continue;
+      }
+      allDropped = false;
+      const localT = sys.phaseT - h.dropDelay;
+      if (localT < 0) {                                        // not this chopper's turn yet
+        const tx = clampBound(playerX, bound);
+        h.x += Math.sign(tx - h.x) * Math.min(Math.abs(tx - h.x), 30 * dt);
+        continue;
+      }
+      if (!h.aiming) { h.aiming = true; h.lockX = clampBound(playerX, bound); }
+      h.x += Math.sign(h.lockX - h.x) * Math.min(Math.abs(h.lockX - h.x), 45 * dt);
+      if (localT >= AIM_TIME) {
+        sys.barrels.push({ x: h.lockX, z: playerZ + dropDist(), flame: Math.random() * 6.28, hit: false });
+        h.dropped = true;
+        cbs?.onDrop?.();
+      }
+    }
+    if (allDropped) { sys.phase = "exit"; sys.phaseT = EXIT_TIME; }
+  } else if (sys.phase === "exit") {
+    sys.phaseT -= dt;
+    const f = 1 - Math.max(0, sys.phaseT) / EXIT_TIME;        // 0 → 1
+    for (const h of sys.helis) {
+      h.y = HELI_HOVER_Y + (HELI_OFFSCREEN_Y - HELI_HOVER_Y) * f;   // climb out of frame
+    }
+    if (sys.phaseT <= 0) {
+      sys.helis = [];
+      sys.sortie++;
+      sys.phase = "wait";
+      sys.phaseT = RELOAD_TIME;                                // 30s reload
+    }
+  }
 }
 
 // Player hit test against armed barrels. Returns the barrel (caller marks .hit).
@@ -136,21 +190,23 @@ export function drawCops(ctx, sys, map, playerZ, playerX) {
     drawFlame(ctx, p.sx, p.sy - 4, b.flame);
   }
 
-  if (!sys.active) return;
+  if (!sys.active || sys.helis.length === 0) return;
+  const screenCx = W / 2 + map.biasX;
 
-  // Aiming reticle on the road at the locked drop spot.
-  if (sys.aiming) {
-    const rp = project(map, playerZ, playerX, { x: sys.lockX, z: playerZ + dropDist() });
-    if (rp) drawReticle(ctx, rp.sx, rp.sy, sys.beaconPhase);
+  // Aiming reticles on the road, one per chopper currently lining up a drop.
+  for (const h of sys.helis) {
+    if (h.aiming && !h.dropped) {
+      const rp = project(map, playerZ, playerX, { x: h.lockX, z: playerZ + dropDist() });
+      if (rp) drawReticle(ctx, rp.sx, rp.sy, h.beaconPhase);
+    }
   }
 
-  // Chopper overlay in the upper road.
-  const screenCx = W / 2 + map.biasX;
-  const hx = (screenCx + sys.x) | 0;
-  const hy = (HELI_SCREEN_Y + Math.sin(sys.bobPhase * 2) * 1.5) | 0;
-  drawSprite(ctx, SPR_HELI, hx - HELI_HALF_W, hy - HELI_HALF_H);
-  // Blinking siren beacon over the body.
-  if (Math.floor(sys.beaconPhase / 0.18) % 2 === 0) rect(ctx, hx - 1, hy - HELI_HALF_H + 5, 2, 1, 1);
-  // Spinning main rotor over the body centre.
-  drawRotor(ctx, hx, hy - 1, sys.rotorPhase);
+  // Choppers (each at its own animated screen position — flies in/out of frame).
+  for (const h of sys.helis) {
+    const hx = (screenCx + h.x) | 0;
+    const hy = h.y | 0;
+    drawSprite(ctx, SPR_HELI, hx - HELI_HALF_W, hy - HELI_HALF_H);
+    if (Math.floor(h.beaconPhase / 0.18) % 2 === 0) rect(ctx, hx - 1, hy - HELI_HALF_H + 5, 2, 1, 1);
+    drawRotor(ctx, hx, hy - 1, h.rotorPhase);
+  }
 }
