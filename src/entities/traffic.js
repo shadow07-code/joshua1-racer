@@ -125,23 +125,28 @@ export function updateTraffic(sys, dt, playerZ, map, cbs) {
     c.z += c.speed * dt;
     c.driftPhase += dt * 1.2;
 
-    // ── Slow lane change ──
-    // Every 8-16 seconds (varied), pick a new target lane. Lerp toward it slowly
-    // (≈5 px/s) so the player has plenty of time to react. The new target stays
-    // within the road bounds.
+    // ── Lane change ──
+    // Bikes weave far more often and more sharply than cars; cars amble between
+    // lanes. New targets avoid merging into an already-occupied space (a driver
+    // checking their blind spot) — but rarely they don't, and a bump can result.
+    const isBike = !!c.skin.bike;
     c.laneChangeTimer -= dt;
     if (c.laneChangeTimer <= 0) {
-      c.laneChangeTimer = 8 + Math.random() * 8;
-      // Chance to actually shift lanes (else hold). Higher = more weaving = harder.
-      if (Math.random() < RACE.trafficSidewaysChance) {
-        const shift = (Math.random() < 0.5 ? -1 : 1) * (10 + Math.random() * 14);
-        c.targetX = Math.max(-(halfRoad - 6), Math.min(halfRoad - 6, c.x + shift));
+      c.laneChangeTimer = isBike ? (2.5 + Math.random() * 3.5) : (8 + Math.random() * 8);
+      const chance = isBike ? Math.min(0.95, RACE.trafficSidewaysChance + 0.25) : RACE.trafficSidewaysChance;
+      if (Math.random() < chance) {
+        const mag = isBike ? (12 + Math.random() * 18) : (10 + Math.random() * 14);
+        const newX = Math.max(-(halfRoad - 6), Math.min(halfRoad - 6, c.x + (Math.random() < 0.5 ? -1 : 1) * mag));
+        const blocked = sys.list.some(o =>
+          o !== c && Math.abs(o.z - c.z) < 14 &&
+          Math.abs(o.x - newX) < skinHalfX(o.skin) + skinHalfX(c.skin) + 3);
+        if (!blocked || Math.random() < 0.07) c.targetX = newX;   // 7% ignore → may bump
       }
     }
-    const LANE_CHANGE_SPEED = 5; // px / sec — deliberately slow
+    const laneSpeed = isBike ? 13 : 5; // px/sec — bikes flick across, cars ease
     const dx = c.targetX - c.x;
     if (Math.abs(dx) > 0.3) {
-      c.x += Math.sign(dx) * Math.min(Math.abs(dx), LANE_CHANGE_SPEED * dt);
+      c.x += Math.sign(dx) * Math.min(Math.abs(dx), laneSpeed * dt);
     }
 
     if (!c.passed && c.z < playerZ - 4) {
@@ -158,7 +163,41 @@ export function updateTraffic(sys, dt, playerZ, map, cbs) {
     }
   }
 
+  // Keep traffic from stacking: cars follow (slow for) the car ahead in their
+  // lane and never overlap it — except for a rare bump.
+  resolveTrafficSeparation(sys, dt);
+
   sys.list = sys.list.filter(c => c.z > playerZ - 30);
+}
+
+// Traffic-vs-traffic separation. Cars overlapping laterally keep a minimum
+// longitudinal gap from the car ahead and match its speed (car-following), so
+// they never stack. A small random chance lets a follower briefly fail and bump.
+function resolveTrafficSeparation(sys, dt) {
+  const cars = sys.list;
+  cars.sort((a, b) => a.z - b.z);   // rear → front
+  for (let i = 0; i < cars.length; i++) {
+    const c = cars[i];
+    for (let j = i + 1; j < cars.length; j++) {
+      const o = cars[j];
+      const gap = o.z - c.z;
+      if (gap > 45) break;                                  // nothing close ahead
+      const latClear = skinHalfX(c.skin) + skinHalfX(o.skin) + 1.5;
+      if (Math.abs(o.x - c.x) >= latClear) continue;        // different lane — ignore
+      const minGap = (skinHalfZ(c.skin) + skinHalfZ(o.skin)) * 0.95;
+      if (gap < minGap) {
+        if (c.bumpT == null) c.bumpT = 0;
+        if (c.bumpT <= 0 && Math.random() < 0.0008) c.bumpT = 0.4;  // rare bump window
+        if (c.bumpT > 0) {
+          c.bumpT -= dt;                                    // allow brief contact
+        } else {
+          c.z = o.z - minGap;                               // no stacking
+          if (c.speed > o.speed) c.speed = o.speed;         // ease off behind it
+        }
+      }
+      break;                                                // only the nearest matters
+    }
+  }
 }
 
 export function drawTraffic(ctx, sys, map, playerZ, playerX) {
@@ -175,9 +214,9 @@ export function drawTraffic(ctx, sys, map, playerZ, playerX) {
 export function checkTrafficHit(sys, box) {
   for (const c of sys.list) {
     const hx = skinHalfX(c.skin), hz = skinHalfZ(c.skin);
-    const x1 = c.x - hx, x2 = c.x + hx;
-    // Tighter longitudinal extent (was 0.6) so a rear approach only "collides"
-    // when the cars are nearly touching — no more phantom gap before impact.
+    // Snug hitbox on ALL sides — collide only on real visual contact, not with a
+    // phantom margin. Lateral 0.72, longitudinal 0.42 (matched to the sprites).
+    const x1 = c.x - hx * 0.72, x2 = c.x + hx * 0.72;
     const z1 = c.z - hz * 0.42, z2 = c.z + hz * 0.42;
     if (box.x1 < x2 && box.x2 > x1 && box.z1 < z2 && box.z2 > z1) return c;
   }

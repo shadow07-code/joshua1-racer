@@ -37,7 +37,7 @@ export function makeCopsSystem() {
   };
 }
 
-export function updateCops(sys, dt, playerZ, playerX, playerSpeed, map) {
+export function updateCops(sys, dt, playerZ, playerX, playerSpeed, map, cbs) {
   sys.rotorPhase += dt;
   sys.bobPhase += dt;
   sys.beaconPhase += dt;
@@ -76,6 +76,7 @@ export function updateCops(sys, dt, playerZ, playerX, playerSpeed, map) {
       sys.barrels.push({ x: sys.lockX, z: playerZ + dropDist(), flame: Math.random() * 6.28, hit: false });
       sys.dropTimer = DROP_INTERVAL;
       sys.aiming = false;
+      cbs?.onDrop?.();
     }
   }
 

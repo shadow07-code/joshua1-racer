@@ -11,7 +11,7 @@ import {
   initAudio, resumeAudio, suspendAudio, startMusic, stopMusic, setMusicIntensity, setMusicTempoFactor,
   playFlourish,
   startEngine, setEngine, stopEngine,
-  sfxAccelAccent, sfxBrake, sfxPickup, sfxCrash, sfxBump,
+  sfxAccelAccent, sfxBrake, sfxPickup, sfxCrash, sfxBump, sfxBarrelDrop,
   sfxMenuMove, sfxMenuSelect, sfxFinish, sfxCountdownBeep,
   setMusicEnabled, setSfxEnabled, isMusicEnabled, isSfxEnabled, applyMix,
 } from "./audio.js";
@@ -399,7 +399,7 @@ function updateRace(dt) {
   });
   // Police helicopter kicks in once the player crosses 250 km/h — it drops
   // flaming barrels on the road ahead (collision handled below, costs a life).
-  updateCops(g.cops, dt, g.player.z, g.player.x, g.player.speed, g.map);
+  updateCops(g.cops, dt, g.player.z, g.player.x, g.player.speed, g.map, { onDrop: sfxBarrelDrop });
   updateScenery(g.scenery, g.player.z, g.map, dt, SPAWN.sceneryPerMeter);
 
   // Player exhaust smoke (no more AI smoke — AI gone).

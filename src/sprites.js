@@ -291,10 +291,10 @@ export const TRAFFIC_SKINS = [
   { spr: SPR_SUV_BLACK,    w: 10, h: 18, scale: TS, speedMul: 0.22 },
   { spr: SPR_SUV_BLUE,     w: 10, h: 18, scale: TS, speedMul: 0.24 },
   { spr: SPR_SUV_ORANGE,   w: 10, h: 18, scale: TS, speedMul: 0.24 },
-  // Harleys (3 colours) — nimble
-  { spr: SPR_MOTO_BLACK,   w: 7,  h: 14, scale: TS, speedMul: 0.34 },
-  { spr: SPR_MOTO_ORANGE,  w: 7,  h: 14, scale: TS, speedMul: 0.36 },
-  { spr: SPR_MOTO_WHITE,   w: 7,  h: 14, scale: TS, speedMul: 0.34 },
+  // Harleys (3 colours) — nimble, weave between lanes more often (bike: true)
+  { spr: SPR_MOTO_BLACK,   w: 7,  h: 14, scale: TS, speedMul: 0.34, bike: true },
+  { spr: SPR_MOTO_ORANGE,  w: 7,  h: 14, scale: TS, speedMul: 0.36, bike: true },
+  { spr: SPR_MOTO_WHITE,   w: 7,  h: 14, scale: TS, speedMul: 0.34, bike: true },
 ];
 
 // ─── Scenery ──────────────────────────────────────────────────────────────────

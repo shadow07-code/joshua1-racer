@@ -249,6 +249,7 @@ function scheduleAhead(now, sixteenthSec, lookahead) {
 
     // Drums
     drumTick(t, sixteenthSec, drumCursor);
+    extraPercussion(t, sixteenthSec, drumCursor);
 
     // Advance
     drumCursor = (drumCursor + 1) % 16;
@@ -278,6 +279,22 @@ function drumTick(t, sixteenthSec, pos) {
     if (pos === 6 || pos === 14) playNoiseHit(t, 0.06, 0.10, 1100);  // mid hand-drum
     if (intensity >= 1 && pos % 4 === 0) playNoiseHit(t, 0.04, 0.08, 1500);
   }
+}
+
+// Extra percussion layer (additive) — enriches the existing groove without
+// touching the melody/bass: a continuous shaker bed, ghost snares, a ride-bell
+// shimmer and a couple of syncopated kicks for more drive. Routed through the
+// music channel so the music toggle/volume still controls it.
+function extraPercussion(t, sixteenthSec, pos) {
+  if (!ctx) return;
+  // Shaker on every 16th — softer on-beat, a touch brighter on the offbeats.
+  playNoiseHit(t, 0.010, pos % 2 === 1 ? 0.045 : 0.026, 7200);
+  // Ghost snare on the last 16th of each beat → busier backbeat.
+  if (pos % 4 === 3) playNoiseHit(t, 0.020, 0.05, 2600);
+  // Ride-bell shimmer on the offbeat eighths.
+  if (pos % 4 === 2) playNoiseHit(t, 0.018, 0.035, 5200);
+  // Syncopated push kicks (adds to the existing 0/8 kicks for a fuller beat).
+  if (pos === 6 || pos === 14) playNoiseHit(t, 0.05, 0.10, 95);
 }
 
 function tickScheduler() {
@@ -395,6 +412,27 @@ export function sfxBump() {
   ng.gain.exponentialRampToValueAtTime(0.001, t + 0.10);
   src.connect(filt); filt.connect(ng); ng.connect(sfxGain);
   src.start(t); src.stop(t + 0.12);
+}
+
+// Helicopter releases a flaming barrel — a falling whistle (pitch sweeps down)
+// plus a metallic clank as it leaves the chopper.
+export function sfxBarrelDrop() {
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  const o = ctx.createOscillator(); o.type = "square";
+  o.frequency.setValueAtTime(900, t);
+  o.frequency.exponentialRampToValueAtTime(170, t + 0.40);
+  const g = ctx.createGain(); g.gain.value = 0;
+  g.gain.linearRampToValueAtTime(0.16, t + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.44);
+  o.connect(g); g.connect(sfxGain);
+  o.start(t); o.stop(t + 0.46);
+  const src = ctx.createBufferSource(); src.buffer = getNoiseBuf();
+  const filt = ctx.createBiquadFilter(); filt.type = "bandpass"; filt.frequency.value = 2400; filt.Q.value = 3;
+  const ng = ctx.createGain(); ng.gain.value = 0.14;
+  ng.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+  src.connect(filt); filt.connect(ng); ng.connect(sfxGain);
+  src.start(t); src.stop(t + 0.14);
 }
 
 export function sfxNitrous() {
