@@ -30,6 +30,32 @@ export function isMuted() { return muted; }
 export function setMuted(v) { muted = !!v; if (masterGain) masterGain.gain.value = muted ? 0 : 0.6; }
 export function toggleMute() { setMuted(!muted); return muted; }
 
+// ── Independent music / SFX channels (additive) ───────────────────────────────
+// Rebalanced mix: music sits lower so the car/engine and effects come forward.
+// Two separate enable flags drive the two toolbar toggles.
+let musicEnabled = true, sfxEnabled = true;
+let musicVol = 0.28;   // was 0.42 — quieter so the car is heard over the track
+let sfxVol   = 1.10;   // was 0.85 — louder engine + effects (the "car sound")
+
+export function isMusicEnabled() { return musicEnabled; }
+export function isSfxEnabled()   { return sfxEnabled; }
+export function setMusicEnabled(on) {
+  musicEnabled = !!on;
+  if (musicGain) musicGain.gain.value = musicEnabled ? musicVol : 0;
+}
+export function setSfxEnabled(on) {
+  sfxEnabled = !!on;
+  if (sfxGain) sfxGain.gain.value = sfxEnabled ? sfxVol : 0;
+}
+export function setMusicVolume(v) { musicVol = v; if (musicGain && musicEnabled) musicGain.gain.value = v; }
+export function setSfxVolume(v)   { sfxVol = v;   if (sfxGain   && sfxEnabled)   sfxGain.gain.value = v; }
+// Push the rebalanced volumes + current enable flags onto the gain nodes. Call
+// after initAudio() (the context may be created lazily on first user gesture).
+export function applyMix() {
+  if (musicGain) musicGain.gain.value = musicEnabled ? musicVol : 0;
+  if (sfxGain)   sfxGain.gain.value   = sfxEnabled   ? sfxVol   : 0;
+}
+
 export function initAudio() {
   if (inited) return;
   try {

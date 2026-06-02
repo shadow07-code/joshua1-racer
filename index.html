@@ -122,6 +122,8 @@
       border-radius: 3px;
     }
     #toolbar button:active { background: rgba(139, 172, 15, 0.85); color: #0f380f; }
+    /* Dimmed look when a channel is toggled OFF. */
+    #toolbar button.off { opacity: 0.4; border-color: var(--dmg-dark); }
     /* Permanent "add to phone" button — shown centred above "TAP TO START"
        on the title screen only. Bottom offset set dynamically by pwa.js. */
     #btn-install {
@@ -299,8 +301,8 @@
 </head>
 <body>
   <div id="toolbar">
-    <button id="btn-mute" title="Mute (M)" aria-label="Mute">♪</button>
-    <button id="btn-pause" title="Pause (P)" aria-label="Pause">II</button>
+    <button id="btn-music" title="Music on/off (M)" aria-label="Toggle music">♪</button>
+    <button id="btn-sfx" title="Sound effects on/off" aria-label="Toggle sound effects">🔊</button>
   </div>
 
   <button id="btn-install" aria-label="Install game for offline play">📲 ADD TO HOME SCREEN</button>

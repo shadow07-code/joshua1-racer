@@ -13,7 +13,7 @@ import {
   startEngine, setEngine, stopEngine,
   sfxAccelAccent, sfxBrake, sfxPickup, sfxCrash, sfxBump,
   sfxMenuMove, sfxMenuSelect, sfxFinish, sfxCountdownBeep,
-  toggleMute,
+  setMusicEnabled, setSfxEnabled, isMusicEnabled, isSfxEnabled, applyMix,
 } from "./audio.js";
 import { drawRoad, distToY } from "./road.js";
 import { makePlayer, updatePlayer, drawPlayer, playerBox, applyCollisionLoss } from "./entities/player.js";
@@ -99,27 +99,47 @@ const g = {
   lbReturnTo: STATES.TITLE,      // where the leaderboard BACK button returns to
 };
 
-const btnMute = document.getElementById("btn-mute");
-const btnPause = document.getElementById("btn-pause");
-btnMute.addEventListener("click", () => {
-  const m = toggleMute();
-  btnMute.textContent = m ? "♪×" : "♪";
-});
-btnPause.addEventListener("click", () => {
-  if (g.state === STATES.RACE) pauseGame();
-  else if (g.state === STATES.PAUSED) resumeGame();
-});
+// ── Audio toggles (music / SFX) — two independent toolbar buttons. ────────────
+const btnMusic = document.getElementById("btn-music");
+const btnSfx = document.getElementById("btn-sfx");
+const MUSIC_KEY = "joshua1.music", SFX_KEY = "joshua1.sfx";
+function loadToggle(key) { try { const v = localStorage.getItem(key); return v === null ? true : v === "1"; } catch { return true; } }
+function saveToggle(key, on) { try { localStorage.setItem(key, on ? "1" : "0"); } catch {} }
+function refreshAudioButtons() {
+  btnMusic.textContent = "♪";
+  btnMusic.classList.toggle("off", !isMusicEnabled());
+  btnSfx.textContent = isSfxEnabled() ? "🔊" : "🔇";
+  btnSfx.classList.toggle("off", !isSfxEnabled());
+}
+function toggleMusic() {
+  ensureAudio();
+  const on = !isMusicEnabled();
+  setMusicEnabled(on); saveToggle(MUSIC_KEY, on); refreshAudioButtons();
+}
+function toggleSfx() {
+  ensureAudio();
+  const on = !isSfxEnabled();
+  setSfxEnabled(on); saveToggle(SFX_KEY, on); refreshAudioButtons();
+}
+// Restore persisted preferences before any audio context exists; applyMix() will
+// push them onto the gain nodes once initAudio() runs.
+setMusicEnabled(loadToggle(MUSIC_KEY));
+setSfxEnabled(loadToggle(SFX_KEY));
+refreshAudioButtons();
+btnMusic.addEventListener("click", toggleMusic);
+btnSfx.addEventListener("click", toggleSfx);
 
-function ensureAudio() { initAudio(); resumeAudio(); }
+function ensureAudio() { initAudio(); resumeAudio(); applyMix(); }
 
-// Pause/resume helpers — pausing silences music + engine so audio also stops
-// when the player backgrounds the app. Resuming restarts both.
+// Pause/resume helpers — pausing silences music + engine (and suspends the audio
+// context) so sound stops IMMEDIATELY, even mid-note. Resuming restarts both.
 function pauseGame() {
   if (g.state !== STATES.RACE) return;
   g.prevState = g.state;
   g.state = STATES.PAUSED;
   stopMusic();
   stopEngine();
+  suspendAudio();
 }
 function resumeGame() {
   if (g.state !== STATES.PAUSED) return;
@@ -131,19 +151,20 @@ function resumeGame() {
   }
 }
 
-// Stop the music + engine the instant the tab/app is hidden (minimised on a
-// phone, switched away on desktop), and fully suspend the audio context so no
-// scheduled chiptune notes leak through. A race auto-pauses; everything resumes
-// on return.
+// Auto-pause whenever the app is backgrounded — minimised, tab/app switched, or
+// the phone's BACK button is pressed. Music stops immediately (suspendAudio cuts
+// any scheduled chiptune notes). A race pauses; the player taps to resume.
+function autoPause() {
+  if (g.state === STATES.RACE) pauseGame();
+  else { stopMusic(); stopEngine(); }
+  suspendAudio();
+}
 document.addEventListener("visibilitychange", () => {
-  if (document.hidden) {
-    if (g.state === STATES.RACE) pauseGame();
-    else { stopMusic(); stopEngine(); }
-    suspendAudio();
-  } else {
-    resumeAudio();
-  }
+  if (document.hidden) autoPause(); else resumeAudio();
 });
+window.addEventListener("pagehide", autoPause);   // back button / navigation away
+window.addEventListener("blur", autoPause);       // app switch / minimise
+window.addEventListener("focus", () => resumeAudio());
 
 function baseRowGapForMap(map) {
   return map.key === "jungle" ? SPAWN.trafficRowGapJungle : SPAWN.trafficRowGapCity;
@@ -340,7 +361,7 @@ function updateRace(dt) {
   const input = getInput();
 
   if (consumePress("p", "P")) { pauseGame(); return; }
-  if (consumePress("m", "M")) { const m = toggleMute(); btnMute.textContent = m ? "♪×" : "♪"; }
+  if (consumePress("m", "M")) { toggleMusic(); }
   if (consumePress("Escape")) { stopMusic(); stopEngine(); g.state = STATES.TITLE; return; }
 
   g.raceTime += dt;

@@ -111,55 +111,67 @@ export const SPR_SPORTS_PLAYER_LEGACY = SPR_SPORTS;
 // Body color slots: B = main, L = secondary detail. Windows always use a contrasting
 // grey, taillights always orange. Three distinct paint variants per shape.
 //
-// SEDAN — 10w × 16h
+// SEDAN — 10w × 16h. Sleek 3-box saloon: raked windshield, distinct roof,
+// rear glass, headlights, taillights and wheels poking at all four corners.
+// Body slots 6/7/8 recolour; 3 glass, 5 headlight, 9 taillight, 4 tyre, 1 glint.
 const SEDAN_BASE = [
-  [_,_,0,0,0,0,0,0,_,_],   // 0 — hood front
-  [_,0,8,6,6,6,6,8,0,_],   // 1 — hood with side highlights (L=8, B=6)
-  [_,0,6,3,3,3,3,6,0,_], // 2 — windshield (mid gray, never blue)
-  [_,0,6,3,1,1,3,6,0,_], // 3 — windshield reflection
-  [0,8,6,6,3,3,6,6,8,0], // 4 — cabin
-  [0,6,6,6,6,6,6,6,6,0],   // 5 — body
-  [0,6,8,6,6,6,6,8,6,0],   // 6 — body w/ panel highlights
-  [0,6,6,6,6,6,6,6,6,0],   // 7
-  [0,6,6,6,6,6,6,6,6,0],   // 8
-  [0,6,8,6,6,6,6,8,6,0],   // 9
-  [0,8,6,6,3,3,6,6,8,0], // 10 — rear cabin
-  [_,0,6,3,3,3,3,6,0,_], // 11 — rear windshield
-  [_,0,6,6,6,6,6,6,0,_],   // 12 — trunk
-  [_,0,9,9,0,0,9,9,0,_],   // 13 — taillights (orange = 9)
-  [_,_,0,0,0,0,0,0,_,_],   // 14 — rear bumper
-  [_,_,_,_,_,_,_,_,_,_],   // 15 — blank
+  [_,_,0,0,0,0,0,0,_,_],   //  0 front bumper
+  [_,0,7,6,6,6,6,7,0,_],   //  1 hood, dark fender edges
+  [_,0,5,6,8,8,6,5,0,_],   //  2 headlights (5) + hood glint (8)
+  [4,0,6,6,6,6,6,6,0,4],   //  3 front wheels poke out
+  [4,0,7,6,6,6,6,7,0,4],   //  4 cowl
+  [_,0,8,3,3,3,3,8,0,_],   //  5 windshield, bright A-pillars
+  [_,0,6,3,1,1,3,6,0,_],   //  6 windshield glint (1)
+  [_,0,8,6,6,6,6,8,0,_],   //  7 roof front (glossy shoulders)
+  [_,0,6,6,6,6,6,6,0,_],   //  8 roof
+  [_,0,8,6,6,6,6,8,0,_],   //  9 roof rear
+  [_,0,6,3,3,3,3,6,0,_],   // 10 rear window
+  [4,0,7,6,6,6,6,7,0,4],   // 11 rear wheels poke out
+  [4,0,8,6,6,6,6,8,0,4],   // 12 trunk glint
+  [_,0,9,9,6,6,9,9,0,_],   // 13 taillights (9)
+  [_,_,0,0,0,0,0,0,_,_],   // 14 rear bumper
+  [_,_,_,_,_,_,_,_,_,_],   // 15 blank
 ];
 
-export const SPR_SEDAN_BLACK  = recolorBody(SEDAN_BASE, 7, 6, 8, 4, 0, 4);   // body black, highlight dk-gray
-export const SPR_SEDAN_WHITE  = recolorBody(SEDAN_BASE, 7, 6, 8, 2, 1, 2);   // body white, highlight lt-gray
-export const SPR_SEDAN_ORANGE = recolorBody(SEDAN_BASE, 7, 6, 8, 22, 9, 5);  // body orange, highlight yellow
+export const SPR_SEDAN_SILVER = recolorBody(SEDAN_BASE, 7, 6, 8, 4, 2, 1);   // silver
+export const SPR_SEDAN_BLUE   = recolorBody(SEDAN_BASE, 7, 6, 8, 4, 16, 13); // blue
+export const SPR_SEDAN_RED    = recolorBody(SEDAN_BASE, 7, 6, 8, 7, 6, 8);   // red
+export const SPR_SEDAN_BLACK  = recolorBody(SEDAN_BASE, 7, 6, 8, 0, 4, 3);   // charcoal (not flat black)
+export const SPR_SEDAN_WHITE  = recolorBody(SEDAN_BASE, 7, 6, 8, 2, 1, 1);   // white
+export const SPR_SEDAN_ORANGE = recolorBody(SEDAN_BASE, 7, 6, 8, 22, 9, 5);  // orange
 
-// TRUCK — 10w × 18h with cargo bed
-const TRUCK_BASE = [
-  [_,_,0,0,0,0,0,0,_,_],
-  [_,0,8,6,6,6,6,8,0,_],   // hood
-  [_,0,6,3,3,3,3,6,0,_],   // windshield (mid gray)
-  [_,0,6,3,1,1,3,6,0,_],
-  [0,8,6,6,3,3,6,6,8,0],   // cab
-  [0,6,6,6,6,6,6,6,6,0],
-  [0,7,7,7,7,7,7,7,7,0],   // bed wall
-  [0,7,4,4,4,4,4,4,7,0],   // cargo bed (dark)
-  [0,7,4,3,4,4,3,4,7,0],
-  [0,7,4,4,3,4,4,4,7,0],
-  [0,7,4,4,4,4,3,4,7,0],
-  [0,7,4,4,3,4,4,4,7,0],
-  [0,7,4,4,4,4,4,4,7,0],
-  [0,7,7,7,7,7,7,7,7,0],   // bed back wall
-  [_,0,6,6,6,6,6,6,0,_],
-  [_,0,9,9,0,0,9,9,0,_],   // taillights
-  [_,_,0,0,0,0,0,0,_,_],
-  [_,_,_,_,_,_,_,_,_,_],
+// SUV — 10w × 18h. Taller, boxier wagon: short hood, big upright greenhouse,
+// long roof with roof-rails, wraparound rear glass. Reads clearly apart from the
+// lower sedan. Same width as the sedan (no bigger).
+const SUV_BASE = [
+  [_,_,0,0,0,0,0,0,_,_],   //  0 front bumper
+  [_,0,5,6,6,6,6,5,0,_],   //  1 headlights (wide)
+  [_,0,7,6,8,8,6,7,0,_],   //  2 short hood + glint
+  [4,0,6,6,6,6,6,6,0,4],   //  3 front wheels poke out
+  [4,0,8,3,3,3,3,8,0,4],   //  4 windshield (upright, starts early)
+  [_,0,6,3,1,1,3,6,0,_],   //  5 windshield glint
+  [_,0,8,6,6,6,6,8,0,_],   //  6 roof front + rails (8)
+  [_,0,8,6,6,6,6,8,0,_],   //  7 roof rails
+  [_,0,8,6,6,6,6,8,0,_],   //  8 roof
+  [_,0,8,6,6,6,6,8,0,_],   //  9 roof
+  [_,0,8,6,6,6,6,8,0,_],   // 10 roof rails
+  [_,0,7,3,3,3,3,7,0,_],   // 11 rear window (big, upright)
+  [4,0,6,6,6,6,6,6,0,4],   // 12 rear wheels poke out
+  [4,0,8,6,6,6,6,8,0,4],   // 13 rear quarter glint
+  [_,0,9,9,6,6,9,9,0,_],   // 14 taillights
+  [_,_,0,0,0,0,0,0,_,_],   // 15 rear bumper
+  [_,_,_,_,_,_,_,_,_,_],   // 16 blank
+  [_,_,_,_,_,_,_,_,_,_],   // 17 blank
 ];
 
-export const SPR_TRUCK_BLACK  = recolorBody(TRUCK_BASE, 7, 6, 8, 4, 0, 4);
-export const SPR_TRUCK_WHITE  = recolorBody(TRUCK_BASE, 7, 6, 8, 2, 1, 2);
-export const SPR_TRUCK_ORANGE = recolorBody(TRUCK_BASE, 7, 6, 8, 22, 9, 5);
+export const SPR_SUV_WHITE    = recolorBody(SUV_BASE, 7, 6, 8, 2, 1, 1);    // white
+export const SPR_SUV_BLACK    = recolorBody(SUV_BASE, 7, 6, 8, 0, 4, 3);    // charcoal
+export const SPR_SUV_ORANGE   = recolorBody(SUV_BASE, 7, 6, 8, 22, 9, 5);   // orange
+export const SPR_SUV_BLUE     = recolorBody(SUV_BASE, 7, 6, 8, 4, 16, 13);  // blue
+// Back-compat names (table + HUD imports referenced the old "truck" sprites).
+export const SPR_TRUCK_BLACK  = SPR_SUV_BLACK;
+export const SPR_TRUCK_WHITE  = SPR_SUV_WHITE;
+export const SPR_TRUCK_ORANGE = SPR_SUV_ORANGE;
 
 // BUS — 10w × 22h, long with rows of windows. Windows are mid-gray (never blue).
 const BUS_BASE = [
@@ -191,27 +203,28 @@ export const SPR_BUS_BLACK  = recolorBody(BUS_BASE, 7, 6, 8, 4, 0, 4);
 export const SPR_BUS_WHITE  = recolorBody(BUS_BASE, 7, 6, 8, 2, 1, 2);
 export const SPR_BUS_ORANGE = recolorBody(BUS_BASE, 7, 6, 8, 22, 9, 5);
 
-// MOTORBIKE (Harley cruiser) — 7w × 14h, top-down. Mostly black + chrome with a
-// recolourable fuel tank (slots 6 main / 7 dark / 8 light).
+// MOTORBIKE (Harley cruiser) — 7w × 14h, top-down. Fat front/rear tyres, wide
+// chrome handlebars, teardrop fuel tank (recolourable 6/7/8), V-twin engine with
+// chrome pipes poking out, and a rider on the seat.
 const MOTO_BASE = [
-  [_,_,_,0,_,_,_],   // 0 — front fender
-  [_,_,0,4,0,_,_],   // 1 — front wheel
-  [_,_,0,4,0,_,_],   // 2 — front wheel
-  [_,0,2,2,2,0,_],   // 3 — handlebars (chrome)
-  [_,_,0,1,0,_,_],   // 4 — headlight
-  [_,0,8,6,8,0,_],   // 5 — fuel tank
-  [_,0,6,6,6,0,_],   // 6 — fuel tank
-  [_,0,7,4,7,0,_],   // 7 — seat
-  [_,_,0,4,0,_,_],   // 8 — rider
-  [_,_,0,4,0,_,_],   // 9 — rider
-  [_,2,0,4,0,2,_],   // 10 — exhaust pipes (chrome)
-  [_,2,0,4,0,2,_],   // 11 — exhaust pipes
-  [_,_,0,4,0,_,_],   // 12 — rear wheel
-  [_,_,0,4,0,_,_],   // 13 — rear wheel
+  [_,_,_,0,_,_,_],   //  0 front fender
+  [_,_,4,4,4,_,_],   //  1 front tyre (fat)
+  [_,_,0,4,0,_,_],   //  2 fork
+  [2,2,2,1,2,2,2],   //  3 wide handlebars (chrome) + headlight (1)
+  [_,_,0,8,0,_,_],   //  4 tank neck
+  [_,0,8,6,8,0,_],   //  5 fuel tank top (glint)
+  [_,0,6,6,6,0,_],   //  6 fuel tank
+  [_,0,7,6,7,0,_],   //  7 tank base
+  [2,0,4,4,4,0,2],   //  8 V-twin engine + chrome pipes poke out
+  [_,0,4,4,4,0,_],   //  9 engine block
+  [_,0,7,7,7,0,_],   // 10 seat
+  [_,_,0,7,0,_,_],   // 11 rider / sissy bar
+  [_,_,4,4,4,_,_],   // 12 rear tyre (fat)
+  [_,_,0,4,0,_,_],   // 13 rear tyre
 ];
-export const SPR_MOTO_BLACK  = recolorBody(MOTO_BASE, 7, 6, 8, 0, 4, 4);
+export const SPR_MOTO_BLACK  = recolorBody(MOTO_BASE, 7, 6, 8, 0, 4, 3);
 export const SPR_MOTO_ORANGE = recolorBody(MOTO_BASE, 7, 6, 8, 22, 9, 5);
-export const SPR_MOTO_WHITE  = recolorBody(MOTO_BASE, 7, 6, 8, 2, 1, 2);
+export const SPR_MOTO_WHITE  = recolorBody(MOTO_BASE, 7, 6, 8, 2, 1, 1);
 
 // POLICE HELICOPTER — 14w × 16h, top-down (nose up). Deep-gray body (23),
 // cockpit glass (13), red beacon (6), white tail rotor (1). The spinning main
@@ -249,14 +262,13 @@ export const SPR_BARREL = [
   [_,0,0,0,0,0,0,_],
 ];
 
-// Legacy aliases (so any stale HUD/import keeps building).
-export const SPR_SEDAN_BLUE   = SPR_SEDAN_BLACK;
-export const SPR_SEDAN_RED    = SPR_SEDAN_ORANGE;
-export const SPR_SEDAN_GREEN  = SPR_SEDAN_BLACK;
-export const SPR_SEDAN_PURPLE = SPR_SEDAN_BLACK;
+// Legacy aliases (so any stale HUD/import keeps building). SPR_SEDAN_BLUE/RED
+// are now real colours defined with the sedan above, so they're not re-aliased.
+export const SPR_SEDAN_GREEN  = SPR_SEDAN_SILVER;
+export const SPR_SEDAN_PURPLE = SPR_SEDAN_BLUE;
 export const SPR_TAXI         = SPR_SEDAN_ORANGE;
-export const SPR_TRUCK_RUST   = SPR_TRUCK_ORANGE;
-export const SPR_TRUCK_BLUE   = SPR_TRUCK_BLACK;
+export const SPR_TRUCK_RUST   = SPR_SUV_ORANGE;
+export const SPR_TRUCK_BLUE   = SPR_SUV_BLUE;
 export const SPR_BUS_GREEN    = SPR_BUS_BLACK;
 export const SPR_BUS_YELLOW   = SPR_BUS_ORANGE;
 export const SPR_BUS_GRAY     = SPR_BUS_BLACK;
@@ -268,12 +280,18 @@ export const SPR_VAN_BROWN    = SPR_SEDAN_BLACK;
 // Collision half-sizes are derived from w/h * scale, so hitboxes shrink too.
 const TS = 0.9;
 export const TRAFFIC_SKINS = [
+  // Sedans (5 colours)
+  { spr: SPR_SEDAN_SILVER, w: 10, h: 16, scale: TS, speedMul: 0.30 },
+  { spr: SPR_SEDAN_BLUE,   w: 10, h: 16, scale: TS, speedMul: 0.30 },
+  { spr: SPR_SEDAN_RED,    w: 10, h: 16, scale: TS, speedMul: 0.32 },
   { spr: SPR_SEDAN_BLACK,  w: 10, h: 16, scale: TS, speedMul: 0.28 },
   { spr: SPR_SEDAN_WHITE,  w: 10, h: 16, scale: TS, speedMul: 0.30 },
-  { spr: SPR_SEDAN_ORANGE, w: 10, h: 16, scale: TS, speedMul: 0.32 },
-  { spr: SPR_TRUCK_BLACK,  w: 10, h: 18, scale: TS, speedMul: 0.22 },
-  { spr: SPR_TRUCK_WHITE,  w: 10, h: 18, scale: TS, speedMul: 0.24 },
-  { spr: SPR_TRUCK_ORANGE, w: 10, h: 18, scale: TS, speedMul: 0.24 },
+  // SUVs (4 colours) — taller, slower
+  { spr: SPR_SUV_WHITE,    w: 10, h: 18, scale: TS, speedMul: 0.24 },
+  { spr: SPR_SUV_BLACK,    w: 10, h: 18, scale: TS, speedMul: 0.22 },
+  { spr: SPR_SUV_BLUE,     w: 10, h: 18, scale: TS, speedMul: 0.24 },
+  { spr: SPR_SUV_ORANGE,   w: 10, h: 18, scale: TS, speedMul: 0.24 },
+  // Harleys (3 colours) — nimble
   { spr: SPR_MOTO_BLACK,   w: 7,  h: 14, scale: TS, speedMul: 0.34 },
   { spr: SPR_MOTO_ORANGE,  w: 7,  h: 14, scale: TS, speedMul: 0.36 },
   { spr: SPR_MOTO_WHITE,   w: 7,  h: 14, scale: TS, speedMul: 0.34 },

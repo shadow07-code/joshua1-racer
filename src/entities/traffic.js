@@ -176,7 +176,9 @@ export function checkTrafficHit(sys, box) {
   for (const c of sys.list) {
     const hx = skinHalfX(c.skin), hz = skinHalfZ(c.skin);
     const x1 = c.x - hx, x2 = c.x + hx;
-    const z1 = c.z - hz * 0.6, z2 = c.z + hz * 0.6;
+    // Tighter longitudinal extent (was 0.6) so a rear approach only "collides"
+    // when the cars are nearly touching — no more phantom gap before impact.
+    const z1 = c.z - hz * 0.42, z2 = c.z + hz * 0.42;
     if (box.x1 < x2 && box.x2 > x1 && box.z1 < z2 && box.z2 > z1) return c;
   }
   return null;
