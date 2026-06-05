@@ -30,7 +30,7 @@ export function makePlayer() {
 
 // Two-phase target ramp:
 //   Phase 1: punchy linear climb to ~100 km/h equivalent in `rampPhase1Seconds`.
-//   Phase 2: slow smoothstep grind from there up to maxSpeed (250 km/h).
+//   Phase 2: slow smoothstep grind from there up to maxSpeed (200 km/h).
 function rampTarget(raceTime) {
   const p1End = PHYS.rampPhase1Seconds;
   const p2End = p1End + PHYS.rampPhase2Seconds;

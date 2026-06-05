@@ -32,14 +32,20 @@ function pickKind(map) {
   return map.scenery[0].kind;
 }
 
-export function updateScenery(sys, playerZ, map, dt, spawnPerMeter) {
+export function updateScenery(sys, playerZ, map, dt, spawnPerMeter, speed01 = 0) {
+  // Thin the roadside out as speed climbs: fewer objects whip past the camera at
+  // pace, which cuts the peripheral "optic flow" that drives the high-speed dizzy
+  // feeling. At top speed the spacing roughly doubles. Smooth — only new spawns
+  // are affected, so the roadside eases from dense (slow start) to open (at pace)
+  // instead of anything popping in or out.
+  const sparse = 1 + Math.max(0, Math.min(1, speed01));
   while (sys.nextSpawnZ < playerZ + 110) {
     const side = Math.random() < 0.5 ? -1 : 1;
     const minOff = map.roadHalfWidth + 8;
     const maxOff = minOff + 28;
     const x = side * (minOff + Math.random() * (maxOff - minOff));
     sys.list.push({ kind: pickKind(map), z: sys.nextSpawnZ, x });
-    sys.nextSpawnZ += (1 / spawnPerMeter) * (0.5 + Math.random() * 1.2);
+    sys.nextSpawnZ += (1 / spawnPerMeter) * (0.5 + Math.random() * 1.2) * sparse;
   }
   sys.list = sys.list.filter(s => s.z > playerZ - 12);
 }

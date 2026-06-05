@@ -403,7 +403,7 @@ function updateRace(dt) {
   setMusicTempoFactor(speed01);
 
   // Track highest speed reached (in display km/h).
-  const currentKmh = Math.round(speed01 * (PHYS.topSpeedKmh || 250));
+  const currentKmh = Math.round(speed01 * (PHYS.topSpeedKmh || 200));
   if (currentKmh > g.topSpeedKmh) g.topSpeedKmh = currentKmh;
 
   // ── Density scaling ──
@@ -427,10 +427,12 @@ function updateRace(dt) {
     playerX: g.player.x,
     onPassed: () => { g.scoreState.score += SCORE.passBonus * Math.max(1, g.combo); },
     onNearMiss: () => {
-      // The combo is a HIGH-SPEED thrill — it only builds at 200+ km/h. Below
-      // that a near-miss just pays the flat bonus.
-      const kmh = g.player.speed / PHYS.maxSpeed * (PHYS.topSpeedKmh || 250);
-      if (kmh >= 200) {
+      // The combo is a HIGH-SPEED thrill — it only builds at 150+ km/h (the same
+      // danger zone where the chopper engages). Below that a near-miss just pays
+      // the flat bonus. Gate lowered from 200 with the new 200 km/h top speed so
+      // combos stay reachable instead of only firing right at the ceiling.
+      const kmh = g.player.speed / PHYS.maxSpeed * (PHYS.topSpeedKmh || 200);
+      if (kmh >= 150) {
         g.combo += 1;
         g.comboBest = Math.max(g.comboBest, g.combo);
         g.comboTimer = RACE.comboWindow;
@@ -457,10 +459,11 @@ function updateRace(dt) {
   }
   if (g.comboFlash > 0) g.comboFlash = Math.max(0, g.comboFlash - dt);
   if (g.shieldMsgTimer > 0) g.shieldMsgTimer = Math.max(0, g.shieldMsgTimer - dt);
-  // Police helicopter kicks in once the player crosses 250 km/h — it drops
+  // Police helicopter kicks in once the player crosses 150 km/h — it drops
   // flaming barrels on the road ahead (collision handled below, costs a life).
   updateCops(g.cops, dt, g.player.z, g.player.x, g.player.speed, g.map, { onDrop: sfxBarrelDrop });
-  updateScenery(g.scenery, g.player.z, g.map, dt, SPAWN.sceneryPerMeter);
+  // Pass speed so the roadside thins out at pace (eases the high-speed dizziness).
+  updateScenery(g.scenery, g.player.z, g.map, dt, SPAWN.sceneryPerMeter, speed01);
 
   // Player exhaust smoke (no more AI smoke — AI gone).
   updateSmoke(g.player, dt);

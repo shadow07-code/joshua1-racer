@@ -49,8 +49,12 @@ export const H = computeH();
 export const PHYS = {
   startSpeed: 14,
   // Internal max-speed; HUD displays km/h via topSpeedKmh / maxSpeed ratio.
-  maxSpeed: 135,
-  cruiseSpeed: 135,
+  // Lowered from 135 → 108 (and topSpeedKmh 250 → 200) so the actual road-scroll
+  // speed at the top is ~20% slower — the km/h ratio is preserved (200/108 ==
+  // 250/135), so the speedometer reads the same per unit; only the ceiling drops.
+  // This is the main lever against the high-speed "dizzy" feeling.
+  maxSpeed: 108,
+  cruiseSpeed: 108,
   // Two-phase ramp:
   //   0 → phase1 (≈100 km/h equivalent) over `rampPhase1Seconds` — punchy launch.
   //   phase1 → maxSpeed over `rampPhase2Seconds` — slow grind to the top.
@@ -64,8 +68,8 @@ export const PHYS = {
   steerSpeedFactor: 0.65,
   carHalfWidth: 6,    // -20% with the smaller player sprite
   carHalfHeight: 8,
-  // Display: top speed shows as 250 KMH; 100 km/h marker used for ramp phase split.
-  topSpeedKmh: 250,
+  // Display: top speed shows as 200 KMH; 100 km/h marker used for ramp phase split.
+  topSpeedKmh: 200,
   phase1Kmh: 100,
 };
 
@@ -86,9 +90,10 @@ export const RACE = {
   density2CarFrom: 1.12,        // above this density, some rows spawn a 2nd car
   trafficSidewaysChance: 0.8,   // chance a car actually changes lane on its timer (was 0.6)
   topSpeedThreshold: 0.95,
-  // Cop chase: 2 cop cars spawn behind the player when they cross this KMH.
-  // Cops cruise slightly slower than the player's max, so a clean run outruns them.
-  copTriggerKmh: 250,
+  // Police helicopter chase: a chopper flies in once the player crosses this KMH
+  // and starts dropping flaming barrels. Re-tuned 250 → 150 so the air threat
+  // shows up mid-run rather than only at the (now lower) 200 km/h top speed.
+  copTriggerKmh: 150,
   copTopSpeedFrac: 0.92,    // cops max out at 92% of player's max speed
   copRamSlowdown: 0.35,     // multiplier on player speed when a cop rams from behind
   copSpawnGapZ: 30,         // initial distance behind the player

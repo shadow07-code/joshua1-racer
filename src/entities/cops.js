@@ -1,10 +1,10 @@
 // Police HELICOPTER chase — replaces the old (ineffective) cop cars.
 //
-// Once the player crosses 250 km/h a police chopper flies into the upper part
+// Once the player crosses 150 km/h a police chopper flies into the upper part
 // of the road ahead. Every ~15s it locks onto the player's lane (a blinking
 // reticle telegraphs the spot for ~1.1s) and drops a FLAMING BARREL onto the
 // road. The barrel is a static hazard that scrolls toward the player — touch it
-// and you lose a life, so steer clear. Slow back below ~235 km/h and the
+// and you lose a life, so steer clear. Slow back below ~135 km/h and the
 // chopper peels away.
 import { W, PHYS, RACE } from "../config.js";
 import { project, yToDist } from "../road.js";
@@ -20,7 +20,7 @@ const ENTER_TIME = 1.7;              // fly-in duration
 const EXIT_TIME = 1.7;               // fly-out duration
 const RELOAD_TIME = 30;              // seconds off-screen between sorties ("reloading")
 const FIRST_DELAY = 3;               // first appearance after the chase engages
-const SINGLE_SORTIES = 3;            // first N sorties use one chopper, then a pair
+const SINGLE_SORTIES = 2;            // first N sorties use one chopper, then a pair
 const SECOND_DROP_DELAY = 1.8;       // 2nd chopper drops this much later than the 1st
 const BARREL_HALF_X = 4;
 const BARREL_HALF_Z = 4;

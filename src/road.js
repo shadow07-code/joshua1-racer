@@ -13,10 +13,11 @@ export function yToDist(y) { return ((PLAYER_Y - y) / PLAYER_Y) * VIEW_AHEAD_MET
 export function distToY(dist) { return PLAYER_Y - (dist / VIEW_AHEAD_METERS) * PLAYER_Y; }
 
 export function drawRoad(ctx, map, playerZ, speed = 0) {
-  // Speed-based "calm" factor — ramps 0→1 between 90 and 150 km/h so fast-moving
+  // Speed-based "calm" factor — ramps 0→1 between 70 and 130 km/h so fast-moving
   // road detail fades out before it can strobe and strain the eyes at speed.
-  const kmh = (speed / PHYS.maxSpeed) * (PHYS.topSpeedKmh || 250);
-  const calm = Math.min(1, Math.max(0, (kmh - 90) / 60));
+  // Brought in earlier (was 90→150) to ease the high-speed dizzy sensation.
+  const kmh = (speed / PHYS.maxSpeed) * (PHYS.topSpeedKmh || 200);
+  const calm = Math.min(1, Math.max(0, (kmh - 70) / 60));
 
   const halfW = map.roadHalfWidth;
   const cx = W / 2 + map.biasX;
@@ -53,7 +54,7 @@ export function drawRoad(ctx, map, playerZ, speed = 0) {
   }
 
   // ── Center line — faint, low-contrast dashes that shrink to nothing as speed
-  // rises. Gone by ~150 km/h (calm = 1), so the high-speed centre stays calm.
+  // rises. Gone by ~130 km/h (calm = 1), so the high-speed centre stays calm.
   if (calm < 1) {
     const pxPerMeter = PLAYER_Y / VIEW_AHEAD_METERS;
     const scrollPx = playerZ * pxPerMeter;

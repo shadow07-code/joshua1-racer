@@ -54,9 +54,9 @@ export function drawHud(ctx, {
   rect(ctx, 0, panelTop + 1, W, 1, 2);
   rect(ctx, 0, H - 1, W, 1, 0);
 
-  // Cell 1 — speedometer (peaks at PHYS.topSpeedKmh, currently 250)
+  // Cell 1 — speedometer (peaks at PHYS.topSpeedKmh, currently 200)
   drawSprite(ctx, ICN_SPEED, 3, panelTop + 7);
-  const kmh = Math.round(speed / PHYS.maxSpeed * (PHYS.topSpeedKmh || 250));
+  const kmh = Math.round(speed / PHYS.maxSpeed * (PHYS.topSpeedKmh || 200));
   text(ctx, pad(kmh, 3), 13, panelTop + 9, 1);
   text(ctx, "KMH", 13, panelTop + 15, 5);
 
