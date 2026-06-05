@@ -18,7 +18,7 @@ import {
 } from "./audio.js";
 import { drawRoad, distToY } from "./road.js";
 import { makePlayer, updatePlayer, drawPlayer, playerBox, applyCollisionLoss } from "./entities/player.js";
-import { makeTrafficSystem, updateTraffic, drawTraffic, checkTrafficHit, prepopulateTraffic } from "./entities/traffic.js";
+import { makeTrafficSystem, updateTraffic, drawTraffic, checkTrafficHit, prepopulateTraffic, smashCar } from "./entities/traffic.js";
 import { makeOilSystem, drawOilSpills, checkOilHit } from "./entities/oilspills.js";
 import { makeCopsSystem, updateCops, drawCops, checkBarrelHit } from "./entities/cops.js";
 import { updateSmoke, drawSmoke } from "./entities/smoke.js";
@@ -203,21 +203,26 @@ function newRaceSetup() {
   g.shieldMsgTimer = 0;
 }
 
-// Take a hit: a combo SHIELD absorbs it (streak survives), otherwise lose a life.
-// Returns true if the run just ended.
-function takeHit(invulnSec) {
-  if (g.player.shield > 0) {
-    g.player.shield = 0;
-    g.player.invuln = Math.max(g.player.invuln, invulnSec + 0.5);
-    g.shieldMsg = "SAVED!"; g.shieldMsgTimer = 1.1;
-    sfxShieldHit();
-    return false;                       // shield ate it — no life lost, combo lives
-  }
+// Take a hit: lose a life (a real crash also breaks the combo streak).
+// Returns true if the run just ended. (During a rampage the player is invincible
+// and this is never called — see the collision handler.)
+function takeHit(_invulnSec) {
   sfxCrash();
   g.player.lives -= 1;
   g.combo = 0; g.comboTimer = 0;        // a real crash breaks the streak
   if (g.player.lives <= 0) { endRace("GAME OVER"); return true; }
   return false;
+}
+
+// A traffic car smashed during a rampage — knocked off the road and added to the
+// combo tally (with an escalating score bonus and the rising combo SFX).
+function registerSmash() {
+  g.combo += 1;
+  g.comboBest = Math.max(g.comboBest, g.combo);
+  g.comboTimer = RACE.comboWindow;
+  g.comboFlash = 0.18;
+  g.scoreState.score += SCORE.smashBonus * g.combo;
+  sfxCombo(g.combo);
 }
 
 function beginCountdown() {
@@ -423,6 +428,8 @@ function updateRace(dt) {
   g.traffic.rowGapZ = baseRowGapForMap(g.map) / g.densityMul;
   g.traffic.densityMul = g.densityMul;
 
+  // After a rampage, keep the near road ahead clear for a few seconds.
+  const clearDist = g.player.rampageClear > 0 ? RACE.rampageClearDist : 0;
   updateTraffic(g.traffic, dt, g.player.z, g.map, {
     playerX: g.player.x,
     onPassed: () => { g.scoreState.score += SCORE.passBonus * Math.max(1, g.combo); },
@@ -439,10 +446,12 @@ function updateRace(dt) {
         g.comboFlash = 0.18;
         g.scoreState.score += SCORE.nearMissBonus * g.combo;
         sfxCombo(g.combo);
-        // Risk → reward: every few combo steps earns a one-hit shield.
-        if (g.combo % RACE.comboShieldEvery === 0 && g.player.shield < 1) {
-          g.player.shield = 1;
-          g.shieldMsg = "SHIELD!"; g.shieldMsgTimer = 1.3;
+        // Risk → reward: every few combo steps triggers NITROUS RAMPAGE — a boost
+        // where the car smashes through traffic. (Doesn't re-trigger mid-rampage.)
+        if (g.combo % RACE.comboRampageEvery === 0 && g.player.rampage <= 0) {
+          g.player.rampage = RACE.rampageDuration;
+          g.player.boost = RACE.rampageDuration;   // nitrous overspeed for the duration
+          g.shieldMsg = "RAMPAGE!"; g.shieldMsgTimer = 1.6;
           sfxShieldUp();
         }
       } else {
@@ -450,7 +459,19 @@ function updateRace(dt) {
         sfxPickup();
       }
     },
-  });
+  }, clearDist);
+
+  // ── Rampage + post-rampage clear timers ──
+  if (g.player.rampage > 0) {
+    g.player.rampage = Math.max(0, g.player.rampage - dt);
+    if (g.player.rampage === 0) {
+      // Rampage just ended: open a clear corridor so the player isn't instantly
+      // slammed coming out of the boost.
+      g.player.rampageClear = RACE.rampageClearTime;
+      g.shieldMsg = "CLEAR!"; g.shieldMsgTimer = 0.9;
+    }
+  }
+  if (g.player.rampageClear > 0) g.player.rampageClear = Math.max(0, g.player.rampageClear - dt);
 
   // Combo decay — lapse the streak if you go too long without a near-miss.
   if (g.comboTimer > 0) {
@@ -472,7 +493,16 @@ function updateRace(dt) {
   if (g.player.oilTimer > 0) g.player.oilTimer = Math.max(0, g.player.oilTimer - dt);
 
   // ── Collisions ──
-  if (g.player.invuln <= 0) {
+  if (g.player.rampage > 0) {
+    // RAMPAGE: plow through traffic. Each car hit is smashed off the road and
+    // adds to the combo; barrels and life loss are ignored (invincible boost).
+    const box = playerBox(g.player);
+    let t, guard = 0;
+    while ((t = checkTrafficHit(g.traffic, box)) && guard++ < 8) {
+      smashCar(t, g.player.x);
+      registerSmash();
+    }
+  } else if (g.player.invuln <= 0) {
     const box = playerBox(g.player);
     const t = checkTrafficHit(g.traffic, box);
     if (t) {

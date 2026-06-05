@@ -93,18 +93,19 @@ function spawnRow(sys, map) {
     const x = laneToX(lane, map.roadHalfWidth);
     const jitter = (Math.random() - 0.5) * 4; // small z stagger inside a row
     const speed = PHYS.cruiseSpeed * (skin.speedMul + (Math.random() * 0.08 - 0.02));
+    // Lateral drift is decided AT SPAWN and stays constant, so a car is visibly
+    // tracking across the road from the moment it enters frame — no random
+    // mid-screen swerves. ~60% drift left or right; the rest hold their lane.
+    const drift = Math.random() < 0.60 ? (Math.random() < 0.5 ? -1 : 1) : 0;
     sys.list.push({
       skin,
       z: sys.nextRowZ + jitter,
       x,
-      targetX: x,            // lane-change target — same lane initially
       laneIdx: lane,
       speed,
       passed: false,
       nearMissed: false,
-      driftPhase: Math.random() * Math.PI * 2,
-      // Slow occasional lane changes start after a random delay so cars don't all swap at once.
-      laneChangeTimer: 4 + Math.random() * 9,
+      driftVx: drift * (6 + Math.random() * 5),   // px/s lateral, constant
     });
   }
 
@@ -120,40 +121,59 @@ export function prepopulateTraffic(sys, map, distance = 600) {
   }
 }
 
-export function updateTraffic(sys, dt, playerZ, map, cbs) {
-  // Spawn ahead so the road is always populated up to ~220m ahead.
+// Knock a car off the road — used by RAMPAGE smashes and the post-rampage road
+// clear. The car flings sideways (away from `fromX`) and tumbles back, stops
+// driving, and no longer collides.
+export function smashCar(c, fromX = 0) {
+  if (c.smashed) return;
+  c.smashed = true;
+  const dir = c.x >= fromX ? 1 : -1;
+  c.vx = dir * (140 + Math.random() * 70);
+  c.vz = -(20 + Math.random() * 25);
+}
+
+export function updateTraffic(sys, dt, playerZ, map, cbs, clearAheadDist = 0) {
+  // Spawn ahead so the road is always populated up to ~220m ahead. During the
+  // post-rampage grace window, push the spawn cursor past the cleared zone so no
+  // fresh cars appear in the player's path.
   const ahead = playerZ + 220;
+  if (clearAheadDist > 0 && sys.nextRowZ < playerZ + clearAheadDist) {
+    sys.nextRowZ = playerZ + clearAheadDist;
+  }
   while (sys.nextRowZ < ahead) {
     spawnRow(sys, map);
   }
 
-  const halfRoad = map.roadHalfWidth;
-  for (const c of sys.list) {
-    c.z += c.speed * dt;
-    c.driftPhase += dt * 1.2;
-
-    // ── Lane change ──
-    // Bikes weave far more often and more sharply than cars; cars amble between
-    // lanes. New targets avoid merging into an already-occupied space (a driver
-    // checking their blind spot) — but rarely they don't, and a bump can result.
-    const isBike = !!c.skin.bike;
-    c.laneChangeTimer -= dt;
-    if (c.laneChangeTimer <= 0) {
-      c.laneChangeTimer = isBike ? (2.5 + Math.random() * 3.5) : (8 + Math.random() * 8);
-      const chance = isBike ? Math.min(0.95, RACE.trafficSidewaysChance + 0.25) : RACE.trafficSidewaysChance;
-      if (Math.random() < chance) {
-        const mag = isBike ? (12 + Math.random() * 18) : (10 + Math.random() * 14);
-        const newX = Math.max(-(halfRoad - 6), Math.min(halfRoad - 6, c.x + (Math.random() < 0.5 ? -1 : 1) * mag));
-        const blocked = sys.list.some(o =>
-          o !== c && Math.abs(o.z - c.z) < 14 &&
-          Math.abs(o.x - newX) < skinHalfX(o.skin) + skinHalfX(c.skin) + 3);
-        if (!blocked || Math.random() < 0.07) c.targetX = newX;   // 7% ignore → may bump
+  // Grace window: fling any car that's in the near-ahead corridor off the road so
+  // the path in front of the player stays clear for a moment after a rampage.
+  if (clearAheadDist > 0) {
+    for (const c of sys.list) {
+      if (!c.smashed && c.z > playerZ + 2 && c.z < playerZ + clearAheadDist) {
+        smashCar(c, 0);   // fling toward the nearest edge
       }
     }
-    const laneSpeed = isBike ? 13 : 5; // px/sec — bikes flick across, cars ease
-    const dx = c.targetX - c.x;
-    if (Math.abs(dx) > 0.3) {
-      c.x += Math.sign(dx) * Math.min(Math.abs(dx), laneSpeed * dt);
+  }
+
+  const halfRoad = map.roadHalfWidth;
+  for (const c of sys.list) {
+    // Smashed cars are knocked off the road: they tumble sideways/back and no
+    // longer drive, change lanes, get "passed", or collide.
+    if (c.smashed) {
+      c.x += c.vx * dt;
+      c.z += c.vz * dt;
+      continue;
+    }
+    c.z += c.speed * dt;
+
+    // ── Steady lateral drift (assigned at spawn) ──
+    // The car tracks across the road at a constant rate the whole time it's on
+    // screen — predictable, readable, and moving from the moment it appears.
+    // When it reaches a road edge it straightens out. No random swerves.
+    if (c.driftVx) {
+      c.x += c.driftVx * dt;
+      const lim = halfRoad - 6;
+      if (c.x >= lim)       { c.x = lim;  c.driftVx = 0; }
+      else if (c.x <= -lim) { c.x = -lim; c.driftVx = 0; }
     }
 
     if (!c.passed && c.z < playerZ - 4) {
@@ -188,8 +208,10 @@ function resolveTrafficSeparation(sys, dt) {
   cars.sort((a, b) => a.z - b.z);   // rear → front
   for (let i = 0; i < cars.length; i++) {
     const c = cars[i];
+    if (c.smashed) continue;                                // off-road, ignore
     for (let j = i + 1; j < cars.length; j++) {
       const o = cars[j];
+      if (o.smashed) continue;
       const gap = o.z - c.z;
       if (gap > 45) break;                                  // nothing close ahead
       const latClear = skinHalfX(c.skin) + skinHalfX(o.skin) + 1.5;
@@ -224,6 +246,7 @@ export function drawTraffic(ctx, sys, map, playerZ, playerX) {
 
 export function checkTrafficHit(sys, box) {
   for (const c of sys.list) {
+    if (c.smashed) continue;                 // already knocked off the road
     const hx = skinHalfX(c.skin), hz = skinHalfZ(c.skin);
     // Snug hitbox on ALL sides — collide only on real visual contact, not with a
     // phantom margin. Lateral 0.72, longitudinal 0.42 (matched to the sprites).

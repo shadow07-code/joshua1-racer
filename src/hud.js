@@ -193,16 +193,17 @@ function drawTitleRoad(ctx, t) {
 function drawHeroCar(ctx, t, topY) {
   const scale = 2;
   const wob = Math.sin(t / 420) * 1.2;
-  const x = (80 - 16 + wob) | 0;          // sprite is 16w → centre at 80
-  groundShadow(ctx, 80, topY + 24 * scale, 18);
+  const x = (80 - 12 + wob) | 0;          // sprite is 12w → centre at 80
+  const baseY = topY + 18 * scale;        // sprite is 18h
+  groundShadow(ctx, 80, baseY, 14);
   drawSpriteScaled(ctx, SPR_PLAYER, x, topY, scale);
   // Flickering exhaust glow at the rear (bottom) of the car.
   if ((Math.floor(t / 90) % 2) === 0) {
-    disc(ctx, 74, topY + 24 * scale + 2, 2, 9);
-    disc(ctx, 86, topY + 24 * scale + 2, 2, 5);
+    disc(ctx, 76, baseY + 2, 2, 9);
+    disc(ctx, 84, baseY + 2, 2, 5);
   } else {
-    disc(ctx, 74, topY + 24 * scale + 2, 1, 5);
-    disc(ctx, 86, topY + 24 * scale + 2, 2, 9);
+    disc(ctx, 76, baseY + 2, 1, 5);
+    disc(ctx, 84, baseY + 2, 2, 9);
   }
 }
 

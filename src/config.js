@@ -55,6 +55,9 @@ export const PHYS = {
   // This is the main lever against the high-speed "dizzy" feeling.
   maxSpeed: 108,
   cruiseSpeed: 108,
+  // Nitrous overspeed during RAMPAGE — speed is allowed up to maxSpeed*boostFactor
+  // while the player.boost timer is running, for a real "kick" out of the boost.
+  boostFactor: 1.10,
   // Two-phase ramp:
   //   0 → phase1 (≈100 km/h equivalent) over `rampPhase1Seconds` — punchy launch.
   //   phase1 → maxSpeed over `rampPhase2Seconds` — slow grind to the top.
@@ -97,11 +100,17 @@ export const RACE = {
   copTopSpeedFrac: 0.92,    // cops max out at 92% of player's max speed
   copRamSlowdown: 0.35,     // multiplier on player speed when a cop rams from behind
   copSpawnGapZ: 30,         // initial distance behind the player
-  // Near-miss COMBO: each close shave (at 200+ km/h) bumps the multiplier; it
+  // Near-miss COMBO: each close shave (at 150+ km/h) bumps the multiplier; it
   // resets if you go this many seconds without another. Skilful weaving = big
-  // score, and every `comboShieldEvery` steps earns a one-hit SHIELD.
+  // score, and every `comboRampageEvery` steps triggers NITROUS RAMPAGE.
   comboWindow: 2.8,
-  comboShieldEvery: 8,
+  comboRampageEvery: 8,
+  // RAMPAGE: a nitrous boost where the car smashes through traffic (each smash
+  // adds to the combo). When it ends, the road ahead is kept clear for a moment
+  // so the player isn't instantly slammed coming out of the boost.
+  rampageDuration: 7,      // seconds of nitrous smashing
+  rampageClearTime: 3,     // seconds of clear road after rampage ends
+  rampageClearDist: 120,   // metres of road ahead kept empty during the grace
 };
 
 // Spawn rates and traffic-row spacing.
@@ -118,6 +127,7 @@ export const SCORE = {
   distanceWeight: 1.0,
   passBonus: 25,           // per traffic car passed
   nearMissBonus: 100,
+  smashBonus: 150,         // per traffic car smashed during a rampage (× combo)
   cityBonus: 1.0,
   jungleBonus: 1.25,
   mediumBonus: 1.0,

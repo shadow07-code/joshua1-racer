@@ -1,7 +1,7 @@
 // Player car — auto-accelerate with a start-of-race speed ramp, brake, steer, slip.
 import { PHYS, PLAYER_Y, W } from "../config.js";
 import { SPR_PLAYER } from "../sprites.js";
-import { drawSpriteNN, groundShadow, ring } from "../render.js";
+import { drawSpriteNN, groundShadow, ring, disc, rect } from "../render.js";
 import { roadCenterX } from "../road.js";
 
 // Player car drawn at native 1× so the pixels stay crisp (the old 0.8 downscale
@@ -24,7 +24,8 @@ export function makePlayer() {
     raceTime: 0,     // seconds since race started (drives the speed ramp)
     oilTimer: 0,     // seconds the car is still affected by an oil spill
     lives: 3,        // endless survival — 3 hits and you're out
-    shield: 0,       // one-hit shield earned from combo milestones
+    rampage: 0,      // seconds of NITROUS RAMPAGE remaining (smash through traffic)
+    rampageClear: 0, // seconds of cleared-road grace after a rampage ends
     _wasBraking: false,
   };
 }
@@ -51,10 +52,12 @@ function rampTarget(raceTime) {
 export function updatePlayer(p, dt, input, map, callbacks) {
   p.raceTime += dt;
 
-  // Target speed.
+  // Target speed. Nitrous (boost) lifts both the target and the hard cap to
+  // maxSpeed * boostFactor, so a rampage genuinely surges past normal top speed.
+  const boostCap = PHYS.maxSpeed * (PHYS.boostFactor || 1);
   let target = rampTarget(p.raceTime);
   if (p.boost > 0) {
-    target = Math.max(target, PHYS.maxSpeed);
+    target = boostCap;
     p.boost = Math.max(0, p.boost - dt);
   }
 
@@ -64,7 +67,8 @@ export function updatePlayer(p, dt, input, map, callbacks) {
     p.speed = Math.max(target, p.speed - PHYS.drag * dt);
   }
   if (p.speed < 4) p.speed = 4;     // never fully stop — always a slow crawl minimum
-  if (p.speed > PHYS.maxSpeed) p.speed = PHYS.maxSpeed;
+  const cap = p.boost > 0 ? boostCap : PHYS.maxSpeed;
+  if (p.speed > cap) p.speed = cap;
 
   // Threshold-crossing accent.
   const tier =
@@ -137,17 +141,32 @@ export function drawPlayer(ctx, p, map) {
   const slipping = p.oilTimer > 0 || p.slip > 0;
   const wobble = slipping ? Math.sin(performance.now() / 28) * 1 : 0;
   // Drawn size of the 16×24 sprite at PLAYER_SCALE (centre-anchored on the car).
-  const halfW = 16 * PLAYER_SCALE / 2;   // ≈ 6.4
-  const halfH = 24 * PLAYER_SCALE / 2;   // ≈ 9.6
-  // Grounding shadow under the car, then the (smaller) F1 sprite.
+  const halfW = 12 * PLAYER_SCALE / 2;   // 6 — smaller player sprite (12×18)
+  const halfH = 18 * PLAYER_SCALE / 2;   // 9
+  const cxp = (cx + p.x) | 0;
+  // RAMPAGE nitrous flames blasting from the twin exhausts (behind the car).
+  if (p.rampage > 0) drawNitroFlames(ctx, cxp, (PLAYER_Y + halfH) | 0);
+  // Grounding shadow under the car, then the F1 sprite.
   groundShadow(ctx, (cx + p.x) | 0, PLAYER_Y + halfH - 3, 6);
   drawSpriteNN(ctx, SPR_PLAYER, cx + p.x - halfW + wobble, PLAYER_Y - halfH, PLAYER_SCALE);
-  // Combo SHIELD — a pulsing emerald/cyan ring around the car while it's active.
-  if (p.shield > 0) {
-    const cxp = (cx + p.x) | 0, cyp = (PLAYER_Y) | 0;
-    const pulse = Math.sin(performance.now() / 90) * 0.5 + 0.5;
-    ring(ctx, cxp, cyp, 11, pulse > 0.5 ? 13 : 17);
-    ring(ctx, cxp, cyp, 12, pulse > 0.5 ? 17 : 13);
+  // RAMPAGE aura — a pulsing fiery ring around the car while nitrous is active.
+  if (p.rampage > 0) {
+    const cyp = (PLAYER_Y) | 0;
+    const blink = Math.floor(performance.now() / 70) % 2 === 0;
+    ring(ctx, cxp, cyp, 12, blink ? 5 : 9);    // yellow / orange
+    ring(ctx, cxp, cyp, 13, blink ? 9 : 5);
+  }
+}
+
+// Twin nitrous flames out the back of the car — flickering orange/yellow tongues.
+function drawNitroFlames(ctx, cx, baseY, t = performance.now()) {
+  const flick = (Math.sin(t / 40) + Math.sin(t / 17)) * 0.5;  // -1..1
+  for (const ox of [-3, 3]) {
+    const len = 6 + Math.round(flick * 2 + 2);
+    disc(ctx, cx + ox, baseY + 2, 2, 9);                      // orange root
+    rect(ctx, (cx + ox) | 0, baseY + 1, 1, len, 9);           // orange tongue
+    rect(ctx, (cx + ox) | 0, baseY + 1, 1, Math.max(1, len - 3), 5); // yellow core
+    if (flick > 0.4) rect(ctx, (cx + ox) | 0, baseY + len, 1, 2, 9); // spit tip
   }
 }
 
