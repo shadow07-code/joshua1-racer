@@ -43,52 +43,47 @@ export const SPR_SPORTS = [
 export const SPR_AI_BLUE_LEGACY    = recolorBody(SPR_SPORTS, 7, 6, 8, 4, 16, 13);
 export const SPR_AI_GREEN_LEGACY   = recolorBody(SPR_SPORTS, 7, 6, 8, 11, 17, 10);
 
-// ─── FORMULA 1 CAR ─ 16w × 24h, exposed wheels, front + rear wings, cockpit + helmet ─
-// Body color slots: 6 = main, 7 = dark, 8 = light (same convention as SPR_SPORTS).
-// Other colors used (stay fixed across all liveries):
-//   0 black (outlines, tires, wings) | 1 white (wing surfaces, helmet)
-//   4 dark gray (wheel rim) | 5 yellow (visor reflection) | 13 light blue (visor glass)
+// ─── RACE CAR (player + AI rivals) — 16w × 24h, drawn at native 1× (crisp). ─────
+// Simplified, flat-shaded top-down car: clean silhouette, one body tone, no fake
+// gradient shading. Reads sharply at speed instead of muddying when scaled.
+//   6 = body (recolourable) | 7 = wheels (recolourable dark) | 0 outline
+//   13 light-blue glass | 5 headlight | 9 taillight | 1 white (the "J")
 const SPR_F1_BASE = [
-  [_,_,_,_,_,_,_,0,0,_,_,_,_,_,_,_],    // 0 — nose tip
-  [_,_,_,_,_,_,0,6,6,0,_,_,_,_,_,_],    // 1 — nose
-  [_,_,_,_,_,0,6,7,7,6,0,_,_,_,_,_],    // 2 — nose
-  [_,_,0,0,0,0,0,0,0,0,0,0,0,0,_,_],    // 3 — top edge of front wing
-  [_,0,1,1,1,1,6,6,1,1,1,1,1,1,0,_],    // 4 — front wing white, nose breaks through
-  [_,0,0,0,0,0,6,6,0,0,0,0,0,0,_,_],    // 5 — wing bottom
-  [_,_,_,_,_,0,6,6,0,_,_,_,_,_,_,_],    // 6 — nose continues toward chassis
-  [_,_,_,_,0,6,6,6,6,0,_,_,_,_,_,_],    // 7
-  [_,_,_,0,8,6,6,6,6,8,0,_,_,_,_,_],    // 8 — chassis widens
-  [_,0,0,4,8,6,6,6,6,8,4,0,0,_,_,_],    // 9 — front wheel rims start
-  [0,4,4,4,8,6,13,13,6,8,4,4,4,0,_,_],  // 10 — front wheels (black) + cockpit start
-  [0,4,4,4,6,13,13,13,13,6,4,4,4,0,_,_], // 11
-  [0,4,4,4,6,13,1,1,13,6,4,4,4,0,_,_],  // 12 — helmet (white)
-  [0,0,0,0,6,13,5,5,13,6,0,0,0,0,_,_],  // 13 — visor (yellow)
-  [_,_,_,0,8,6,13,13,6,8,0,_,_,_,_,_],  // 14 — rear of cockpit
-  [_,_,_,0,6,6,7,7,6,6,0,_,_,_,_,_],    // 15 — engine cover
-  [_,_,_,0,8,6,6,6,6,8,0,_,_,_,_,_],    // 16 — body
-  [_,_,_,0,6,6,6,6,6,6,0,_,_,_,_,_],    // 17 — body (J row 1 will go here for player)
-  [_,_,_,0,6,6,6,6,6,6,0,_,_,_,_,_],    // 18 — body (J row 2)
-  [_,_,_,0,6,6,6,6,6,6,0,_,_,_,_,_],    // 19 — body (J row 3)
-  [_,_,_,0,8,6,6,6,6,8,0,_,_,_,_,_],    // 20
-  [_,0,0,4,4,6,6,6,6,4,4,0,0,_,_,_],    // 21 — rear wheel rims
-  [0,4,4,4,6,6,6,6,6,6,4,4,4,0,_,_],    // 22 — rear wheels
-  [0,0,0,0,0,0,0,0,0,0,0,0,0,0,_,_],    // 23 — top edge of rear wing
+  [_,_,_,0,0,0,0,0,0,0,0,0,0,_,_,_],    //  0 front bumper
+  [_,_,_,0,5,6,6,6,6,6,6,5,0,_,_,_],    //  1 headlights
+  [_,_,_,0,6,6,6,6,6,6,6,6,0,_,_,_],    //  2 hood
+  [_,0,0,0,6,13,13,13,13,13,13,6,0,0,0,_], //  3 front wheels + windshield
+  [_,0,0,0,6,13,13,13,13,13,13,6,0,0,0,_], //  4 front wheels + windshield
+  [_,_,_,0,6,13,13,13,13,13,13,6,0,_,_,_], //  5 windshield base
+  [_,_,_,0,6,6,6,6,6,6,6,6,0,_,_,_],    //  6 roof (J row)
+  [_,_,_,0,6,6,6,6,6,6,6,6,0,_,_,_],    //  7 roof (J row)
+  [_,_,_,0,6,6,6,6,6,6,6,6,0,_,_,_],    //  8 roof (J row)
+  [_,_,_,0,6,6,6,6,6,6,6,6,0,_,_,_],    //  9 roof (J row)
+  [_,_,_,0,6,6,6,6,6,6,6,6,0,_,_,_],    // 10 roof (J row)
+  [_,_,_,0,6,6,6,6,6,6,6,6,0,_,_,_],    // 11 body
+  [_,_,_,0,6,6,6,6,6,6,6,6,0,_,_,_],    // 12 body
+  [_,_,_,0,6,13,13,13,13,13,13,6,0,_,_,_], // 13 rear window
+  [_,_,_,0,6,13,13,13,13,13,13,6,0,_,_,_], // 14 rear window
+  [_,_,_,0,6,6,6,6,6,6,6,6,0,_,_,_],    // 15 body
+  [_,_,_,0,6,6,6,6,6,6,6,6,0,_,_,_],    // 16 body
+  [_,0,0,0,6,6,6,6,6,6,6,6,0,0,0,_],    // 17 rear wheels
+  [_,0,0,0,6,6,6,6,6,6,6,6,0,0,0,_],    // 18 rear wheels
+  [_,_,_,0,6,6,6,6,6,6,6,6,0,_,_,_],    // 19 body
+  [_,_,_,0,6,6,6,6,6,6,6,6,0,_,_,_],    // 20 body
+  [_,_,_,0,9,9,6,6,6,6,9,9,0,_,_,_],    // 21 taillights
+  [_,_,_,0,0,0,0,0,0,0,0,0,0,_,_,_],    // 22 rear bumper
+  [_,_,_,_,_,_,_,_,_,_,_,_,_,_,_,_],    // 23 blank
 ];
 
-// Stamp a big "J" in white onto the body engine-cover area.
-// J spans rows 16..20, cols 5..8 — large enough to read at native resolution.
+// Stamp a white "J" on the roof (player only — AI rivals stay plain).
+// J spans rows 6..10, cols 5..8 — large enough to read at native resolution.
 function stampJ(sprite) {
   const out = sprite.map(r => r.slice());
-  // Row 16: top bar "JJJJ"
-  out[16][5] = 1; out[16][6] = 1; out[16][7] = 1; out[16][8] = 1;
-  // Row 17: vertical "...J"
-  out[17][7] = 1; out[17][8] = 1;
-  // Row 18: vertical "...J"
-  out[18][7] = 1; out[18][8] = 1;
-  // Row 19: hook starts "J..J"
-  out[19][5] = 1; out[19][7] = 1; out[19][8] = 1;
-  // Row 20: hook closes ".JJ."
-  out[20][5] = 1; out[20][6] = 1; out[20][7] = 1;
+  out[6][5] = 1; out[6][6] = 1; out[6][7] = 1; out[6][8] = 1;   // top bar
+  out[7][7] = 1; out[7][8] = 1;                                  // stem
+  out[8][7] = 1; out[8][8] = 1;                                  // stem
+  out[9][5] = 1; out[9][7] = 1; out[9][8] = 1;                   // hook
+  out[10][5] = 1; out[10][6] = 1; out[10][7] = 1;                // base
   return out;
 }
 
@@ -116,20 +111,20 @@ export const SPR_SPORTS_PLAYER_LEGACY = SPR_SPORTS;
 // Body slots 6/7/8 recolour; 3 glass, 5 headlight, 9 taillight, 4 tyre, 1 glint.
 const SEDAN_BASE = [
   [_,_,0,0,0,0,0,0,_,_],   //  0 front bumper
-  [_,0,5,7,6,6,7,5,0,_],   //  1 headlights + dark grille edges
-  [_,0,7,6,8,8,6,7,0,_],   //  2 hood — dark sides, centre gloss
-  [4,0,6,6,8,8,6,6,0,4],   //  3 hood gloss + front wheels
-  [4,0,7,6,6,6,6,7,0,4],   //  4 cowl + wheels
-  [7,0,2,3,3,3,3,2,0,7],   //  5 windshield + chrome pillars + door mirrors
-  [_,0,8,3,1,1,3,8,0,_],   //  6 windshield glint
-  [_,0,8,6,6,6,6,8,0,_],   //  7 roof front (bright shoulders)
-  [_,0,7,6,8,8,6,7,0,_],   //  8 roof centre gloss
-  [_,0,8,6,6,6,6,8,0,_],   //  9 roof rear
-  [_,0,2,3,3,3,3,2,0,_],   // 10 rear window + chrome
-  [4,0,7,6,6,6,6,7,0,4],   // 11 rear wheels
-  [4,0,6,6,8,8,6,6,0,4],   // 12 trunk gloss + wheels
-  [_,0,9,9,7,7,9,9,0,_],   // 13 taillights
-  [_,_,0,0,0,0,0,0,_,_],   // 14 rear bumper
+  [_,0,5,6,6,6,6,5,0,_],   //  1 headlights
+  [_,0,6,6,6,6,6,6,0,_],   //  2 hood
+  [0,0,6,6,6,6,6,6,0,0],   //  3 front wheels
+  [0,0,6,3,3,3,3,6,0,0],   //  4 front wheels + windshield
+  [_,0,6,3,3,3,3,6,0,_],   //  5 windshield
+  [_,0,6,6,6,6,6,6,0,_],   //  6 roof
+  [_,0,6,6,6,6,6,6,0,_],   //  7 roof
+  [_,0,6,6,6,6,6,6,0,_],   //  8 roof
+  [_,0,6,3,3,3,3,6,0,_],   //  9 rear window
+  [0,0,6,6,6,6,6,6,0,0],   // 10 rear wheels
+  [0,0,6,6,6,6,6,6,0,0],   // 11 rear wheels
+  [_,0,9,9,6,6,9,9,0,_],   // 12 taillights
+  [_,_,0,0,0,0,0,0,_,_],   // 13 rear bumper
+  [_,_,_,_,_,_,_,_,_,_],   // 14 blank
   [_,_,_,_,_,_,_,_,_,_],   // 15 blank
 ];
 
@@ -145,20 +140,20 @@ export const SPR_SEDAN_ORANGE = recolorBody(SEDAN_BASE, 7, 6, 8, 22, 9, 5);  // 
 // lower sedan. Same width as the sedan (no bigger).
 const SUV_BASE = [
   [_,_,0,0,0,0,0,0,_,_],   //  0 front bumper
-  [_,0,5,7,6,6,7,5,0,_],   //  1 headlights + grille
-  [_,0,7,6,8,8,6,7,0,_],   //  2 short hood + centre gloss
-  [4,0,6,6,8,8,6,6,0,4],   //  3 hood gloss + front wheels
-  [7,0,2,3,3,3,3,2,0,7],   //  4 windshield + chrome pillars + mirrors
-  [_,0,8,3,1,1,3,8,0,_],   //  5 windshield glint
-  [_,0,2,6,8,8,6,2,0,_],   //  6 roof front + chrome rails
-  [_,0,2,6,6,6,6,2,0,_],   //  7 roof + rails
-  [_,0,2,6,8,8,6,2,0,_],   //  8 roof centre gloss + rails
-  [_,0,2,6,6,6,6,2,0,_],   //  9 roof + rails
-  [_,0,8,3,3,3,3,8,0,_],   // 10 rear quarter glass
-  [_,0,2,3,3,3,3,2,0,_],   // 11 rear window + chrome
-  [4,0,6,6,8,8,6,6,0,4],   // 12 rear wheels + gloss
-  [4,0,7,6,6,6,6,7,0,4],   // 13 rear quarter + wheels
-  [_,0,9,9,7,7,9,9,0,_],   // 14 taillights
+  [_,0,5,6,6,6,6,5,0,_],   //  1 headlights
+  [_,0,6,6,6,6,6,6,0,_],   //  2 short hood
+  [0,0,6,6,6,6,6,6,0,0],   //  3 front wheels
+  [0,0,6,3,3,3,3,6,0,0],   //  4 front wheels + windshield
+  [_,0,6,3,3,3,3,6,0,_],   //  5 windshield
+  [_,0,6,6,6,6,6,6,0,_],   //  6 tall roof
+  [_,0,6,6,6,6,6,6,0,_],   //  7 tall roof
+  [_,0,6,6,6,6,6,6,0,_],   //  8 tall roof
+  [_,0,6,6,6,6,6,6,0,_],   //  9 tall roof
+  [_,0,6,6,6,6,6,6,0,_],   // 10 tall roof
+  [_,0,6,3,3,3,3,6,0,_],   // 11 rear window
+  [0,0,6,6,6,6,6,6,0,0],   // 12 rear wheels
+  [0,0,6,6,6,6,6,6,0,0],   // 13 rear wheels
+  [_,0,9,9,6,6,9,9,0,_],   // 14 taillights
   [_,_,0,0,0,0,0,0,_,_],   // 15 rear bumper
   [_,_,_,_,_,_,_,_,_,_],   // 16 blank
   [_,_,_,_,_,_,_,_,_,_],   // 17 blank
@@ -208,19 +203,19 @@ export const SPR_BUS_ORANGE = recolorBody(BUS_BASE, 7, 6, 8, 22, 9, 5);
 // chrome pipes poking out, and a rider on the seat.
 const MOTO_BASE = [
   [_,_,_,0,_,_,_],   //  0 front fender
-  [_,_,4,2,4,_,_],   //  1 front tyre + chrome hub
-  [_,_,0,4,0,_,_],   //  2 fork
-  [2,2,1,1,1,2,2],   //  3 wide chrome bars + bright headlight
-  [_,_,0,8,0,_,_],   //  4 tank neck
-  [_,0,8,6,8,0,_],   //  5 fuel tank top (glint)
-  [_,0,6,6,6,0,_],   //  6 fuel tank
-  [_,0,7,6,7,0,_],   //  7 tank base
-  [2,0,4,2,4,0,2],   //  8 V-twin chrome heads + pipes poke out
-  [_,0,4,4,4,0,_],   //  9 engine block
-  [_,0,7,7,7,0,_],   // 10 seat
-  [_,_,0,7,0,_,_],   // 11 rider / sissy bar
-  [_,_,4,2,4,_,_],   // 12 rear tyre + chrome hub
-  [_,_,0,4,0,_,_],   // 13 rear tyre
+  [_,_,0,0,0,_,_],   //  1 front tyre
+  [_,_,_,6,_,_,_],   //  2 fork
+  [_,1,1,1,1,1,_],   //  3 handlebars
+  [_,0,6,6,6,0,_],   //  4 fuel tank
+  [_,0,6,6,6,0,_],   //  5 fuel tank
+  [_,0,7,7,7,0,_],   //  6 engine
+  [_,0,6,6,6,0,_],   //  7 seat front
+  [_,0,7,7,7,0,_],   //  8 seat
+  [_,_,0,6,0,_,_],   //  9 rider
+  [_,_,0,0,0,_,_],   // 10 rear tyre
+  [_,_,0,0,0,_,_],   // 11 rear tyre
+  [_,_,_,0,_,_,_],   // 12 rear fender
+  [_,_,_,_,_,_,_],   // 13 blank
 ];
 export const SPR_MOTO_BLACK  = recolorBody(MOTO_BASE, 7, 6, 8, 0, 4, 3);
 export const SPR_MOTO_ORANGE = recolorBody(MOTO_BASE, 7, 6, 8, 22, 9, 5);
@@ -232,17 +227,17 @@ export const SPR_MOTO_WHITE  = recolorBody(MOTO_BASE, 7, 6, 8, 2, 1, 1);
 const AUTO_BASE = [
   [_,_,_,_,0,_,_,_,_],   //  0 pointed nose
   [_,_,_,0,6,0,_,_,_],   //  1 narrow front cowl
-  [_,_,0,8,5,8,0,_,_],   //  2 headlight + glint (narrow front)
-  [_,_,_,4,4,4,_,_,_],   //  3 single front wheel
-  [_,_,0,6,6,6,0,_,_],   //  4 still narrow (driver)
-  [_,0,6,6,8,6,6,0,_],   //  5 body flares out to the cabin
-  [0,6,2,3,3,3,2,6,0],   //  6 windscreen + chrome posts
-  [0,8,6,6,6,6,6,8,0],   //  7 domed canopy (bright top)
-  [0,6,6,6,6,6,6,6,0],   //  8 canopy roof
-  [0,7,3,4,4,4,3,7,0],   //  9 OPEN SIDES — see-through dark interior
-  [0,6,6,6,6,6,6,6,0],   // 10 rear body (widest)
-  [4,4,0,9,6,9,0,4,4],   // 11 fat rear wheels + taillights
-  [_,0,0,0,0,0,0,0,_],   // 12 rear bumper
+  [_,_,0,6,5,6,0,_,_],   //  2 headlight
+  [_,_,_,0,0,0,_,_,_],   //  3 single front wheel
+  [_,0,6,6,6,6,6,0,_],   //  4 body flares to cabin
+  [0,6,3,3,3,3,3,6,0],   //  5 windscreen
+  [0,6,6,6,6,6,6,6,0],   //  6 canopy
+  [0,6,6,6,6,6,6,6,0],   //  7 canopy roof
+  [0,7,6,6,6,6,6,7,0],   //  8 open sides (dark posts)
+  [0,6,6,6,6,6,6,6,0],   //  9 rear body
+  [0,0,9,6,6,6,9,0,0],   // 10 rear wheels + taillights
+  [_,0,0,0,0,0,0,0,_],   // 11 rear bumper
+  [_,_,_,_,_,_,_,_,_],   // 12 blank
   [_,_,_,_,_,_,_,_,_],   // 13 blank
 ];
 export const SPR_AUTO_YELLOW = recolorBody(AUTO_BASE, 7, 6, 8, 22, 21, 1);  // classic yellow
@@ -298,9 +293,10 @@ export const SPR_VAN_WHITE    = SPR_SEDAN_WHITE;
 export const SPR_VAN_BROWN    = SPR_SEDAN_BLACK;
 
 // ── Traffic skin table — cars (sedans + pickups) and Harley motorbikes; no buses.
-// `scale` (drawn at this factor by drawTraffic) is the global -10% traffic size.
-// Collision half-sizes are derived from w/h * scale, so hitboxes shrink too.
-const TS = 0.9;
+// `scale` is the draw factor. Kept at 1.0 (native pixels) so sprites stay crisp —
+// fractional scaling was what muddied the art. Collision half-sizes derive from
+// w/h * scale.
+const TS = 1.0;
 export const TRAFFIC_SKINS = [
   // Sedans (5 colours)
   { spr: SPR_SEDAN_SILVER, w: 10, h: 16, scale: TS, speedMul: 0.30 },

@@ -5,7 +5,7 @@ import {
   SPR_TREE, SPR_PINE, SPR_PALM, SPR_BUSH, SPR_ROCK_SCEN, SPR_LAMP,
   SPR_BUILDING, SPR_BUILDING2,
 } from "./sprites.js";
-import { W } from "./config.js";
+import { W, H } from "./config.js";
 
 const SPRITES = {
   tree: { sprite: SPR_TREE,      w: 14, h: 16, halfX: 7, halfZ: 8 },
@@ -47,7 +47,9 @@ export function updateScenery(sys, playerZ, map, dt, spawnPerMeter, speed01 = 0)
     sys.list.push({ kind: pickKind(map), z: sys.nextSpawnZ, x });
     sys.nextSpawnZ += (1 / spawnPerMeter) * (0.5 + Math.random() * 1.2) * sparse;
   }
-  sys.list = sys.list.filter(s => s.z > playerZ - 12);
+  // Keep roadside objects until they've fully scrolled off the bottom (was -12,
+  // which popped them out of view just below the player).
+  sys.list = sys.list.filter(s => s.z > playerZ - 50);
 }
 
 export function drawScenery(ctx, sys, map, playerZ) {
@@ -55,8 +57,9 @@ export function drawScenery(ctx, sys, map, playerZ) {
   for (let i = sys.list.length - 1; i >= 0; i--) {
     const s = sys.list[i];
     const dist = s.z - playerZ;
-    if (dist < -8 || dist > 110) continue;
+    if (dist > 110) continue;                 // not in view yet (too far ahead)
     const sy = distToY(dist);
+    if (sy > H + 28) continue;                // fully scrolled off the bottom
     const def = SPRITES[s.kind];
     if (!def) continue;
     const screenCx = W / 2 + map.biasX;

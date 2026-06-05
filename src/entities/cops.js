@@ -20,7 +20,7 @@ const ENTER_TIME = 1.7;              // fly-in duration
 const EXIT_TIME = 1.7;               // fly-out duration
 const RELOAD_TIME = 30;              // seconds off-screen between sorties ("reloading")
 const FIRST_DELAY = 3;               // first appearance after the chase engages
-const SINGLE_SORTIES = 2;            // first N sorties use one chopper, then a pair
+const SINGLE_SORTIES = 1;            // first N sorties use one chopper, then a pair
 const SECOND_DROP_DELAY = 1.8;       // 2nd chopper drops this much later than the 1st
 const BARREL_HALF_X = 4;
 const BARREL_HALF_Z = 4;
@@ -30,18 +30,33 @@ function leaveSpeed()   { return PHYS.maxSpeed * ((RACE.copTriggerKmh - 15) / PH
 function dropDist()     { return yToDist(HELI_HOVER_Y); }
 const clampBound = (x, b) => Math.max(-b, Math.min(b, x));
 
-function makeHeli(spawnX, dropDelay) {
+// A chopper holds station around `homeX` and drifts left/right with a smooth,
+// slightly irregular sway (two out-of-phase sines) so a pair looks like it's
+// patrolling rather than sitting locked in place.
+function makeHeli(homeX, dropDelay, swayAmp) {
   return {
-    x: spawnX, homeX: spawnX,
+    x: homeX, homeX,
     y: HELI_OFFSCREEN_Y,
     dropDelay,            // seconds into the AIM phase before THIS chopper drops
     aiming: false,
     dropped: false,
     lockX: 0,
+    swayAmp,                              // px of horizontal roam around homeX
+    swayPhase: Math.random() * 6.28,
+    swayPhase2: Math.random() * 6.28,
+    swayFreq: 0.55 + Math.random() * 0.5, // rad/s — each chopper roams at its own pace
     rotorPhase: Math.random() * 6,
     bobPhase: Math.random() * 6,
     beaconPhase: Math.random() * 6,
   };
+}
+
+// Smooth station-keeping target: roam left/right around homeX, clamped on-road.
+function swayTargetX(h, bound) {
+  const x = h.homeX
+    + Math.sin(h.swayPhase) * h.swayAmp
+    + Math.sin(h.swayPhase2) * h.swayAmp * 0.35;
+  return clampBound(x, bound);
 }
 
 export function makeCopsSystem() {
@@ -59,16 +74,21 @@ export function makeCopsSystem() {
 // every run sends TWO choppers whose drops are staggered. Between runs they sit
 // off-screen for RELOAD_TIME (they're "reloading"), so barrels aren't unlimited.
 export function updateCops(sys, dt, playerZ, playerX, playerSpeed, map, cbs) {
-  // Barrels are static world hazards — always advance their flame + cull.
+  // Barrels are static world hazards — always advance their flame + cull. Kept
+  // until they've scrolled well past the player (-50) so they slide off-screen
+  // instead of vanishing just below the car.
   for (const b of sys.barrels) b.flame += dt;
-  sys.barrels = sys.barrels.filter(b => !b.hit && b.z > playerZ - 16);
+  sys.barrels = sys.barrels.filter(b => !b.hit && b.z > playerZ - 50);
 
-  // Engage / disengage the chase by speed (with hysteresis).
+  // Engage / disengage the chase by speed (with hysteresis). The sortie count is
+  // NOT reset here — it persists for the whole run, so once the first single
+  // sortie is flown every later sortie is a pair, even if the player drops below
+  // the trigger speed and re-engages later (progression is independent of whether
+  // high speed was sustained).
   if (!sys.active && playerSpeed >= triggerSpeed()) {
     sys.active = true;
     sys.phase = "wait";
     sys.phaseT = FIRST_DELAY;
-    sys.sortie = 0;
     sys.helis = [];
   } else if (sys.active && playerSpeed < leaveSpeed()) {
     sys.active = false;
@@ -77,15 +97,22 @@ export function updateCops(sys, dt, playerZ, playerX, playerSpeed, map, cbs) {
   if (!sys.active) return;
 
   const bound = map.roadHalfWidth - 8;
-  for (const h of sys.helis) { h.rotorPhase += dt; h.bobPhase += dt; h.beaconPhase += dt; }
+  for (const h of sys.helis) {
+    h.rotorPhase += dt; h.bobPhase += dt; h.beaconPhase += dt;
+    h.swayPhase += h.swayFreq * dt;
+    h.swayPhase2 += h.swayFreq * 0.41 * dt;
+  }
 
   if (sys.phase === "wait") {
     sys.phaseT -= dt;
     if (sys.phaseT <= 0) {
       const dbl = sys.sortie >= SINGLE_SORTIES;
+      // Single chopper roams across the centre; a pair takes the left/right halves
+      // and patrols its own side. Drops are staggered (dropDelay).
       sys.helis = dbl
-        ? [makeHeli(-bound * 0.55, 0), makeHeli(bound * 0.55, SECOND_DROP_DELAY)]
-        : [makeHeli(clampBound(playerX, bound), 0)];
+        ? [makeHeli(-bound * 0.5, 0, bound * 0.26),
+           makeHeli( bound * 0.5, SECOND_DROP_DELAY, bound * 0.26)]
+        : [makeHeli(0, 0, bound * 0.5)];
       sys.phase = "enter";
       sys.phaseT = ENTER_TIME;
     }
@@ -94,8 +121,7 @@ export function updateCops(sys, dt, playerZ, playerX, playerSpeed, map, cbs) {
     const f = 1 - Math.max(0, sys.phaseT) / ENTER_TIME;        // 0 → 1
     for (const h of sys.helis) {
       h.y = HELI_OFFSCREEN_Y + (HELI_HOVER_Y - HELI_OFFSCREEN_Y) * f;
-      const tx = clampBound(playerX * 0.5 + h.homeX * 0.5, bound);
-      h.x += (tx - h.x) * Math.min(1, dt * 2);
+      h.x += (h.homeX - h.x) * Math.min(1, dt * 2);            // settle onto station
     }
     if (sys.phaseT <= 0) { sys.phase = "aim"; sys.phaseT = 0; }
   } else if (sys.phase === "aim") {
@@ -103,26 +129,26 @@ export function updateCops(sys, dt, playerZ, playerX, playerSpeed, map, cbs) {
     let allDropped = true;
     for (const h of sys.helis) {
       h.y = HELI_HOVER_Y + Math.sin(h.bobPhase * 2) * 1.5;    // hover bob
-      if (h.dropped) {
-        // ease back toward its home column after dropping (declutters a pair)
-        h.x += (h.homeX - h.x) * Math.min(1, dt * 1.5);
+      const localT = sys.phaseT - h.dropDelay;
+      // Before its turn (and after it has dropped) a chopper just sways on station.
+      if (h.dropped || localT < 0) {
+        const tx = swayTargetX(h, bound);
+        h.x += (tx - h.x) * Math.min(1, dt * 2.2);
+        if (!h.dropped) allDropped = false;
         continue;
       }
       allDropped = false;
-      const localT = sys.phaseT - h.dropDelay;
-      if (localT < 0) {                                        // not this chopper's turn yet
-        const tx = clampBound(playerX, bound);
-        h.x += Math.sign(tx - h.x) * Math.min(Math.abs(tx - h.x), 30 * dt);
-        continue;
-      }
+      // Its drop window: lock onto the player's lane, telegraph, then drop there.
       if (!h.aiming) { h.aiming = true; h.lockX = clampBound(playerX, bound); }
-      h.x += Math.sign(h.lockX - h.x) * Math.min(Math.abs(h.lockX - h.x), 45 * dt);
+      h.x += Math.sign(h.lockX - h.x) * Math.min(Math.abs(h.lockX - h.x), 50 * dt);
       if (localT >= AIM_TIME) {
         sys.barrels.push({ x: h.lockX, z: playerZ + dropDist(), flame: Math.random() * 6.28, hit: false });
         h.dropped = true;
+        h.aiming = false;                                      // reticle off, resume sway
         cbs?.onDrop?.();
       }
     }
+    // Both choppers leave together — exit only once every chopper has dropped.
     if (allDropped) { sys.phase = "exit"; sys.phaseT = EXIT_TIME; }
   } else if (sys.phase === "exit") {
     sys.phaseT -= dt;

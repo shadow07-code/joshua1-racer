@@ -71,8 +71,9 @@ export function drawRoad(ctx, map, playerZ, speed = 0) {
 
 export function project(map, playerZ, _x, entity) {
   const dist = entity.z - playerZ;
-  if (dist < -4 || dist > VIEW_AHEAD_METERS) return null;
+  if (dist > VIEW_AHEAD_METERS) return null;     // beyond the horizon
   const sy = distToY(dist);
+  if (sy > H + 24) return null;                   // fully slid off the bottom edge
   const cx = W / 2 + map.biasX;
   return { sx: (cx + entity.x) | 0, sy: sy | 0 };
 }

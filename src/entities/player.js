@@ -4,8 +4,9 @@ import { SPR_PLAYER } from "../sprites.js";
 import { drawSpriteNN, groundShadow, ring } from "../render.js";
 import { roadCenterX } from "../road.js";
 
-// Player car drawn 20% smaller than its native 16×24 sprite.
-const PLAYER_SCALE = 0.8;
+// Player car drawn at native 1× so the pixels stay crisp (the old 0.8 downscale
+// is what made it look blurry).
+const PLAYER_SCALE = 1.0;
 
 export function makePlayer() {
   return {

@@ -174,7 +174,10 @@ export function updateTraffic(sys, dt, playerZ, map, cbs) {
   // lane and never overlap it — except for a rare bump.
   resolveTrafficSeparation(sys, dt);
 
-  sys.list = sys.list.filter(c => c.z > playerZ - 30);
+  // Keep cars in the list until they've fully slid off the bottom edge (they used
+  // to be culled at -30, popping out of view just below the player). -50 lets them
+  // scroll all the way past.
+  sys.list = sys.list.filter(c => c.z > playerZ - 50);
 }
 
 // Traffic-vs-traffic separation. Cars overlapping laterally keep a minimum
