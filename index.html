@@ -136,45 +136,31 @@
       border-width: 3px;
       border-radius: 7px;
     }
-    /* One-thumb steering — a FLOATING JOYSTICK. The container is an invisible
-       touch surface over the lower band; touching anywhere in it pops the
-       joystick up under the thumb. Steering is binary: push past the centre
-       deadzone and the car commits fully left or right (no analog gradient). */
-    #steer-controls {
-      position: fixed; left: 0; right: 0; bottom: 0; top: 45%;
-      display: none; z-index: 8; touch-action: none;
-      -webkit-tap-highlight-color: transparent;
-    }
+    /* On-screen steering pads — big, translucent, bottom corners. */
+    #steer-controls { position: fixed; inset: 0; display: none; z-index: 8; pointer-events: none; }
     #steer-controls.show { display: block; }
-    /* Floating joystick base — input.js positions it under the touch point. */
-    #steer-stick {
-      position: fixed; display: none;
-      width: 132px; height: 132px;
-      transform: translate(-50%, -50%);
-      background: rgba(15, 56, 15, 0.45);
-      border: 3px solid rgba(155, 188, 15, 0.85);
-      border-radius: 50%;
-      pointer-events: none;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+    /* Just the arrows — large invisible tap area, no box. */
+    #steer-controls button {
+      position: absolute;
+      bottom: calc(env(safe-area-inset-bottom) + 9%);
+      width: 40%;
+      height: 22%;
+      max-height: 180px;
+      pointer-events: auto;
+      background: transparent;
+      border: none;
+      color: rgba(155, 188, 15, 0.78);
+      font-size: 58px;
+      line-height: 1;
+      font-weight: bold;
+      text-shadow: 0 2px 2px rgba(0, 0, 0, 0.55);
+      display: flex; align-items: center; justify-content: center;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none; touch-action: none;
     }
-    #steer-stick.show { display: block; }
-    /* Left / right direction arrows inside the ring. */
-    #steer-stick::after {
-      content: "\25C0        \25B6"; position: absolute; inset: 0;
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 0 14px; color: rgba(155, 188, 15, 0.50);
-      font-size: 15px; line-height: 1; letter-spacing: 0;
-    }
-    #steer-knob {
-      position: absolute; left: 50%; top: 50%;
-      width: 56px; height: 56px;
-      transform: translate(-50%, -50%);
-      background: rgba(155, 188, 15, 0.92);
-      border: 3px solid #0f380f;
-      border-radius: 50%;
-      pointer-events: none;
-      z-index: 1;
-    }
+    #btn-steer-left { left: 2%; }
+    #btn-steer-right { right: 2%; }
+    #steer-controls button:active { color: #9bbc0f; transform: scale(0.9); }
     /* Permanent "add to phone" button — shown centred above "TAP TO START"
        on the title screen only. Bottom offset set dynamically by pwa.js. */
     #btn-install {
@@ -356,9 +342,10 @@
     <button id="btn-sfx" title="Sound effects on/off" aria-label="Toggle sound effects">🔊</button>
   </div>
 
-  <!-- One-thumb floating steering joystick (shown during gameplay; wired by input.js) -->
+  <!-- On-screen steering pads (shown during gameplay; wired by input.js) -->
   <div id="steer-controls" aria-hidden="true">
-    <div id="steer-stick"><div id="steer-knob"></div></div>
+    <button id="btn-steer-left" aria-label="Steer left">◀</button>
+    <button id="btn-steer-right" aria-label="Steer right">▶</button>
   </div>
 
   <button id="btn-install" aria-label="Install game for offline play">📲 ADD TO HOME SCREEN</button>

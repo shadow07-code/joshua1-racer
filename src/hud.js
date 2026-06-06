@@ -243,7 +243,7 @@ export function drawTitleScreen(ctx, allTimeBest) {
   textOutlinedCentered(ctx, "TAP TO START", bannerY + 4, promptIdx, 0, 2);
 
   // ── Control hints (pinned to the bottom edge) ──
-  textCentered(ctx, "SLIDE TO STEER", H - 26, 1, 1);
+  textCentered(ctx, "TAP SIDES OR ARROWS", H - 26, 1, 1);
   textCentered(ctx, "AUTO GAS  NO BRAKE", H - 16, 21, 1);
   textCentered(ctx, "3 LIVES  DODGE TRAFFIC", H - 8, 14, 1);
 }
@@ -408,17 +408,10 @@ export function drawSteerZones(ctx, { leftLit = true, rightLit = true, pulse = t
   if (leftLit && rightLit) rect(ctx, midX, top, 1, h, 0);   // divider
 }
 
-// Per-race steering reminder (every race): a slim "◀ SLIDE TO STEER ▶" prompt in
-// the lower band where the floating slider lives. Faded out by `vis` at race start.
+// Per-race steering reminder (every race): both zones lit + pulsing, faded by
+// `vis` at race start. Bold orange, big arrows.
 export function drawSteerHints(ctx, vis = 1) {
-  if (vis <= 0) return;
-  const t = performance.now();
-  if (vis < 0.4 && (Math.floor(t / 110) % 2 === 0)) return;   // blink out as it fades
-  const cy = (H * 0.60) | 0;
-  const blink = Math.floor(t / 350) % 2 === 0;
-  textOutlinedCentered(ctx, "SLIDE TO STEER", cy, blink ? 5 : 1, 0, 1);
-  drawBigArrow(ctx, 32, cy + 2, -1, 9, 10, 5, 0);       // ◀ left of the text
-  drawBigArrow(ctx, W - 32, cy + 2, +1, 9, 10, 5, 0);   // ▶ right of the text
+  drawSteerZones(ctx, { leftLit: true, rightLit: true, pulse: true, vis });
 }
 
 // First-run interactive tutorial overlay, drawn over a live road backdrop (the
@@ -449,7 +442,7 @@ export function drawTutorialOverlay(ctx, tut) {
   textOutlinedCentered(ctx, "HOW TO STEER", 12, 5, 0, 2, 7);
   let prompt;
   if (phase === "demo") prompt = "WATCH THE CAR";
-  else if (phase === "practice") prompt = tut.rightDone ? "NOW SLIDE LEFT" : "SLIDE RIGHT";
+  else if (phase === "practice") prompt = tut.rightDone ? "NOW TAP LEFT SIDE" : "TAP RIGHT SIDE";
   else prompt = "GREAT!  TAP TO RACE";
   const blink = Math.floor(t / 400) % 2 === 0;
   textOutlinedCentered(ctx, prompt, 30, (phase === "done" && !blink) ? 1 : 5, 0, 1);

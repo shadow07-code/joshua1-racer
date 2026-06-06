@@ -9,20 +9,26 @@ const state = {
 };
 
 const heldKeys = new Set();
-const touchPoints = new Map(); // identifier -> { x, y } — menu "Touch" detection
-// Floating steering JOYSTICK: `active` while a finger is held in the lower band.
-// Steering is BINARY — `value` is -1, 0, or +1 depending on whether the thumb has
-// pushed past the centre deadzone left/right of where it first touched (`anchor`).
-// `radius` = px the knob can travel from centre; `deadzone` = neutral pocket.
-const stick = { active: false, value: 0, anchorX: 0, anchorY: 0, radius: 54, deadzone: 16 };
+const touchPoints = new Map(); // identifier -> { x, y, side }
+const btnHeld = { L: false, R: false }; // explicit on-screen-button state
 
 function recompute() {
   let s = 0;
   if (KEYS.left.some(k => heldKeys.has(k))) s -= 1;
   if (KEYS.right.some(k => heldKeys.has(k))) s += 1;
-  // The floating joystick overrides the keyboard while a finger is down. Output
-  // is binary (full left / neutral / full right) — no proportional gradient.
-  if (stick.active) s = stick.value;
+  // On-screen buttons take priority — they're the new "official" mobile controls.
+  if (btnHeld.L && !btnHeld.R) s = -1;
+  else if (btnHeld.R && !btnHeld.L) s = 1;
+  // Canvas-half touch as a fallback (kept for menus and casual taps).
+  else {
+    let leftTouch = false, rightTouch = false;
+    for (const t of touchPoints.values()) {
+      if (t.side === "L") leftTouch = true;
+      else if (t.side === "R") rightTouch = true;
+    }
+    if (leftTouch && !rightTouch) s = -1;
+    else if (rightTouch && !leftTouch) s = 1;
+  }
   state.steer = Math.max(-1, Math.min(1, s));
   state.brake = false;
 }
@@ -110,60 +116,31 @@ function bindPointer(canvas) {
   });
 }
 
-// Floating steering joystick. The #steer-controls div is an invisible touch
-// surface over the lower band; pressing anywhere in it pops the joystick up
-// under the thumb. The knob tracks the thumb in 2D (clamped to the base radius)
-// for feel, but steering is BINARY: once the thumb crosses the horizontal
-// deadzone the car commits fully left/right. One thumb, self-centering on release.
-function bindJoystick() {
-  const surface = document.getElementById("steer-controls");
-  const base = document.getElementById("steer-stick");
-  const knob = document.getElementById("steer-knob");
-  if (!surface || !base) return;
-  const R = stick.radius;
-  const DZ = stick.deadzone;
-  const setKnob = (dx, dy) => {
-    if (knob) knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
-  };
-
-  surface.addEventListener("pointerdown", (e) => {
-    e.preventDefault();
-    try { surface.setPointerCapture(e.pointerId); } catch (_) {}
-    stick.active = true;
-    stick.anchorX = e.clientX;
-    stick.anchorY = e.clientY;
-    stick.value = 0;
-    base.style.left = e.clientX + "px";
-    base.style.top = e.clientY + "px";
-    base.classList.add("show");
-    setKnob(0, 0);
-    state.pressed.add("Touch");   // also counts as a tap (menus / pause-resume)
-    recompute();
-  });
-  surface.addEventListener("pointermove", (e) => {
-    if (!stick.active) return;
-    e.preventDefault();
-    let dx = e.clientX - stick.anchorX;
-    let dy = e.clientY - stick.anchorY;
-    // Clamp the knob inside the joystick base (2D) so it feels like a real stick.
-    const dist = Math.hypot(dx, dy);
-    if (dist > R) { dx = (dx / dist) * R; dy = (dy / dist) * R; }
-    setKnob(dx, dy);
-    // Binary steer: past the horizontal deadzone, commit fully to that side.
-    stick.value = dx <= -DZ ? -1 : dx >= DZ ? 1 : 0;
-    recompute();
-  });
-  const end = () => {
-    if (!stick.active) return;
-    stick.active = false;
-    stick.value = 0;
-    setKnob(0, 0);
-    base.classList.remove("show");
+function bindSteerButtons() {
+  const btnL = document.getElementById("btn-steer-left");
+  const btnR = document.getElementById("btn-steer-right");
+  if (!btnL || !btnR) return;
+  const press = (side) => {
+    btnHeld[side] = true;
+    state.pressed.add("Touch");
     recompute();
   };
-  surface.addEventListener("pointerup", end);
-  surface.addEventListener("pointercancel", end);
-  surface.addEventListener("contextmenu", (e) => e.preventDefault());
+  const release = (side) => {
+    btnHeld[side] = false;
+    recompute();
+  };
+  // Pointer events cover both touch and mouse in one binding.
+  btnL.addEventListener("pointerdown", (e) => { e.preventDefault(); btnL.setPointerCapture(e.pointerId); press("L"); });
+  btnL.addEventListener("pointerup",   (e) => { e.preventDefault(); release("L"); });
+  btnL.addEventListener("pointercancel",(e)=> { release("L"); });
+  btnL.addEventListener("pointerleave",(e) => { release("L"); });
+  btnR.addEventListener("pointerdown", (e) => { e.preventDefault(); btnR.setPointerCapture(e.pointerId); press("R"); });
+  btnR.addEventListener("pointerup",   (e) => { e.preventDefault(); release("R"); });
+  btnR.addEventListener("pointercancel",(e)=> { release("R"); });
+  btnR.addEventListener("pointerleave",(e) => { release("R"); });
+  // Block native context menu / drag.
+  btnL.addEventListener("contextmenu", (e) => e.preventDefault());
+  btnR.addEventListener("contextmenu", (e) => e.preventDefault());
 }
 
 let _bound = false;
@@ -171,7 +148,7 @@ export function initInput(canvas) {
   if (_bound) return;
   _bound = true;
   bindPointer(canvas);
-  bindJoystick();
+  bindSteerButtons();
 }
 
 export function getInput() {
