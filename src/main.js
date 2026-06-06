@@ -572,7 +572,7 @@ function syncOverlays() {
   setLeaderboardButtonVisible(onTitle);
   // Enlarge the music/SFX toggles during gameplay for easy tapping, and show the
   // on-screen steering pads.
-  const playing = g.state === STATES.RACE || g.state === STATES.PAUSED || g.state === STATES.COUNTDOWN;
+  const playing = g.state === STATES.RACE || g.state === STATES.PAUSED || g.state === STATES.COUNTDOWN || g.state === STATES.TUTORIAL;
   document.getElementById("toolbar").classList.toggle("playing", playing);
   document.getElementById("steer-controls").classList.toggle("show", playing);
   showNameEntry(g.state === STATES.NAME_ENTRY);

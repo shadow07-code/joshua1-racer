@@ -9,26 +9,19 @@ const state = {
 };
 
 const heldKeys = new Set();
-const touchPoints = new Map(); // identifier -> { x, y, side }
-const btnHeld = { L: false, R: false }; // explicit on-screen-button state
+const touchPoints = new Map(); // identifier -> { x, y } — menu "Touch" detection
+// Floating analog steering slider: `active` while a finger is held in the lower
+// band; `value` is -1..1, proportional to how far the thumb has slid sideways
+// from where it first touched (`anchorX`). `radius` = px of travel for full lock.
+const analog = { active: false, value: 0, anchorX: 0, radius: 72 };
 
 function recompute() {
   let s = 0;
   if (KEYS.left.some(k => heldKeys.has(k))) s -= 1;
   if (KEYS.right.some(k => heldKeys.has(k))) s += 1;
-  // On-screen buttons take priority — they're the new "official" mobile controls.
-  if (btnHeld.L && !btnHeld.R) s = -1;
-  else if (btnHeld.R && !btnHeld.L) s = 1;
-  // Canvas-half touch as a fallback (kept for menus and casual taps).
-  else {
-    let leftTouch = false, rightTouch = false;
-    for (const t of touchPoints.values()) {
-      if (t.side === "L") leftTouch = true;
-      else if (t.side === "R") rightTouch = true;
-    }
-    if (leftTouch && !rightTouch) s = -1;
-    else if (rightTouch && !leftTouch) s = 1;
-  }
+  // The floating analog slider overrides the keyboard while a finger is down,
+  // giving proportional steering (how far you slide = how hard you turn).
+  if (analog.active) s = analog.value;
   state.steer = Math.max(-1, Math.min(1, s));
   state.brake = false;
 }
@@ -116,31 +109,51 @@ function bindPointer(canvas) {
   });
 }
 
-function bindSteerButtons() {
-  const btnL = document.getElementById("btn-steer-left");
-  const btnR = document.getElementById("btn-steer-right");
-  if (!btnL || !btnR) return;
-  const press = (side) => {
-    btnHeld[side] = true;
-    state.pressed.add("Touch");
+// Floating analog steering slider. The #steer-controls div is an invisible touch
+// surface over the lower band; pressing anywhere in it pops the slider up under
+// the thumb, and sliding sideways sets a proportional steer value. One thumb,
+// left/right only, self-centering on release.
+function bindSteerSlider() {
+  const surface = document.getElementById("steer-controls");
+  const slider = document.getElementById("steer-slider");
+  const knob = document.getElementById("steer-knob");
+  if (!surface || !slider) return;
+  const R = analog.radius;
+  const setKnob = (dx) => {
+    if (knob) knob.style.transform = `translate(calc(-50% + ${dx}px), -50%)`;
+  };
+
+  surface.addEventListener("pointerdown", (e) => {
+    e.preventDefault();
+    try { surface.setPointerCapture(e.pointerId); } catch (_) {}
+    analog.active = true;
+    analog.anchorX = e.clientX;
+    analog.value = 0;
+    slider.style.left = e.clientX + "px";
+    slider.style.top = e.clientY + "px";
+    slider.classList.add("show");
+    setKnob(0);
+    state.pressed.add("Touch");   // also counts as a tap (menus / pause-resume)
+    recompute();
+  });
+  surface.addEventListener("pointermove", (e) => {
+    if (!analog.active) return;
+    e.preventDefault();
+    const dx = Math.max(-R, Math.min(R, e.clientX - analog.anchorX));
+    setKnob(dx);
+    analog.value = Math.abs(dx) < 5 ? 0 : dx / R;   // small centre deadzone
+    recompute();
+  });
+  const end = () => {
+    if (!analog.active) return;
+    analog.active = false;
+    analog.value = 0;
+    slider.classList.remove("show");
     recompute();
   };
-  const release = (side) => {
-    btnHeld[side] = false;
-    recompute();
-  };
-  // Pointer events cover both touch and mouse in one binding.
-  btnL.addEventListener("pointerdown", (e) => { e.preventDefault(); btnL.setPointerCapture(e.pointerId); press("L"); });
-  btnL.addEventListener("pointerup",   (e) => { e.preventDefault(); release("L"); });
-  btnL.addEventListener("pointercancel",(e)=> { release("L"); });
-  btnL.addEventListener("pointerleave",(e) => { release("L"); });
-  btnR.addEventListener("pointerdown", (e) => { e.preventDefault(); btnR.setPointerCapture(e.pointerId); press("R"); });
-  btnR.addEventListener("pointerup",   (e) => { e.preventDefault(); release("R"); });
-  btnR.addEventListener("pointercancel",(e)=> { release("R"); });
-  btnR.addEventListener("pointerleave",(e) => { release("R"); });
-  // Block native context menu / drag.
-  btnL.addEventListener("contextmenu", (e) => e.preventDefault());
-  btnR.addEventListener("contextmenu", (e) => e.preventDefault());
+  surface.addEventListener("pointerup", end);
+  surface.addEventListener("pointercancel", end);
+  surface.addEventListener("contextmenu", (e) => e.preventDefault());
 }
 
 let _bound = false;
@@ -148,7 +161,7 @@ export function initInput(canvas) {
   if (_bound) return;
   _bound = true;
   bindPointer(canvas);
-  bindSteerButtons();
+  bindSteerSlider();
 }
 
 export function getInput() {
