@@ -78,7 +78,8 @@ export const PHYS = {
 
 // Player car sits in the lower third (not jammed against the bottom edge) so
 // there's foreground road below it and more breathing room to read traffic.
-export const PLAYER_Y = Math.round(H * 0.74);
+// Raised from 0.74 → 0.68 to clear the floating steering joystick at the bottom.
+export const PLAYER_Y = Math.round(H * 0.68);
 
 // Endless survival mode.
 export const RACE = {

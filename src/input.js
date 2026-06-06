@@ -10,18 +10,19 @@ const state = {
 
 const heldKeys = new Set();
 const touchPoints = new Map(); // identifier -> { x, y } — menu "Touch" detection
-// Floating analog steering slider: `active` while a finger is held in the lower
-// band; `value` is -1..1, proportional to how far the thumb has slid sideways
-// from where it first touched (`anchorX`). `radius` = px of travel for full lock.
-const analog = { active: false, value: 0, anchorX: 0, radius: 72 };
+// Floating steering JOYSTICK: `active` while a finger is held in the lower band.
+// Steering is BINARY — `value` is -1, 0, or +1 depending on whether the thumb has
+// pushed past the centre deadzone left/right of where it first touched (`anchor`).
+// `radius` = px the knob can travel from centre; `deadzone` = neutral pocket.
+const stick = { active: false, value: 0, anchorX: 0, anchorY: 0, radius: 54, deadzone: 16 };
 
 function recompute() {
   let s = 0;
   if (KEYS.left.some(k => heldKeys.has(k))) s -= 1;
   if (KEYS.right.some(k => heldKeys.has(k))) s += 1;
-  // The floating analog slider overrides the keyboard while a finger is down,
-  // giving proportional steering (how far you slide = how hard you turn).
-  if (analog.active) s = analog.value;
+  // The floating joystick overrides the keyboard while a finger is down. Output
+  // is binary (full left / neutral / full right) — no proportional gradient.
+  if (stick.active) s = stick.value;
   state.steer = Math.max(-1, Math.min(1, s));
   state.brake = false;
 }
@@ -109,46 +110,55 @@ function bindPointer(canvas) {
   });
 }
 
-// Floating analog steering slider. The #steer-controls div is an invisible touch
-// surface over the lower band; pressing anywhere in it pops the slider up under
-// the thumb, and sliding sideways sets a proportional steer value. One thumb,
-// left/right only, self-centering on release.
-function bindSteerSlider() {
+// Floating steering joystick. The #steer-controls div is an invisible touch
+// surface over the lower band; pressing anywhere in it pops the joystick up
+// under the thumb. The knob tracks the thumb in 2D (clamped to the base radius)
+// for feel, but steering is BINARY: once the thumb crosses the horizontal
+// deadzone the car commits fully left/right. One thumb, self-centering on release.
+function bindJoystick() {
   const surface = document.getElementById("steer-controls");
-  const slider = document.getElementById("steer-slider");
+  const base = document.getElementById("steer-stick");
   const knob = document.getElementById("steer-knob");
-  if (!surface || !slider) return;
-  const R = analog.radius;
-  const setKnob = (dx) => {
-    if (knob) knob.style.transform = `translate(calc(-50% + ${dx}px), -50%)`;
+  if (!surface || !base) return;
+  const R = stick.radius;
+  const DZ = stick.deadzone;
+  const setKnob = (dx, dy) => {
+    if (knob) knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
   };
 
   surface.addEventListener("pointerdown", (e) => {
     e.preventDefault();
     try { surface.setPointerCapture(e.pointerId); } catch (_) {}
-    analog.active = true;
-    analog.anchorX = e.clientX;
-    analog.value = 0;
-    slider.style.left = e.clientX + "px";
-    slider.style.top = e.clientY + "px";
-    slider.classList.add("show");
-    setKnob(0);
+    stick.active = true;
+    stick.anchorX = e.clientX;
+    stick.anchorY = e.clientY;
+    stick.value = 0;
+    base.style.left = e.clientX + "px";
+    base.style.top = e.clientY + "px";
+    base.classList.add("show");
+    setKnob(0, 0);
     state.pressed.add("Touch");   // also counts as a tap (menus / pause-resume)
     recompute();
   });
   surface.addEventListener("pointermove", (e) => {
-    if (!analog.active) return;
+    if (!stick.active) return;
     e.preventDefault();
-    const dx = Math.max(-R, Math.min(R, e.clientX - analog.anchorX));
-    setKnob(dx);
-    analog.value = Math.abs(dx) < 5 ? 0 : dx / R;   // small centre deadzone
+    let dx = e.clientX - stick.anchorX;
+    let dy = e.clientY - stick.anchorY;
+    // Clamp the knob inside the joystick base (2D) so it feels like a real stick.
+    const dist = Math.hypot(dx, dy);
+    if (dist > R) { dx = (dx / dist) * R; dy = (dy / dist) * R; }
+    setKnob(dx, dy);
+    // Binary steer: past the horizontal deadzone, commit fully to that side.
+    stick.value = dx <= -DZ ? -1 : dx >= DZ ? 1 : 0;
     recompute();
   });
   const end = () => {
-    if (!analog.active) return;
-    analog.active = false;
-    analog.value = 0;
-    slider.classList.remove("show");
+    if (!stick.active) return;
+    stick.active = false;
+    stick.value = 0;
+    setKnob(0, 0);
+    base.classList.remove("show");
     recompute();
   };
   surface.addEventListener("pointerup", end);
@@ -161,7 +171,7 @@ export function initInput(canvas) {
   if (_bound) return;
   _bound = true;
   bindPointer(canvas);
-  bindSteerSlider();
+  bindJoystick();
 }
 
 export function getInput() {

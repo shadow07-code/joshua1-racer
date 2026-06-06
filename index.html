@@ -136,45 +136,41 @@
       border-width: 3px;
       border-radius: 7px;
     }
-    /* One-thumb steering — a FLOATING horizontal slider. The container is an
-       invisible touch surface over the lower band; touching anywhere in it makes
-       the slider pop up under the thumb, and sliding left/right steers (analog). */
+    /* One-thumb steering — a FLOATING JOYSTICK. The container is an invisible
+       touch surface over the lower band; touching anywhere in it pops the
+       joystick up under the thumb. Steering is binary: push past the centre
+       deadzone and the car commits fully left or right (no analog gradient). */
     #steer-controls {
       position: fixed; left: 0; right: 0; bottom: 0; top: 45%;
       display: none; z-index: 8; touch-action: none;
       -webkit-tap-highlight-color: transparent;
     }
     #steer-controls.show { display: block; }
-    /* Floating slider track — input.js positions it at the touch point. */
-    #steer-slider {
+    /* Floating joystick base — input.js positions it under the touch point. */
+    #steer-stick {
       position: fixed; display: none;
-      width: 184px; height: 28px;
+      width: 132px; height: 132px;
       transform: translate(-50%, -50%);
-      background: rgba(15, 56, 15, 0.55);
-      border: 2px solid rgba(155, 188, 15, 0.85);
-      border-radius: 14px;
+      background: rgba(15, 56, 15, 0.45);
+      border: 3px solid rgba(155, 188, 15, 0.85);
+      border-radius: 50%;
       pointer-events: none;
-      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
     }
-    #steer-slider.show { display: block; }
-    /* Centre reference notch. */
-    #steer-slider::before {
-      content: ""; position: absolute; left: 50%; top: 6px; bottom: 6px;
-      width: 2px; margin-left: -1px; background: rgba(155, 188, 15, 0.40);
-    }
-    /* Directional arrows at the track ends. */
-    #steer-slider::after {
-      content: "\25C0          \25B6"; position: absolute; inset: 0;
+    #steer-stick.show { display: block; }
+    /* Left / right direction arrows inside the ring. */
+    #steer-stick::after {
+      content: "\25C0        \25B6"; position: absolute; inset: 0;
       display: flex; align-items: center; justify-content: space-between;
-      padding: 0 9px; color: rgba(155, 188, 15, 0.55);
-      font-size: 12px; line-height: 1; letter-spacing: 0;
+      padding: 0 14px; color: rgba(155, 188, 15, 0.50);
+      font-size: 15px; line-height: 1; letter-spacing: 0;
     }
     #steer-knob {
       position: absolute; left: 50%; top: 50%;
-      width: 34px; height: 34px;
+      width: 56px; height: 56px;
       transform: translate(-50%, -50%);
       background: rgba(155, 188, 15, 0.92);
-      border: 2px solid #0f380f;
+      border: 3px solid #0f380f;
       border-radius: 50%;
       pointer-events: none;
       z-index: 1;
@@ -360,9 +356,9 @@
     <button id="btn-sfx" title="Sound effects on/off" aria-label="Toggle sound effects">🔊</button>
   </div>
 
-  <!-- One-thumb floating steering slider (shown during gameplay; wired by input.js) -->
+  <!-- One-thumb floating steering joystick (shown during gameplay; wired by input.js) -->
   <div id="steer-controls" aria-hidden="true">
-    <div id="steer-slider"><div id="steer-knob"></div></div>
+    <div id="steer-stick"><div id="steer-knob"></div></div>
   </div>
 
   <button id="btn-install" aria-label="Install game for offline play">📲 ADD TO HOME SCREEN</button>
