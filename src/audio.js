@@ -28,7 +28,13 @@ let bpmMultiplier = 1.0;     // 0.9 .. 1.1, set externally per speed
 let intensity = 0;
 let _musicTrack = 0;         // 0 = off, 1 = ambient, 2 = original chiptune
 export function getMusicTrack() { return _musicTrack; }
-export function setMusicTrack(n) { _musicTrack = n; }
+export function setMusicTrack(n) {
+  _musicTrack = n;
+  // Push the per-track volume onto the live music channel so switching tracks
+  // also rebalances the mix (ambient louder, chiptune quieter).
+  musicVol = (n === 1) ? MUSIC_VOL_AMBIENT : MUSIC_VOL_CHIPTUNE;
+  if (musicGain && musicEnabled) musicGain.gain.value = musicVol;
+}
 
 export function isMuted() { return muted; }
 export function setMuted(v) { muted = !!v; if (masterGain) masterGain.gain.value = muted ? 0 : 0.6; }
@@ -38,8 +44,13 @@ export function toggleMute() { setMuted(!muted); return muted; }
 // Rebalanced mix: music sits lower so the car/engine and effects come forward.
 // Two separate enable flags drive the two toolbar toggles.
 let musicEnabled = true, sfxEnabled = true;
-let musicVol = 0.28;   // was 0.42 — quieter so the car is heard over the track
-let sfxVol   = 1.10;   // was 0.85 — louder engine + effects (the "car sound")
+// Per-track music volume — Track 1 (ambient) sits forward to match the engine,
+// Track 2 (chiptune) sits lower so it doesn't dominate. setMusicTrack() pushes
+// the appropriate one onto musicGain so the live mix follows the user's choice.
+const MUSIC_VOL_AMBIENT = 0.52;
+const MUSIC_VOL_CHIPTUNE = 0.18;
+let musicVol = MUSIC_VOL_CHIPTUNE;   // current active volume (updated by setMusicTrack)
+let sfxVol   = 1.10;
 
 export function isMusicEnabled() { return musicEnabled; }
 export function isSfxEnabled()   { return sfxEnabled; }
@@ -68,8 +79,8 @@ export function initAudio() {
     ctx = new AC();
     masterGain = ctx.createGain(); masterGain.gain.value = muted ? 0 : 0.6;
     masterGain.connect(ctx.destination);
-    musicGain = ctx.createGain(); musicGain.gain.value = 0.42; musicGain.connect(masterGain);
-    sfxGain   = ctx.createGain(); sfxGain.gain.value = 0.85;   sfxGain.connect(masterGain);
+    musicGain = ctx.createGain(); musicGain.gain.value = musicEnabled ? musicVol : 0; musicGain.connect(masterGain);
+    sfxGain   = ctx.createGain(); sfxGain.gain.value   = sfxEnabled   ? sfxVol   : 0; sfxGain.connect(masterGain);
     inited = true;
   } catch {}
 }
@@ -447,12 +458,16 @@ let _engineRampage = false;
 
 export function startEngine() {
   if (!ctx || engineOsc) return;
+  // Smoother engine: one sawtooth (body/buzz) + one detuned TRIANGLE (warmth)
+  // instead of two saws — much less ear-fatiguing. Sub-octave square for low
+  // growl. Filter pulled down to 650 Hz with gentle Q so the high harmonics
+  // that cause the "irritating" buzz are tamed without losing engine character.
   engineOsc = ctx.createOscillator(); engineOsc.type = "sawtooth"; engineOsc.frequency.value = 70;
-  engineOsc2 = ctx.createOscillator(); engineOsc2.type = "sawtooth"; engineOsc2.frequency.value = 70; engineOsc2.detune.value = 12;
+  engineOsc2 = ctx.createOscillator(); engineOsc2.type = "triangle"; engineOsc2.frequency.value = 70; engineOsc2.detune.value = 12;
   engineOscSub = ctx.createOscillator(); engineOscSub.type = "square"; engineOscSub.frequency.value = 35;
   engineGain = ctx.createGain(); engineGain.gain.value = 0;
   engineGainSub = ctx.createGain(); engineGainSub.gain.value = 0;
-  engineFilt = ctx.createBiquadFilter(); engineFilt.type = "lowpass"; engineFilt.frequency.value = 850; engineFilt.Q.value = 1.6;
+  engineFilt = ctx.createBiquadFilter(); engineFilt.type = "lowpass"; engineFilt.frequency.value = 650; engineFilt.Q.value = 1.2;
   engineOsc.connect(engineFilt); engineOsc2.connect(engineFilt);
   engineFilt.connect(engineGain); engineGain.connect(sfxGain);
   engineOscSub.connect(engineGainSub); engineGainSub.connect(sfxGain);
@@ -477,22 +492,23 @@ export function setEngine(speed01) {
   engineOsc.frequency.setTargetAtTime(f, t, 0.05);
   engineOsc2.frequency.setTargetAtTime(f * 1.005, t, 0.05);
   engineOscSub.frequency.setTargetAtTime(f * 0.5, t, 0.05);
-  const vol = 0.035 + 0.07 * s;
-  engineGain.gain.setTargetAtTime(vol, t, 0.05);
-  engineGainSub.gain.setTargetAtTime(vol * 0.55, t, 0.05);
+  // Slightly louder sub mix vs main for a deeper, less buzzy presence.
+  const vol = 0.030 + 0.06 * s;
+  engineGain.gain.setTargetAtTime(vol, t, 0.06);
+  engineGainSub.gain.setTargetAtTime(vol * 0.70, t, 0.06);
 }
 export function setEngineRampage(on) {
   if (!engineFilt || !ctx || _engineRampage === on) return;
   _engineRampage = on;
   const t = ctx.currentTime;
   if (on) {
-    engineFilt.frequency.setTargetAtTime(2200, t, 0.08);
-    engineFilt.Q.setTargetAtTime(3.0, t, 0.08);
-    engineGain.gain.setTargetAtTime(0.16, t, 0.06);
-    engineGainSub.gain.setTargetAtTime(0.09, t, 0.06);
+    engineFilt.frequency.setTargetAtTime(1800, t, 0.08);
+    engineFilt.Q.setTargetAtTime(2.4, t, 0.08);
+    engineGain.gain.setTargetAtTime(0.14, t, 0.06);
+    engineGainSub.gain.setTargetAtTime(0.10, t, 0.06);
   } else {
-    engineFilt.frequency.setTargetAtTime(850, t, 0.15);
-    engineFilt.Q.setTargetAtTime(1.6, t, 0.15);
+    engineFilt.frequency.setTargetAtTime(650, t, 0.15);
+    engineFilt.Q.setTargetAtTime(1.2, t, 0.15);
   }
 }
 

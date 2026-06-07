@@ -35,7 +35,8 @@ import {
 } from "./hud.js";
 import { registerServiceWorker, initInstallBanner, initInstallButton, setInstallButtonVisible } from "./pwa.js";
 import {
-  initUI, setLeaderboardButtonVisible, showNameEntry, showGameOverActions,
+  initUI, setLeaderboardButtonVisible, setSoundControlsVisible,
+  showNameEntry, showGameOverActions,
   showLeaderboardPanel, renderLeaderboard,
 } from "./ui.js";
 import {
@@ -640,13 +641,13 @@ function syncOverlays() {
   const onMenu = onTitle || g.state === STATES.NAME_ENTRY || g.state === STATES.LEADERBOARD;
   setInstallButtonVisible(onTitle);
   setLeaderboardButtonVisible(onTitle);
-  // Title-screen sound controls at the bottom; toolbar at the top during gameplay.
-  soundControls.classList.toggle("show", onMenu);
+  // Sound controls live on the title screen only (positioned above TAP TO START).
+  setSoundControlsVisible(onTitle);
   refreshSoundControls();
   const playing = g.state === STATES.RACE || g.state === STATES.PAUSED || g.state === STATES.COUNTDOWN;
-  // Hide toolbar on menu screens (the bottom controls replace it); show during play.
+  // Hide toolbar on the title screen (sound controls replace it); show elsewhere.
   const toolbar = document.getElementById("toolbar");
-  toolbar.style.display = onMenu ? "none" : "";
+  toolbar.style.display = onTitle ? "none" : "";
   toolbar.classList.toggle("playing", playing);
   document.getElementById("steer-controls").classList.toggle("show", playing);
   showNameEntry(g.state === STATES.NAME_ENTRY);

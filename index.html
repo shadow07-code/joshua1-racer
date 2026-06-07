@@ -335,12 +335,15 @@
     #gameover-actions.show { display: flex; }
     #gameover-actions .btn-go, #gameover-actions .btn-ghost { flex: none; }
 
-    /* ── Title-screen sound controls (bottom of menu) ───────────────── */
+    /* ── Title-screen sound controls (above TAP TO START) ───────────── */
+    /* Matches the existing #btn-install / #btn-leaderboard button style:
+       dark-green pill with light-green border, bold spaced caps.
+       Vertical position is set dynamically by ui.js per canvas scale. */
     #sound-controls {
       position: fixed;
       left: 50%;
       transform: translateX(-50%);
-      bottom: calc(env(safe-area-inset-bottom) + 10px);
+      bottom: 60%;                     /* fallback; JS overrides */
       display: none;
       flex-direction: column;
       gap: 6px;
@@ -351,39 +354,42 @@
     .snd-row {
       display: flex;
       align-items: center;
+      justify-content: center;
       gap: 6px;
+      background: rgba(15, 56, 15, 0.85);
+      border: 2px solid var(--dmg-light);
+      border-radius: 6px;
+      padding: 6px 10px;
     }
     .snd-label {
-      font-size: 10px;
+      font: inherit;
+      font-size: 12px;
       font-weight: bold;
-      letter-spacing: 2px;
-      color: var(--dmg-light);
-      min-width: 52px;
-      text-align: right;
+      letter-spacing: 1.5px;
+      color: var(--dmg-lightest);
+      min-width: 50px;
     }
     .snd-opt {
       font: inherit;
-      font-size: 11px;
+      font-size: 12px;
       font-weight: bold;
-      letter-spacing: 1px;
-      padding: 6px 10px;
-      min-width: 36px;
+      letter-spacing: 1.5px;
+      padding: 4px 10px;
+      min-width: 34px;
       text-align: center;
       cursor: pointer;
       border-radius: 4px;
       border: 2px solid var(--dmg-dark);
       background: transparent;
       color: var(--dmg-light);
-      opacity: 0.55;
       -webkit-tap-highlight-color: transparent;
     }
     .snd-opt.active {
       border-color: var(--dmg-lightest);
-      background: var(--dmg-dark);
-      color: var(--dmg-lightest);
-      opacity: 1;
+      background: var(--dmg-light);
+      color: var(--dmg-darkest);
     }
-    .snd-opt:active { opacity: 1; }
+    .snd-opt:active { background: var(--dmg-lightest); color: var(--dmg-darkest); }
   </style>
 </head>
 <body>

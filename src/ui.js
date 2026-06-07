@@ -13,6 +13,7 @@ export function initUI(callbacks) {
   cb = callbacks || {};
   el = {
     btnLeaderboard: document.getElementById("btn-leaderboard"),
+    soundControls: document.getElementById("sound-controls"),
     namePanel: document.getElementById("name-entry"),
     nameInput: document.getElementById("name-input"),
     nameStart: document.getElementById("name-start"),
@@ -59,26 +60,35 @@ export function initUI(callbacks) {
   if (el.goBoard) el.goBoard.addEventListener("click", (e) => { e.stopPropagation(); cb.onGameOverLeaderboard && cb.onGameOverLeaderboard(); });
   if (el.goExit) el.goExit.addEventListener("click", (e) => { e.stopPropagation(); cb.onExit && cb.onExit(); });
 
-  // Keep the title button aligned when the viewport changes.
+  // Keep the title buttons aligned when the viewport changes.
   window.addEventListener("resize", () => {
-    if (el.btnLeaderboard && el.btnLeaderboard.classList.contains("show")) positionTitleUI();
+    if ((el.btnLeaderboard && el.btnLeaderboard.classList.contains("show")) ||
+        (el.soundControls  && el.soundControls.classList.contains("show"))) {
+      positionTitleUI();
+    }
   });
 }
 
 function toggle(node, show) { if (node) node.classList.toggle("show", !!show); }
 
-// Place the LEADERBOARD button just above the install button. The install button
-// sits 8 canvas-px above the "TAP TO START" banner (banner top = H-118); we stack
-// this one ~48 screen-px higher so the two read as a tidy vertical pair.
+// Place the title-screen buttons stacked above the "TAP TO START" banner
+// (banner top = H-118 in canvas units). From bottom to top:
+//   install  → leaderboard  → sound controls
+// All anchored relative to that same banner so they read as one vertical column.
 export function positionTitleUI() {
-  if (!el.btnLeaderboard) return;
   const scale = window.innerHeight / H;
   const installBottom = (118 + 8) * scale;
-  el.btnLeaderboard.style.bottom = (installBottom + 48) + "px";
+  if (el.btnLeaderboard) el.btnLeaderboard.style.bottom = (installBottom + 48) + "px";
+  if (el.soundControls)  el.soundControls.style.bottom  = (installBottom + 100) + "px";
 }
 
 export function setLeaderboardButtonVisible(show) {
   toggle(el.btnLeaderboard, show);
+  if (show) positionTitleUI();
+}
+
+export function setSoundControlsVisible(show) {
+  toggle(el.soundControls, show);
   if (show) positionTitleUI();
 }
 
