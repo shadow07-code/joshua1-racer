@@ -16,6 +16,7 @@ import {
   sfxMenuMove, sfxMenuSelect, sfxFinish, sfxCountdownBeep,
   startHeliSound, stopHeliSound,
   setMusicEnabled, setSfxEnabled, isMusicEnabled, isSfxEnabled, applyMix,
+  getMusicTrack, setMusicTrack,
 } from "./audio.js";
 import { drawRoad, distToY } from "./road.js";
 import { makePlayer, updatePlayer, drawPlayer, playerBox, applyCollisionLoss } from "./entities/player.js";
@@ -107,35 +108,88 @@ const g = {
   lbReturnTo: STATES.TITLE,      // where the leaderboard BACK button returns to
 };
 
-// ── Audio toggles (music / SFX) — two independent toolbar buttons. ────────────
+// ── Audio toggles ─────────────────────────────────────────────────────────────
+// Toolbar buttons (top-right during gameplay) + title-screen sound controls.
 const btnMusic = document.getElementById("btn-music");
 const btnSfx = document.getElementById("btn-sfx");
-const MUSIC_KEY = "joshua1.music", SFX_KEY = "joshua1.sfx";
+const soundControls = document.getElementById("sound-controls");
+const SFX_KEY = "joshua1.sfx";
+const TRACK_KEY = "joshua1.musicTrack";     // "0" | "1" | "2"
+
 function loadToggle(key) { try { const v = localStorage.getItem(key); return v === null ? true : v === "1"; } catch { return true; } }
 function saveToggle(key, on) { try { localStorage.setItem(key, on ? "1" : "0"); } catch {} }
+function loadTrack() { try { const v = localStorage.getItem(TRACK_KEY); return v === null ? 0 : parseInt(v) || 0; } catch { return 0; } }
+function saveTrack(n) { try { localStorage.setItem(TRACK_KEY, String(n)); } catch {} }
+
 function refreshAudioButtons() {
+  const track = getMusicTrack();
   btnMusic.textContent = "♪";
-  btnMusic.classList.toggle("off", !isMusicEnabled());
+  btnMusic.classList.toggle("off", track === 0 || !isMusicEnabled());
   btnSfx.textContent = isSfxEnabled() ? "🔊" : "🔇";
   btnSfx.classList.toggle("off", !isSfxEnabled());
 }
+function refreshSoundControls() {
+  const track = getMusicTrack();
+  const sfx = isSfxEnabled();
+  soundControls.querySelectorAll("[data-sfx]").forEach(btn => {
+    btn.classList.toggle("active", (btn.dataset.sfx === "1") === sfx);
+  });
+  soundControls.querySelectorAll("[data-music]").forEach(btn => {
+    btn.classList.toggle("active", parseInt(btn.dataset.music) === track);
+  });
+}
+
+// Toolbar: mute/unmute music during gameplay (keeps selected track).
 function toggleMusic() {
   ensureAudio();
+  if (getMusicTrack() === 0) return;       // no track selected — nothing to toggle
   const on = !isMusicEnabled();
-  setMusicEnabled(on); saveToggle(MUSIC_KEY, on); refreshAudioButtons();
+  setMusicEnabled(on);
+  applyMix();
+  refreshAudioButtons();
 }
 function toggleSfx() {
   ensureAudio();
   const on = !isSfxEnabled();
-  setSfxEnabled(on); saveToggle(SFX_KEY, on); refreshAudioButtons();
+  setSfxEnabled(on); saveToggle(SFX_KEY, on);
+  refreshAudioButtons(); refreshSoundControls();
 }
-// Restore persisted preferences before any audio context exists; applyMix() will
-// push them onto the gain nodes once initAudio() runs.
-setMusicEnabled(loadToggle(MUSIC_KEY));
+
+// Restore persisted preferences.
+const _initTrack = loadTrack();
+setMusicTrack(_initTrack);
+setMusicEnabled(_initTrack > 0);
 setSfxEnabled(loadToggle(SFX_KEY));
 refreshAudioButtons();
+refreshSoundControls();
 btnMusic.addEventListener("click", toggleMusic);
 btnSfx.addEventListener("click", toggleSfx);
+
+// ── Title-screen sound controls (bottom of main menu) ────────────────────────
+soundControls.addEventListener("click", (e) => {
+  const btn = e.target.closest(".snd-opt");
+  if (!btn) return;
+  ensureAudio();
+  if (btn.dataset.sfx !== undefined) {
+    const on = btn.dataset.sfx === "1";
+    setSfxEnabled(on); saveToggle(SFX_KEY, on);
+  }
+  if (btn.dataset.music !== undefined) {
+    const track = parseInt(btn.dataset.music);
+    setMusicTrack(track); saveTrack(track);
+    stopMusic();
+    if (track > 0) {
+      setMusicEnabled(true);
+      applyMix();
+      startMusic("city");               // live preview on the title screen
+    } else {
+      setMusicEnabled(false);
+      applyMix();
+    }
+  }
+  refreshAudioButtons();
+  refreshSoundControls();
+});
 
 function ensureAudio() { initAudio(); resumeAudio(); applyMix(); }
 function stopAllLoopingSfx() { stopEngine(); stopHeliSound(); g._heliSoundOn = false; setEngineRampage(false); }
@@ -228,6 +282,7 @@ function registerSmash() {
 }
 
 function beginCountdown() {
+  stopMusic();                 // stop any title-screen preview music
   newRaceSetup();
   g.countdownTime = 0;
   g.countdownLastBeep = -1;
@@ -582,12 +637,17 @@ function syncOverlays() {
   if (g.state === _lastUiState) return;
   _lastUiState = g.state;
   const onTitle = g.state === STATES.TITLE;
+  const onMenu = onTitle || g.state === STATES.NAME_ENTRY || g.state === STATES.LEADERBOARD;
   setInstallButtonVisible(onTitle);
   setLeaderboardButtonVisible(onTitle);
-  // Enlarge the music/SFX toggles during gameplay for easy tapping, and show the
-  // on-screen steering pads.
+  // Title-screen sound controls at the bottom; toolbar at the top during gameplay.
+  soundControls.classList.toggle("show", onMenu);
+  refreshSoundControls();
   const playing = g.state === STATES.RACE || g.state === STATES.PAUSED || g.state === STATES.COUNTDOWN;
-  document.getElementById("toolbar").classList.toggle("playing", playing);
+  // Hide toolbar on menu screens (the bottom controls replace it); show during play.
+  const toolbar = document.getElementById("toolbar");
+  toolbar.style.display = onMenu ? "none" : "";
+  toolbar.classList.toggle("playing", playing);
   document.getElementById("steer-controls").classList.toggle("show", playing);
   showNameEntry(g.state === STATES.NAME_ENTRY);
   showGameOverActions(g.state === STATES.GAME_OVER);

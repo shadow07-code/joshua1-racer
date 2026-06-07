@@ -1,6 +1,7 @@
-// Chiptune audio — 2 square + triangle + noise. NES-style 4-channel mix.
-// Music: an upbeat *Speed Racer*-vibe original chiptune. Richer arrangement
-// with verse / chorus contrast and a dynamic tempo that tracks player speed.
+// Audio — dual music tracks + F1 engine SFX.
+// Track 1 ("ambient"): minimal driving synth — keeps pace, stays out of the way.
+// Track 2 ("original"): upbeat NES-style chiptune (Speed Racer vibe).
+// Music defaults OFF; the title screen lets the player tap 1/2 to preview & pick.
 import { MUSIC } from "./config.js";
 
 // ── Note helpers ──────────────────────────────────────────────────────────────
@@ -25,6 +26,9 @@ let currentMap = "city";
 let baseBPM = MUSIC.cityBPM;
 let bpmMultiplier = 1.0;     // 0.9 .. 1.1, set externally per speed
 let intensity = 0;
+let _musicTrack = 0;         // 0 = off, 1 = ambient, 2 = original chiptune
+export function getMusicTrack() { return _musicTrack; }
+export function setMusicTrack(n) { _musicTrack = n; }
 
 export function isMuted() { return muted; }
 export function setMuted(v) { muted = !!v; if (masterGain) masterGain.gain.value = muted ? 0 : 0.6; }
@@ -75,7 +79,88 @@ export function resumeAudio() { if (ctx && ctx.state === "suspended") ctx.resume
 // the engine drone stop immediately on mobile). Pairs with resumeAudio().
 export function suspendAudio() { if (ctx && ctx.state === "running") { try { ctx.suspend(); } catch {} } }
 
-// ── Song data ─────────────────────────────────────────────────────────────────
+// ── TRACK 1: Ambient driving synth ──────────────────────────────────────────
+// Minimal, atmospheric — pulsing low sine pads, a shimmering high triangle
+// arpeggio, and a soft kick/hat groove. Stays out of the way of the engine
+// and SFX while keeping pace (tempo tracks speed like the original).
+// Johnny Quest / Tron Legacy-inspired driving mood.
+
+// Ambient pad chord progression (Cm → Ab → Eb → Bb → Fm → Db → Eb → Cm) — each
+// chord holds for one bar (16 sixteenths). Root + 5th sine drones, very quiet.
+const AMB_CHORDS = [
+  { r: ["C",3], f: ["G",3] },
+  { r: ["Ab",2], f: ["Eb",3] },
+  { r: ["Eb",3], f: ["Bb",3] },
+  { r: ["Bb",2], f: ["F",3] },
+  { r: ["F",3], f: ["C",4] },
+  { r: ["Db",3], f: ["Ab",3] },
+  { r: ["Eb",3], f: ["Bb",3] },
+  { r: ["C",3], f: ["G",3] },
+];
+// Ambient melody (triangle) — sparse, descending phrases over the pads.
+const AMB_MELODY = [
+  ["Eb",5,4],["G",5,4],["Bb",5,4],["-",0,4],
+  ["Ab",5,4],["Eb",5,4],["C",5,4],["-",0,4],
+  ["Bb",5,4],["G",5,4],["Eb",5,8],
+  ["-",0,8],["F",5,4],["Eb",5,4],
+  ["C",5,4],["Eb",5,4],["F",5,4],["-",0,4],
+  ["Db",5,4],["Eb",5,4],["Ab",4,8],
+  ["Bb",4,4],["Eb",5,4],["G",5,4],["-",0,4],
+  ["C",5,8],["-",0,4],["Eb",5,4],
+];
+
+// Synth helper: soft sine pad (for ambient drones)
+function playSine(name, oct, t, dur16, sixteenthSec, gain) {
+  if (!ctx || name === "-") return;
+  const f = noteHz(name, oct); if (!f) return;
+  const dur = dur16 * sixteenthSec;
+  const osc = ctx.createOscillator(); osc.type = "sine"; osc.frequency.value = f;
+  const g = ctx.createGain();
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(gain, t + Math.min(0.15, dur * 0.3));
+  g.gain.setValueAtTime(gain, t + dur * 0.7);
+  g.gain.linearRampToValueAtTime(0, t + dur);
+  osc.connect(g); g.connect(musicGain);
+  osc.start(t); osc.stop(t + dur + 0.02);
+}
+
+let ambMelIdx = 0, ambMelTick = 0;
+let ambChordIdx = 0, ambBarTick = 16;
+
+function scheduleAmbient(now, sixteenthSec, lookahead) {
+  while (nextTickTime < now + lookahead) {
+    const t = nextTickTime;
+
+    // Pad drone: hold each chord for a full bar
+    if (ambBarTick >= 16) {
+      ambBarTick = 0;
+      const ch = AMB_CHORDS[ambChordIdx % AMB_CHORDS.length];
+      playSine(ch.r[0], ch.r[1], t, 16, sixteenthSec, 0.10);
+      playSine(ch.f[0], ch.f[1], t, 16, sixteenthSec, 0.06);
+      ambChordIdx++;
+    }
+
+    // Melody (triangle, sparse)
+    if (ambMelTick <= 0) {
+      const ev = AMB_MELODY[ambMelIdx % AMB_MELODY.length];
+      ambMelTick = ev[2];
+      playTri(ev[0], ev[1], t, ev[2], sixteenthSec, 0.09);
+      ambMelIdx++;
+    }
+
+    // Minimal percussion: soft kick on 1 & 3, closed hat on 8ths
+    const pos = ambBarTick;
+    if (pos === 0 || pos === 8) playNoiseHit(t, 0.06, 0.10, 80);
+    if (pos % 4 === 0) playNoiseHit(t, 0.015, 0.03, 6000);
+
+    ambBarTick++;
+    ambMelTick--;
+    nextTickTime += sixteenthSec;
+  }
+}
+
+// ── TRACK 2: Original chiptune ──────────────────────────────────────────────
+// Song data ─────────────────────────────────────────────────────────────────
 // Each entry: [noteName, octave, duration16ths]. "-" = rest.
 // Two-section song (A = chorus, B = verse), 16 bars per loop.
 // 16 sixteenths per bar (4/4). Verse repeats melody an octave down for contrast.
@@ -301,18 +386,27 @@ function tickScheduler() {
   if (!ctx) return;
   const bpm = baseBPM * bpmMultiplier;
   const sixteenthSec = (60 / bpm) / 4;
-  scheduleAhead(ctx.currentTime, sixteenthSec, 0.4);
+  if (_musicTrack === 1) {
+    scheduleAmbient(ctx.currentTime, sixteenthSec, 0.4);
+  } else {
+    scheduleAhead(ctx.currentTime, sixteenthSec, 0.4);
+  }
 }
 
 export function startMusic(mapKind) {
   if (!ctx) return;
   stopMusic();
-  currentMap = mapKind;
-  baseBPM = mapKind === "jungle" ? MUSIC.jungleBPM : MUSIC.cityBPM;
+  if (_musicTrack === 0) return;           // music OFF — nothing to play
+  currentMap = mapKind || "city";
+  baseBPM = currentMap === "jungle" ? MUSIC.jungleBPM : MUSIC.cityBPM;
   bpmMultiplier = 1.0;
+  // Reset original chiptune state
   leadIdx = bassIdx = drumCursor = arpCursor = barCursor = 0;
   barTickLeft = 16;
   leadTickLeft = bassTickLeft = 0;
+  // Reset ambient state
+  ambMelIdx = ambMelTick = 0;
+  ambChordIdx = 0; ambBarTick = 16;
   nextTickTime = ctx.currentTime + 0.05;
   tickScheduler();
   musicTimer = setInterval(tickScheduler, 200);
@@ -358,7 +452,7 @@ export function startEngine() {
   engineOscSub = ctx.createOscillator(); engineOscSub.type = "square"; engineOscSub.frequency.value = 35;
   engineGain = ctx.createGain(); engineGain.gain.value = 0;
   engineGainSub = ctx.createGain(); engineGainSub.gain.value = 0;
-  engineFilt = ctx.createBiquadFilter(); engineFilt.type = "lowpass"; engineFilt.frequency.value = 1100; engineFilt.Q.value = 2.5;
+  engineFilt = ctx.createBiquadFilter(); engineFilt.type = "lowpass"; engineFilt.frequency.value = 850; engineFilt.Q.value = 1.6;
   engineOsc.connect(engineFilt); engineOsc2.connect(engineFilt);
   engineFilt.connect(engineGain); engineGain.connect(sfxGain);
   engineOscSub.connect(engineGainSub); engineGainSub.connect(sfxGain);
@@ -383,22 +477,22 @@ export function setEngine(speed01) {
   engineOsc.frequency.setTargetAtTime(f, t, 0.05);
   engineOsc2.frequency.setTargetAtTime(f * 1.005, t, 0.05);
   engineOscSub.frequency.setTargetAtTime(f * 0.5, t, 0.05);
-  const vol = 0.06 + 0.12 * s;
+  const vol = 0.035 + 0.07 * s;
   engineGain.gain.setTargetAtTime(vol, t, 0.05);
-  engineGainSub.gain.setTargetAtTime(vol * 0.5, t, 0.05);
+  engineGainSub.gain.setTargetAtTime(vol * 0.55, t, 0.05);
 }
 export function setEngineRampage(on) {
   if (!engineFilt || !ctx || _engineRampage === on) return;
   _engineRampage = on;
   const t = ctx.currentTime;
   if (on) {
-    engineFilt.frequency.setTargetAtTime(2800, t, 0.08);
-    engineFilt.Q.setTargetAtTime(4.5, t, 0.08);
-    engineGain.gain.setTargetAtTime(0.24, t, 0.06);
-    engineGainSub.gain.setTargetAtTime(0.14, t, 0.06);
+    engineFilt.frequency.setTargetAtTime(2200, t, 0.08);
+    engineFilt.Q.setTargetAtTime(3.0, t, 0.08);
+    engineGain.gain.setTargetAtTime(0.16, t, 0.06);
+    engineGainSub.gain.setTargetAtTime(0.09, t, 0.06);
   } else {
-    engineFilt.frequency.setTargetAtTime(1100, t, 0.15);
-    engineFilt.Q.setTargetAtTime(2.5, t, 0.15);
+    engineFilt.frequency.setTargetAtTime(850, t, 0.15);
+    engineFilt.Q.setTargetAtTime(1.6, t, 0.15);
   }
 }
 
