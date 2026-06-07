@@ -18,7 +18,7 @@ const HELI_OFFSCREEN_Y = -20;        // parked above the top edge (out of frame)
 const AIM_TIME = 1.1;                // reticle telegraph before a drop
 const ENTER_TIME = 1.7;              // fly-in duration
 const EXIT_TIME = 1.7;               // fly-out duration
-const RELOAD_TIME = 30;              // seconds off-screen between sorties ("reloading")
+const RELOAD_TIME = 20;              // seconds off-screen between sorties (was 30)
 const FIRST_DELAY = 3;               // first appearance after the chase engages
 const SINGLE_SORTIES = 1;            // first N sorties use one chopper, then a pair
 const SECOND_DROP_DELAY = 1.8;       // 2nd chopper drops this much later than the 1st
@@ -30,32 +30,37 @@ function leaveSpeed()   { return PHYS.maxSpeed * ((RACE.copTriggerKmh - 15) / PH
 function dropDist()     { return yToDist(HELI_HOVER_Y); }
 const clampBound = (x, b) => Math.max(-b, Math.min(b, x));
 
+const DUAL_DEAD_ZONE = 12;            // px gap in the center dual helis never cross
+
 // A chopper holds station around `homeX` and drifts left/right with a smooth,
 // slightly irregular sway (two out-of-phase sines) so a pair looks like it's
-// patrolling rather than sitting locked in place.
-function makeHeli(homeX, dropDelay, swayAmp) {
+// patrolling rather than sitting locked in place. `zoneMin`/`zoneMax` hard-limit
+// each chopper to its half of the road (dual mode) so they never crowd together.
+function makeHeli(homeX, dropDelay, swayAmp, zoneMin, zoneMax) {
   return {
     x: homeX, homeX,
     y: HELI_OFFSCREEN_Y,
-    dropDelay,            // seconds into the AIM phase before THIS chopper drops
+    dropDelay,
     aiming: false,
     dropped: false,
     lockX: 0,
-    swayAmp,                              // px of horizontal roam around homeX
+    swayAmp,
+    zoneMin, zoneMax,
     swayPhase: Math.random() * 6.28,
     swayPhase2: Math.random() * 6.28,
-    swayFreq: 0.55 + Math.random() * 0.5, // rad/s — each chopper roams at its own pace
+    swayFreq: 0.55 + Math.random() * 0.5,
     rotorPhase: Math.random() * 6,
     bobPhase: Math.random() * 6,
     beaconPhase: Math.random() * 6,
   };
 }
 
-// Smooth station-keeping target: roam left/right around homeX, clamped on-road.
+// Smooth station-keeping target: roam left/right around homeX, clamped to zone.
 function swayTargetX(h, bound) {
-  const x = h.homeX
+  let x = h.homeX
     + Math.sin(h.swayPhase) * h.swayAmp
     + Math.sin(h.swayPhase2) * h.swayAmp * 0.35;
+  x = Math.max(h.zoneMin, Math.min(h.zoneMax, x));
   return clampBound(x, bound);
 }
 
@@ -108,11 +113,17 @@ export function updateCops(sys, dt, playerZ, playerX, playerSpeed, map, cbs) {
     if (sys.phaseT <= 0) {
       const dbl = sys.sortie >= SINGLE_SORTIES;
       // Single chopper roams across the centre; a pair takes the left/right halves
-      // and patrols its own side. Drops are staggered (dropDelay).
-      sys.helis = dbl
-        ? [makeHeli(-bound * 0.5, 0, bound * 0.26),
-           makeHeli( bound * 0.5, SECOND_DROP_DELAY, bound * 0.26)]
-        : [makeHeli(0, 0, bound * 0.5)];
+      // and patrols its own side with a dead zone in the middle so they never
+      // crowd each other. Drops are staggered (dropDelay).
+      if (dbl) {
+        const half = DUAL_DEAD_ZONE / 2;
+        sys.helis = [
+          makeHeli(-bound * 0.5, 0, bound * 0.26, -bound, -half),
+          makeHeli( bound * 0.5, SECOND_DROP_DELAY, bound * 0.26, half, bound),
+        ];
+      } else {
+        sys.helis = [makeHeli(0, 0, bound * 0.5, -bound, bound)];
+      }
       sys.phase = "enter";
       sys.phaseT = ENTER_TIME;
     }
@@ -139,7 +150,7 @@ export function updateCops(sys, dt, playerZ, playerX, playerSpeed, map, cbs) {
       }
       allDropped = false;
       // Its drop window: lock onto the player's lane, telegraph, then drop there.
-      if (!h.aiming) { h.aiming = true; h.lockX = clampBound(playerX, bound); }
+      if (!h.aiming) { h.aiming = true; h.lockX = Math.max(h.zoneMin, Math.min(h.zoneMax, clampBound(playerX, bound))); }
       h.x += Math.sign(h.lockX - h.x) * Math.min(Math.abs(h.lockX - h.x), 50 * dt);
       if (localT >= AIM_TIME) {
         sys.barrels.push({ x: h.lockX, z: playerZ + dropDist(), flame: Math.random() * 6.28, hit: false });

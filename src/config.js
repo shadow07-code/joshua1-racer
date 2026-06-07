@@ -110,7 +110,7 @@ export const RACE = {
   // adds to the combo). When it ends, the road ahead is kept clear for a moment
   // so the player isn't instantly slammed coming out of the boost.
   rampageDuration: 7,      // seconds of nitrous smashing
-  rampageClearTime: 3,     // seconds of clear road after rampage ends
+  rampageClearTime: 1,     // seconds of clear road after rampage ends (instant shockwave, not long empty stretch)
   rampageClearDist: 120,   // metres of road ahead kept empty during the grace
 };
 

@@ -10,10 +10,11 @@ import { initInput, getInput, consumePress, consumeAnyPress } from "./input.js";
 import {
   initAudio, resumeAudio, suspendAudio, startMusic, stopMusic, setMusicIntensity, setMusicTempoFactor,
   playFlourish,
-  startEngine, setEngine, stopEngine,
+  startEngine, setEngine, stopEngine, setEngineRampage,
   sfxAccelAccent, sfxBrake, sfxPickup, sfxCrash, sfxBump, sfxBarrelDrop, sfxCombo,
-  sfxShieldUp, sfxShieldHit,
+  sfxShieldUp, sfxShieldHit, sfxShockwave,
   sfxMenuMove, sfxMenuSelect, sfxFinish, sfxCountdownBeep,
+  startHeliSound, stopHeliSound,
   setMusicEnabled, setSfxEnabled, isMusicEnabled, isSfxEnabled, applyMix,
 } from "./audio.js";
 import { drawRoad, distToY } from "./road.js";
@@ -137,6 +138,7 @@ btnMusic.addEventListener("click", toggleMusic);
 btnSfx.addEventListener("click", toggleSfx);
 
 function ensureAudio() { initAudio(); resumeAudio(); applyMix(); }
+function stopAllLoopingSfx() { stopEngine(); stopHeliSound(); g._heliSoundOn = false; setEngineRampage(false); }
 
 // Pause/resume helpers — pausing silences music + engine (and suspends the audio
 // context) so sound stops IMMEDIATELY, even mid-note. Resuming restarts both.
@@ -145,7 +147,7 @@ function pauseGame() {
   g.prevState = g.state;
   g.state = STATES.PAUSED;
   stopMusic();
-  stopEngine();
+  stopAllLoopingSfx();
   suspendAudio();
 }
 function resumeGame() {
@@ -163,7 +165,7 @@ function resumeGame() {
 // any scheduled chiptune notes). A race pauses; the player taps to resume.
 function autoPause() {
   if (g.state === STATES.RACE) pauseGame();
-  else { stopMusic(); stopEngine(); }
+  else { stopMusic(); stopAllLoopingSfx(); }
   suspendAudio();
 }
 document.addEventListener("visibilitychange", () => {
@@ -242,7 +244,7 @@ function beginRace() {
 
 function endRace(reason) {
   stopMusic();
-  stopEngine();
+  stopAllLoopingSfx();
   g.endReason = reason;
   g.isNewHi = finalizeScore(g.scoreState);
   if (g.isNewHi) playFlourish();
@@ -382,7 +384,7 @@ function updateDifficulty() {
 }
 
 function updateCountdown(dt) {
-  if (consumePress("Escape")) { stopEngine(); g.state = STATES.TITLE; return; }
+  if (consumePress("Escape")) { stopAllLoopingSfx(); g.state = STATES.TITLE; return; }
   g.countdownTime += dt;
   const step = Math.floor(g.countdownTime);
   if (step !== g.countdownLastBeep && step <= RACE.countdownSeconds) {
@@ -397,7 +399,7 @@ function updateRace(dt) {
 
   if (consumePress("p", "P")) { pauseGame(); return; }
   if (consumePress("m", "M")) { toggleMusic(); }
-  if (consumePress("Escape")) { stopMusic(); stopEngine(); g.state = STATES.TITLE; return; }
+  if (consumePress("Escape")) { stopMusic(); stopAllLoopingSfx(); g.state = STATES.TITLE; return; }
 
   g.raceTime += dt;
 
@@ -450,9 +452,10 @@ function updateRace(dt) {
         // where the car smashes through traffic. (Doesn't re-trigger mid-rampage.)
         if (g.combo % RACE.comboRampageEvery === 0 && g.player.rampage <= 0) {
           g.player.rampage = RACE.rampageDuration;
-          g.player.boost = RACE.rampageDuration;   // nitrous overspeed for the duration
+          g.player.boost = RACE.rampageDuration;
           g.shieldMsg = "RAMPAGE!"; g.shieldMsgTimer = 1.6;
           sfxShieldUp();
+          setEngineRampage(true);
         }
       } else {
         g.scoreState.score += SCORE.nearMissBonus;
@@ -461,12 +464,19 @@ function updateRace(dt) {
     },
   }, clearDist);
 
-  // ── Rampage + post-rampage clear timers ──
+  // ── Rampage + post-rampage shockwave ──
   if (g.player.rampage > 0) {
     g.player.rampage = Math.max(0, g.player.rampage - dt);
     if (g.player.rampage === 0) {
-      // Rampage just ended: open a clear corridor so the player isn't instantly
-      // slammed coming out of the boost.
+      // Rampage just ended: fire a shockwave that flings ALL visible cars off the
+      // road at once, then a brief 1s grace so nothing respawns instantly.
+      setEngineRampage(false);
+      sfxShockwave();
+      for (const c of g.traffic.list) {
+        if (!c.smashed && c.z > g.player.z - 30 && c.z < g.player.z + RACE.rampageClearDist) {
+          smashCar(c, g.player.x);
+        }
+      }
       g.player.rampageClear = RACE.rampageClearTime;
       g.shieldMsg = "CLEAR!"; g.shieldMsgTimer = 0.9;
     }
@@ -483,6 +493,10 @@ function updateRace(dt) {
   // Police helicopter kicks in once the player crosses 150 km/h — it drops
   // flaming barrels on the road ahead (collision handled below, costs a life).
   updateCops(g.cops, dt, g.player.z, g.player.x, g.player.speed, g.map, { onDrop: sfxBarrelDrop });
+  // Helicopter rotor sound — on when choppers are on-screen, off otherwise.
+  const helisOnScreen = g.cops.active && g.cops.helis.length > 0;
+  if (helisOnScreen && !g._heliSoundOn) { startHeliSound(); g._heliSoundOn = true; }
+  else if (!helisOnScreen && g._heliSoundOn) { stopHeliSound(); g._heliSoundOn = false; }
   // Pass speed so the roadside thins out at pace (eases the high-speed dizziness).
   updateScenery(g.scenery, g.player.z, g.map, dt, SPAWN.sceneryPerMeter, speed01);
 
@@ -540,7 +554,7 @@ function updateRace(dt) {
 
 function updatePaused() {
   if (consumePress("p", "P", "Enter", " ", "Touch")) { ensureAudio(); resumeGame(); }
-  if (consumePress("Escape")) { stopMusic(); stopEngine(); g.state = STATES.TITLE; }
+  if (consumePress("Escape")) { stopMusic(); stopAllLoopingSfx(); g.state = STATES.TITLE; }
 }
 
 function updateGameOver() {

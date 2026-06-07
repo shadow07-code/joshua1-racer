@@ -344,25 +344,62 @@ export function playFlourish() {
 }
 
 // ── SFX ───────────────────────────────────────────────────────────────────────
+// Multi-oscillator F1 engine: two detuned sawtooths for a thick, raw tone
+// layered with a sub-octave square for low-end growl. During RAMPAGE the
+// filter opens up and the gain pushes harder for a rawer, angrier sound.
+let engineOsc2 = null, engineGainSub = null, engineOscSub = null;
+let engineFilt = null;
+let _engineRampage = false;
+
 export function startEngine() {
   if (!ctx || engineOsc) return;
   engineOsc = ctx.createOscillator(); engineOsc.type = "sawtooth"; engineOsc.frequency.value = 70;
+  engineOsc2 = ctx.createOscillator(); engineOsc2.type = "sawtooth"; engineOsc2.frequency.value = 70; engineOsc2.detune.value = 12;
+  engineOscSub = ctx.createOscillator(); engineOscSub.type = "square"; engineOscSub.frequency.value = 35;
   engineGain = ctx.createGain(); engineGain.gain.value = 0;
-  const filt = ctx.createBiquadFilter(); filt.type = "lowpass"; filt.frequency.value = 900;
-  engineOsc.connect(filt); filt.connect(engineGain); engineGain.connect(sfxGain);
-  engineOsc.start();
+  engineGainSub = ctx.createGain(); engineGainSub.gain.value = 0;
+  engineFilt = ctx.createBiquadFilter(); engineFilt.type = "lowpass"; engineFilt.frequency.value = 1100; engineFilt.Q.value = 2.5;
+  engineOsc.connect(engineFilt); engineOsc2.connect(engineFilt);
+  engineFilt.connect(engineGain); engineGain.connect(sfxGain);
+  engineOscSub.connect(engineGainSub); engineGainSub.connect(sfxGain);
+  engineOsc.start(); engineOsc2.start(); engineOscSub.start();
+  _engineRampage = false;
 }
 export function stopEngine() {
   if (!engineOsc) return;
   try { engineOsc.stop(); } catch {}
-  engineOsc.disconnect(); engineGain.disconnect();
-  engineOsc = null; engineGain = null;
+  try { engineOsc2.stop(); } catch {}
+  try { engineOscSub.stop(); } catch {}
+  engineOsc.disconnect(); engineOsc2.disconnect(); engineOscSub.disconnect();
+  engineGain.disconnect(); engineGainSub.disconnect(); engineFilt.disconnect();
+  engineOsc = engineOsc2 = engineOscSub = null;
+  engineGain = engineGainSub = engineFilt = null;
 }
 export function setEngine(speed01) {
   if (!engineOsc || !ctx) return;
-  const f = 55 + 240 * Math.max(0, Math.min(1, speed01));
-  engineOsc.frequency.setTargetAtTime(f, ctx.currentTime, 0.05);
-  engineGain.gain.setTargetAtTime(0.05 + 0.10 * speed01, ctx.currentTime, 0.05);
+  const s = Math.max(0, Math.min(1, speed01));
+  const t = ctx.currentTime;
+  const f = 55 + 240 * s;
+  engineOsc.frequency.setTargetAtTime(f, t, 0.05);
+  engineOsc2.frequency.setTargetAtTime(f * 1.005, t, 0.05);
+  engineOscSub.frequency.setTargetAtTime(f * 0.5, t, 0.05);
+  const vol = 0.06 + 0.12 * s;
+  engineGain.gain.setTargetAtTime(vol, t, 0.05);
+  engineGainSub.gain.setTargetAtTime(vol * 0.5, t, 0.05);
+}
+export function setEngineRampage(on) {
+  if (!engineFilt || !ctx || _engineRampage === on) return;
+  _engineRampage = on;
+  const t = ctx.currentTime;
+  if (on) {
+    engineFilt.frequency.setTargetAtTime(2800, t, 0.08);
+    engineFilt.Q.setTargetAtTime(4.5, t, 0.08);
+    engineGain.gain.setTargetAtTime(0.24, t, 0.06);
+    engineGainSub.gain.setTargetAtTime(0.14, t, 0.06);
+  } else {
+    engineFilt.frequency.setTargetAtTime(1100, t, 0.15);
+    engineFilt.Q.setTargetAtTime(2.5, t, 0.15);
+  }
 }
 
 export function sfxAccelAccent() {
@@ -571,6 +608,51 @@ export function sfxCountdownBeep(high = false) {
   g.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
   o.connect(g); g.connect(sfxGain);
   o.start(t); o.stop(t + 0.2);
+}
+
+// ── Helicopter rotor sound — continuous while choppers are on-screen ─────────
+let heliSrc = null, heliGain = null, heliLfo = null, heliLfoGain = null;
+
+export function startHeliSound() {
+  if (!ctx || heliSrc) return;
+  heliSrc = ctx.createBufferSource(); heliSrc.buffer = getNoiseBuf(); heliSrc.loop = true;
+  const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 420; bp.Q.value = 3;
+  heliGain = ctx.createGain(); heliGain.gain.value = 0;
+  // Amplitude LFO gives the chopping rhythm
+  heliLfo = ctx.createOscillator(); heliLfo.type = "square"; heliLfo.frequency.value = 18;
+  heliLfoGain = ctx.createGain(); heliLfoGain.gain.value = 0.09;
+  heliSrc.connect(bp); bp.connect(heliGain);
+  heliLfo.connect(heliLfoGain); heliLfoGain.connect(heliGain.gain);
+  heliGain.connect(sfxGain);
+  heliSrc.start(); heliLfo.start();
+  heliGain.gain.setTargetAtTime(0.08, ctx.currentTime, 0.3);
+}
+export function stopHeliSound() {
+  if (!heliSrc) return;
+  try { heliSrc.stop(); } catch {}
+  try { heliLfo.stop(); } catch {}
+  heliSrc.disconnect(); heliGain.disconnect(); heliLfo.disconnect(); heliLfoGain.disconnect();
+  heliSrc = heliGain = heliLfo = heliLfoGain = null;
+}
+
+// Post-rampage shockwave — a deep concussive boom + high woosh.
+export function sfxShockwave() {
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  const o = ctx.createOscillator(); o.type = "sine";
+  o.frequency.setValueAtTime(80, t);
+  o.frequency.exponentialRampToValueAtTime(25, t + 0.35);
+  const g = ctx.createGain(); g.gain.value = 0;
+  g.gain.linearRampToValueAtTime(0.30, t + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.40);
+  o.connect(g); g.connect(sfxGain);
+  o.start(t); o.stop(t + 0.42);
+  const src = ctx.createBufferSource(); src.buffer = getNoiseBuf();
+  const filt = ctx.createBiquadFilter(); filt.type = "bandpass"; filt.frequency.value = 600; filt.Q.value = 0.8;
+  const ng = ctx.createGain(); ng.gain.value = 0.18;
+  ng.gain.exponentialRampToValueAtTime(0.001, t + 0.30);
+  src.connect(filt); filt.connect(ng); ng.connect(sfxGain);
+  src.start(t); src.stop(t + 0.35);
 }
 
 // Compatibility no-ops (other modules may still call these).
