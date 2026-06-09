@@ -90,34 +90,39 @@ export function resumeAudio() { if (ctx && ctx.state === "suspended") ctx.resume
 // the engine drone stop immediately on mobile). Pairs with resumeAudio().
 export function suspendAudio() { if (ctx && ctx.state === "running") { try { ctx.suspend(); } catch {} } }
 
-// ── TRACK 1: Ambient driving synth ──────────────────────────────────────────
-// Minimal, atmospheric — pulsing low sine pads, a shimmering high triangle
-// arpeggio, and a soft kick/hat groove. Stays out of the way of the engine
-// and SFX while keeping pace (tempo tracks speed like the original).
-// Johnny Quest / Tron Legacy-inspired driving mood.
+// ── TRACK 1: Ambient driving score ───────────────────────────────────────────
+// Motivating, adventurous — a pulsing 8th-note bass ostinato that never stops
+// pushing forward, warm pad drones, and a heroic minor-key melody riding on
+// top. Light four-on-the-floor groove. Anthemic Em → C → G → D progression
+// (the classic "keep going" axis) so it lifts without ever getting busy or
+// fighting the engine/SFX. Tempo tracks player speed like the original.
 
-// Ambient pad chord progression (Cm → Ab → Eb → Bb → Fm → Db → Eb → Cm) — each
-// chord holds for one bar (16 sixteenths). Root + 5th sine drones, very quiet.
-const AMB_CHORDS = [
-  { r: ["C",3], f: ["G",3] },
-  { r: ["Ab",2], f: ["Eb",3] },
-  { r: ["Eb",3], f: ["Bb",3] },
-  { r: ["Bb",2], f: ["F",3] },
-  { r: ["F",3], f: ["C",4] },
-  { r: ["Db",3], f: ["Ab",3] },
-  { r: ["Eb",3], f: ["Bb",3] },
-  { r: ["C",3], f: ["G",3] },
-];
-// Ambient melody (triangle) — sparse, descending phrases over the pads.
+// One chord per bar, 8-bar loop.
+const AMB_PROG  = ["E", "C", "G", "D", "E", "C", "D", "E"];
+const AMB_FIFTH = { E: "B", C: "G", G: "D", D: "A" };
+// Driving bass ostinato: 8 eighth-notes per bar on the chord root; the octave
+// kicks UP on beats 2 and 4 for a gallop that keeps the pulse alive.
+const AMB_BASS_OCT_UP = new Set([4, 12]);          // sixteenth positions
+
+// Heroic lead melody (triangle, octave 5) — one phrase per bar, 8 bars,
+// rises through the first half and resolves home in the second.
 const AMB_MELODY = [
-  ["Eb",5,4],["G",5,4],["Bb",5,4],["-",0,4],
-  ["Ab",5,4],["Eb",5,4],["C",5,4],["-",0,4],
-  ["Bb",5,4],["G",5,4],["Eb",5,8],
-  ["-",0,8],["F",5,4],["Eb",5,4],
-  ["C",5,4],["Eb",5,4],["F",5,4],["-",0,4],
-  ["Db",5,4],["Eb",5,4],["Ab",4,8],
-  ["Bb",4,4],["Eb",5,4],["G",5,4],["-",0,4],
-  ["C",5,8],["-",0,4],["Eb",5,4],
+  // Bar 1 (Em) — opening call
+  ["E",5,4],["G",5,2],["A",5,2],["B",5,6],["-",0,2],
+  // Bar 2 (C) — answer, reaching up
+  ["G",5,4],["A",5,2],["B",5,2],["C",6,6],["B",5,2],
+  // Bar 3 (G) — settle
+  ["B",5,4],["A",5,2],["G",5,2],["D",5,8],
+  // Bar 4 (D) — push forward
+  ["F#",5,4],["A",5,2],["G",5,2],["F#",5,4],["D",5,4],
+  // Bar 5 (Em) — restate with drive
+  ["E",5,2],["-",0,2],["E",5,2],["G",5,2],["B",5,4],["A",5,4],
+  // Bar 6 (C) — climb to the peak
+  ["G",5,4],["A",5,2],["B",5,2],["C",6,8],
+  // Bar 7 (D) — turn for home
+  ["A",5,4],["F#",5,2],["D",5,2],["F#",5,4],["A",5,4],
+  // Bar 8 (Em) — resolve
+  ["B",5,6],["G",5,2],["E",5,8],
 ];
 
 // Synth helper: soft sine pad (for ambient drones)
@@ -142,27 +147,35 @@ function scheduleAmbient(now, sixteenthSec, lookahead) {
   while (nextTickTime < now + lookahead) {
     const t = nextTickTime;
 
-    // Pad drone: hold each chord for a full bar
+    // Bar boundary: advance the chord, lay the pad drone (root + 5th sines).
     if (ambBarTick >= 16) {
       ambBarTick = 0;
-      const ch = AMB_CHORDS[ambChordIdx % AMB_CHORDS.length];
-      playSine(ch.r[0], ch.r[1], t, 16, sixteenthSec, 0.10);
-      playSine(ch.f[0], ch.f[1], t, 16, sixteenthSec, 0.06);
+      const root = AMB_PROG[ambChordIdx % AMB_PROG.length];
+      playSine(root, 3, t, 16, sixteenthSec, 0.09);
+      playSine(AMB_FIFTH[root], 3, t, 16, sixteenthSec, 0.05);
       ambChordIdx++;
     }
+    const pos = ambBarTick;
+    const root = AMB_PROG[(ambChordIdx - 1 + AMB_PROG.length) % AMB_PROG.length];
 
-    // Melody (triangle, sparse)
+    // Driving bass ostinato — 8th-note triangle pulse on the chord root, with
+    // octave-up kicks on beats 2 & 4. This is the "keeps you going" engine.
+    if (pos % 2 === 0) {
+      playTri(root, AMB_BASS_OCT_UP.has(pos) ? 3 : 2, t, 2, sixteenthSec, 0.16);
+    }
+
+    // Heroic lead (triangle)
     if (ambMelTick <= 0) {
       const ev = AMB_MELODY[ambMelIdx % AMB_MELODY.length];
       ambMelTick = ev[2];
-      playTri(ev[0], ev[1], t, ev[2], sixteenthSec, 0.09);
+      playTri(ev[0], ev[1], t, ev[2], sixteenthSec, 0.11);
       ambMelIdx++;
     }
 
-    // Minimal percussion: soft kick on 1 & 3, closed hat on 8ths
-    const pos = ambBarTick;
-    if (pos === 0 || pos === 8) playNoiseHit(t, 0.06, 0.10, 80);
-    if (pos % 4 === 0) playNoiseHit(t, 0.015, 0.03, 6000);
+    // Groove: light four-on-the-floor kick, soft snare backbeat, hat 8ths.
+    if (pos % 4 === 0) playNoiseHit(t, 0.06, 0.11, 85);            // kick 1-2-3-4
+    if (pos === 4 || pos === 12) playNoiseHit(t, 0.05, 0.06, 2000); // soft snare
+    if (pos % 2 === 0) playNoiseHit(t, 0.012, 0.025, 6500);         // hats
 
     ambBarTick++;
     ambMelTick--;
@@ -458,16 +471,17 @@ let _engineRampage = false;
 
 export function startEngine() {
   if (!ctx || engineOsc) return;
-  // Smoother engine: one sawtooth (body/buzz) + one detuned TRIANGLE (warmth)
-  // instead of two saws — much less ear-fatiguing. Sub-octave square for low
-  // growl. Filter pulled down to 650 Hz with gentle Q so the high harmonics
-  // that cause the "irritating" buzz are tamed without losing engine character.
-  engineOsc = ctx.createOscillator(); engineOsc.type = "sawtooth"; engineOsc.frequency.value = 70;
-  engineOsc2 = ctx.createOscillator(); engineOsc2.type = "triangle"; engineOsc2.frequency.value = 70; engineOsc2.detune.value = 12;
-  engineOscSub = ctx.createOscillator(); engineOscSub.type = "square"; engineOscSub.frequency.value = 35;
+  // F1 engine: two detuned sawtooths (rasp) + sub-octave square (growl).
+  // The whole character is speed-tracked in setEngine(): at standstill the
+  // pitch sits at ~38 Hz behind a nearly-closed filter (a low RUMBLE), and
+  // both pitch and filter open progressively with speed so the high-RPM
+  // scream is reserved for actual top speed instead of arriving early.
+  engineOsc = ctx.createOscillator(); engineOsc.type = "sawtooth"; engineOsc.frequency.value = 38;
+  engineOsc2 = ctx.createOscillator(); engineOsc2.type = "sawtooth"; engineOsc2.frequency.value = 38; engineOsc2.detune.value = 12;
+  engineOscSub = ctx.createOscillator(); engineOscSub.type = "square"; engineOscSub.frequency.value = 19;
   engineGain = ctx.createGain(); engineGain.gain.value = 0;
   engineGainSub = ctx.createGain(); engineGainSub.gain.value = 0;
-  engineFilt = ctx.createBiquadFilter(); engineFilt.type = "lowpass"; engineFilt.frequency.value = 650; engineFilt.Q.value = 1.2;
+  engineFilt = ctx.createBiquadFilter(); engineFilt.type = "lowpass"; engineFilt.frequency.value = 320; engineFilt.Q.value = 1.4;
   engineOsc.connect(engineFilt); engineOsc2.connect(engineFilt);
   engineFilt.connect(engineGain); engineGain.connect(sfxGain);
   engineOscSub.connect(engineGainSub); engineGainSub.connect(sfxGain);
@@ -488,12 +502,19 @@ export function setEngine(speed01) {
   if (!engineOsc || !ctx) return;
   const s = Math.max(0, Math.min(1, speed01));
   const t = ctx.currentTime;
-  const f = 55 + 240 * s;
-  engineOsc.frequency.setTargetAtTime(f, t, 0.05);
-  engineOsc2.frequency.setTargetAtTime(f * 1.005, t, 0.05);
-  engineOscSub.frequency.setTargetAtTime(f * 0.5, t, 0.05);
-  // Slightly louder sub mix vs main for a deeper, less buzzy presence.
-  const vol = 0.030 + 0.06 * s;
+  // Power curve keeps the RPM low through the early/mid range so there's real
+  // headroom left for the top end (a linear ramp sounded maxed-out too early).
+  const curve = Math.pow(s, 1.7);
+  const f = 38 + 300 * curve;                       // 38 Hz rumble → 338 Hz wail
+  engineOsc.frequency.setTargetAtTime(f, t, 0.06);
+  engineOsc2.frequency.setTargetAtTime(f * 1.006, t, 0.06);
+  engineOscSub.frequency.setTargetAtTime(f * 0.5, t, 0.06);
+  // Filter opens with speed: muffled low rumble at rest → bright F1 rasp at top.
+  // (During rampage the filter is owned by setEngineRampage — don't fight it.)
+  if (!_engineRampage) {
+    engineFilt.frequency.setTargetAtTime(320 + 1900 * curve, t, 0.08);
+  }
+  const vol = 0.030 + 0.055 * curve;
   engineGain.gain.setTargetAtTime(vol, t, 0.06);
   engineGainSub.gain.setTargetAtTime(vol * 0.70, t, 0.06);
 }
@@ -502,13 +523,13 @@ export function setEngineRampage(on) {
   _engineRampage = on;
   const t = ctx.currentTime;
   if (on) {
-    engineFilt.frequency.setTargetAtTime(1800, t, 0.08);
-    engineFilt.Q.setTargetAtTime(2.4, t, 0.08);
+    engineFilt.frequency.setTargetAtTime(2600, t, 0.08);
+    engineFilt.Q.setTargetAtTime(2.6, t, 0.08);
     engineGain.gain.setTargetAtTime(0.14, t, 0.06);
     engineGainSub.gain.setTargetAtTime(0.10, t, 0.06);
   } else {
-    engineFilt.frequency.setTargetAtTime(650, t, 0.15);
-    engineFilt.Q.setTargetAtTime(1.2, t, 0.15);
+    // Hand the filter back to setEngine (it re-tracks speed on the next frame).
+    engineFilt.Q.setTargetAtTime(1.4, t, 0.15);
   }
 }
 

@@ -101,17 +101,20 @@ export const RACE = {
   copTopSpeedFrac: 0.92,    // cops max out at 92% of player's max speed
   copRamSlowdown: 0.35,     // multiplier on player speed when a cop rams from behind
   copSpawnGapZ: 30,         // initial distance behind the player
-  // Near-miss COMBO: each close shave (at 150+ km/h) bumps the multiplier; it
-  // resets if you go this many seconds without another. Skilful weaving = big
-  // score, and every `comboRampageEvery` steps triggers NITROUS RAMPAGE.
+  // Near-miss rewards, two tiers:
+  //   below comboKmh — every close shave pays a flat, discreet bonus (no combo);
+  //   at comboKmh+   — NEAR MISS COMBO territory: each shave bumps the
+  //   multiplier, resetting after comboWindow seconds without another. Every
+  //   `comboRampageEvery` steps triggers NITROUS RAMPAGE.
+  comboKmh: 100,
   comboWindow: 2.8,
   comboRampageEvery: 8,
   // RAMPAGE: a nitrous boost where the car smashes through traffic (each smash
-  // adds to the combo). When it ends, the road ahead is kept clear for a moment
-  // so the player isn't instantly slammed coming out of the boost.
+  // adds to the combo). When it ends, an instantaneous shockwave from the car
+  // kicks out just the next 2 vehicles ahead — room to maneuver, no long clear.
   rampageDuration: 7,      // seconds of nitrous smashing
-  rampageClearTime: 1,     // seconds of clear road after rampage ends (instant shockwave, not long empty stretch)
-  rampageClearDist: 120,   // metres of road ahead kept empty during the grace
+  rampageClearTime: 0,     // no clear-road grace — the exit shockwave is instantaneous
+  rampageClearDist: 120,   // search range for the exit shockwave (next 2 cars within this)
 };
 
 // Spawn rates and traffic-row spacing.

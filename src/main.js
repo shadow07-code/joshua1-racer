@@ -32,6 +32,7 @@ import {
 import {
   drawHud, drawTitleScreen, drawMapSelect, drawDifficultySelect,
   drawGameOver, drawPaused, drawCountdown, drawTutorialOverlay, drawSteerHints, drawCombo, drawShieldMsg,
+  drawNearMiss,
 } from "./hud.js";
 import { registerServiceWorker, initInstallBanner, initInstallButton, setInstallButtonVisible } from "./pwa.js";
 import {
@@ -100,6 +101,7 @@ const g = {
   comboTimer: 0,        // seconds left before the combo lapses
   comboFlash: 0,        // brief screen-edge flash on each combo step
   comboBest: 0,         // best combo this run (for the game-over stats)
+  nearMissTimer: 0,     // discreet sub-combo "NEAR MISS" flash timer
   shieldMsg: "",        // transient "SHIELD!" / "SAVED!" popup text
   shieldMsgTimer: 0,
   countdownTime: 0,
@@ -256,6 +258,7 @@ function newRaceSetup() {
   g.comboTimer = 0;
   g.comboFlash = 0;
   g.comboBest = 0;
+  g.nearMissTimer = 0;
   g.shieldMsg = "";
   g.shieldMsgTimer = 0;
 }
@@ -492,12 +495,12 @@ function updateRace(dt) {
     playerX: g.player.x,
     onPassed: () => { g.scoreState.score += SCORE.passBonus * Math.max(1, g.combo); },
     onNearMiss: () => {
-      // The combo is a HIGH-SPEED thrill — it only builds at 150+ km/h (the same
-      // danger zone where the chopper engages). Below that a near-miss just pays
-      // the flat bonus. Gate lowered from 200 with the new 200 km/h top speed so
-      // combos stay reachable instead of only firing right at the ceiling.
+      // Two tiers. Below comboKmh (100): every close shave still pays a flat
+      // bonus with a discreet "NEAR MISS" flash — but no multiplier. At
+      // comboKmh+ we enter NEAR MISS COMBO territory: shaves chain into a
+      // multiplier and every few steps triggers NITROUS RAMPAGE.
       const kmh = g.player.speed / PHYS.maxSpeed * (PHYS.topSpeedKmh || 200);
-      if (kmh >= 150) {
+      if (kmh >= RACE.comboKmh) {
         g.combo += 1;
         g.comboBest = Math.max(g.comboBest, g.combo);
         g.comboTimer = RACE.comboWindow;
@@ -515,6 +518,7 @@ function updateRace(dt) {
         }
       } else {
         g.scoreState.score += SCORE.nearMissBonus;
+        g.nearMissTimer = 0.8;          // discreet flash, no combo
         sfxPickup();
       }
     },
@@ -524,16 +528,17 @@ function updateRace(dt) {
   if (g.player.rampage > 0) {
     g.player.rampage = Math.max(0, g.player.rampage - dt);
     if (g.player.rampage === 0) {
-      // Rampage just ended: fire a shockwave that flings ALL visible cars off the
-      // road at once, then a brief 1s grace so nothing respawns instantly.
+      // Rampage just ended: an instantaneous shockwave from the player's car
+      // kicks out only the NEXT TWO cars ahead — just enough room to maneuver
+      // out of the boost without an unfair instant collision. The rest of the
+      // traffic stays put (no long clear-off, no empty road).
       setEngineRampage(false);
       sfxShockwave();
-      for (const c of g.traffic.list) {
-        if (!c.smashed && c.z > g.player.z - 30 && c.z < g.player.z + RACE.rampageClearDist) {
-          smashCar(c, g.player.x);
-        }
-      }
-      g.player.rampageClear = RACE.rampageClearTime;
+      const ahead = g.traffic.list
+        .filter(c => !c.smashed && c.z > g.player.z && c.z < g.player.z + RACE.rampageClearDist)
+        .sort((a, b) => a.z - b.z)
+        .slice(0, 2);
+      for (const c of ahead) smashCar(c, g.player.x);
       g.shieldMsg = "CLEAR!"; g.shieldMsgTimer = 0.9;
     }
   }
@@ -545,6 +550,7 @@ function updateRace(dt) {
     if (g.comboTimer <= 0) g.combo = 0;
   }
   if (g.comboFlash > 0) g.comboFlash = Math.max(0, g.comboFlash - dt);
+  if (g.nearMissTimer > 0) g.nearMissTimer = Math.max(0, g.nearMissTimer - dt);
   if (g.shieldMsgTimer > 0) g.shieldMsgTimer = Math.max(0, g.shieldMsgTimer - dt);
   // Police helicopter kicks in once the player crosses 150 km/h — it drops
   // flaming barrels on the road ahead (collision handled below, costs a life).
@@ -693,6 +699,7 @@ function render() {
   if (g.state === STATES.RACE || g.state === STATES.PAUSED) {
     drawWorld();
     drawCombo(ctx, g.combo, g.comboTimer, RACE.comboWindow);
+    if (g.combo < 2) drawNearMiss(ctx, g.nearMissTimer, SCORE.nearMissBonus);
     if (g.shieldMsgTimer > 0) drawShieldMsg(ctx, g.shieldMsg);
     drawHud(ctx, {
       score: g.scoreState.score,
