@@ -338,36 +338,37 @@ export const SPR_VAN_BROWN    = SPR_SEDAN_BLACK;
 // `scale` is the draw factor. Kept at 1.0 (native pixels) so sprites stay crisp —
 // fractional scaling was what muddied the art. Collision half-sizes derive from
 // w/h * scale, so the smaller sprites also have smaller hitboxes.
-// Each skin also carries pre-built lean variants (sprL/sprR): drawTraffic picks
-// one by the car's lateral drift, so drifting cars visibly nose toward where
-// they're going — you can READ which cars are tracking across the road.
+// Each skin carries lean variants (sprL/sprR — used for the smashed-car skid
+// look) and `tailRow`, the sprite row of its taillights: the turn-signal
+// blinker overdraws an amber corner light there when the car is about to
+// merge or actively drifting.
 const TS = 1.0;
-function mkSkin(spr, w, h, speedMul, leanRows = [0, 1, 2]) {
+function mkSkin(spr, w, h, speedMul, tailRow, leanRows = [0, 1, 2]) {
   return {
-    spr, w, h, scale: TS, speedMul,
+    spr, w, h, scale: TS, speedMul, tailRow,
     sprL: leanRows.length ? leanSprite(spr, leanRows, -1) : spr,
     sprR: leanRows.length ? leanSprite(spr, leanRows, +1) : spr,
   };
 }
 export const TRAFFIC_SKINS = [
   // Sedans (5 colours + taxi) — small + nippy
-  mkSkin(SPR_SEDAN_SILVER, 9, 14, 0.30),
-  mkSkin(SPR_SEDAN_BLUE,   9, 14, 0.30),
-  mkSkin(SPR_SEDAN_RED,    9, 14, 0.32),
-  mkSkin(SPR_SEDAN_BLACK,  9, 14, 0.28),
-  mkSkin(SPR_SEDAN_WHITE,  9, 14, 0.30),
-  mkSkin(SPR_TAXI_CAB,     9, 14, 0.32),
+  mkSkin(SPR_SEDAN_SILVER, 9, 14, 0.30, 10),
+  mkSkin(SPR_SEDAN_BLUE,   9, 14, 0.30, 10),
+  mkSkin(SPR_SEDAN_RED,    9, 14, 0.32, 10),
+  mkSkin(SPR_SEDAN_BLACK,  9, 14, 0.28, 10),
+  mkSkin(SPR_SEDAN_WHITE,  9, 14, 0.30, 10),
+  mkSkin(SPR_TAXI_CAB,     9, 14, 0.32, 10),
   // SUVs (3 colours) — a touch taller, slower
-  mkSkin(SPR_SUV_WHITE,    9, 16, 0.24),
-  mkSkin(SPR_SUV_BLACK,    9, 16, 0.22),
-  mkSkin(SPR_SUV_BLUE,     9, 16, 0.24),
-  // Trucks (3 colours) — long box trucks, big + slow (only the cab leans)
-  mkSkin(SPR_TRUCK_BLUE,   9, 18, 0.18),
-  mkSkin(SPR_TRUCK_WHITE,  9, 18, 0.18),
-  mkSkin(SPR_TRUCK_ORANGE, 9, 18, 0.20),
+  mkSkin(SPR_SUV_WHITE,    9, 16, 0.24, 11),
+  mkSkin(SPR_SUV_BLACK,    9, 16, 0.22, 11),
+  mkSkin(SPR_SUV_BLUE,     9, 16, 0.24, 11),
+  // Trucks (3 colours) — long box trucks, big + slow
+  mkSkin(SPR_TRUCK_BLUE,   9, 18, 0.18, 15),
+  mkSkin(SPR_TRUCK_WHITE,  9, 18, 0.18, 15),
+  mkSkin(SPR_TRUCK_ORANGE, 9, 18, 0.20, 15),
   // Buses (2 colours) — biggest + slowest; too long to lean visibly
-  mkSkin(SPR_BUS_WHITE,    10, 22, 0.16, []),
-  mkSkin(SPR_BUS_ORANGE,   10, 22, 0.16, []),
+  mkSkin(SPR_BUS_WHITE,    10, 22, 0.16, 20, []),
+  mkSkin(SPR_BUS_ORANGE,   10, 22, 0.16, 20, []),
 ];
 
 // ─── Scenery ──────────────────────────────────────────────────────────────────

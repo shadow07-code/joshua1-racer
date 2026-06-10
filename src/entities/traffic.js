@@ -7,7 +7,7 @@
 // to find the gap.
 import { PHYS, RACE } from "../config.js";
 import { project } from "../road.js";
-import { drawSpriteNN, groundShadow } from "../render.js";
+import { drawSpriteNN, groundShadow, rect } from "../render.js";
 import { TRAFFIC_SKINS } from "../sprites.js";
 
 const LANES = 5;
@@ -93,9 +93,11 @@ function spawnRow(sys, map) {
     const x = laneToX(lane, map.roadHalfWidth);
     const jitter = (Math.random() - 0.5) * 4; // small z stagger inside a row
     const speed = PHYS.cruiseSpeed * (skin.speedMul + (Math.random() * 0.08 - 0.02));
-    // Lateral drift is decided AT SPAWN and stays constant, so a car is visibly
-    // tracking across the road from the moment it enters frame — no random
+    // Lateral drift is decided AT SPAWN and stays constant — no random
     // mid-screen swerves. ~60% drift left or right; the rest hold their lane.
+    // A drifting car SIGNALS like a real driver: its amber turn indicator
+    // blinks for a short lead-in (signalT) before the drift engages, and keeps
+    // blinking the whole time it's tracking across the road.
     const drift = Math.random() < 0.60 ? (Math.random() < 0.5 ? -1 : 1) : 0;
     sys.list.push({
       skin,
@@ -105,7 +107,10 @@ function spawnRow(sys, map) {
       speed,
       passed: false,
       nearMissed: false,
-      driftVx: drift * (6 + Math.random() * 5),   // px/s lateral, constant
+      driftVx: 0,                                      // engages after the lead-in
+      pendingDriftVx: drift * (6 + Math.random() * 5), // px/s lateral once engaged
+      signalT: drift ? 0.7 + Math.random() * 0.8 : 0,  // blink-before-merge lead-in (s)
+      sigPhase: Math.random() * 560,                   // unsynced blinker phase (ms)
     });
   }
 
@@ -165,10 +170,17 @@ export function updateTraffic(sys, dt, playerZ, map, cbs, clearAheadDist = 0) {
     }
     c.z += c.speed * dt;
 
-    // ── Steady lateral drift (assigned at spawn) ──
-    // The car tracks across the road at a constant rate the whole time it's on
-    // screen — predictable, readable, and moving from the moment it appears.
-    // When it reaches a road edge it straightens out. No random swerves.
+    // Signal lead-in: the indicator blinks for a moment BEFORE the drift
+    // engages (telegraphing the merge), then the car starts tracking.
+    if (c.signalT > 0) {
+      c.signalT -= dt;
+      if (c.signalT <= 0) c.driftVx = c.pendingDriftVx;
+    }
+
+    // ── Steady lateral drift (assigned at spawn, engaged after the signal) ──
+    // The car tracks across the road at a constant rate — predictable and
+    // readable. When it reaches a road edge it straightens out (and the
+    // indicator stops). No random swerves.
     if (c.driftVx) {
       c.x += c.driftVx * dt;
       const lim = halfRoad - 6;
@@ -234,19 +246,31 @@ function resolveTrafficSeparation(sys, dt) {
 
 export function drawTraffic(ctx, sys, map, playerZ, playerX) {
   const drawList = sys.list.slice().sort((a, b) => b.z - a.z);
+  const tNow = performance.now();
   for (const c of drawList) {
     const p = project(map, playerZ, playerX, c);
     if (!p) continue;
     const hx = skinHalfX(c.skin), hz = skinHalfZ(c.skin);
-    // Pick the lean variant: drifting cars nose toward their drift (so lateral
-    // movement is readable at a glance); smashed cars lean into their skid.
-    const dirX = c.smashed ? c.vx : c.driftVx;
-    const spr = dirX > 0 ? (c.skin.sprR || c.skin.spr)
-              : dirX < 0 ? (c.skin.sprL || c.skin.spr)
+    // Smashed cars lean into their skid; everyone else draws straight (lateral
+    // intent is telegraphed by the turn-signal blinker below, not a lean).
+    const spr = c.smashed && c.vx > 0 ? (c.skin.sprR || c.skin.spr)
+              : c.smashed && c.vx < 0 ? (c.skin.sprL || c.skin.spr)
               : c.skin.spr;
     // Shadow hugs the car's visible base so it looks grounded, not flying.
     groundShadow(ctx, p.sx, p.sy + hz - 2, hx);
     drawSpriteNN(ctx, spr, p.sx - hx, p.sy - hz, c.skin.scale);
+    // Turn-signal indicator — a bright amber corner light over the taillight on
+    // the side the car is merging toward, blinking through the lead-in AND the
+    // drift itself. Per-car phase offset so the road never flashes in unison.
+    // Anchored with the SAME rounding as the sprite blit so it pins exactly to
+    // the taillight + outline columns at any fractional screen position.
+    if (!c.smashed) {
+      const sig = c.signalT > 0 ? Math.sign(c.pendingDriftVx || 0) : Math.sign(c.driftVx || 0);
+      if (sig && Math.floor((tNow + (c.sigPhase || 0)) / 280) % 2 === 0) {
+        const sx0 = Math.round(p.sx - hx), sy0 = Math.round(p.sy - hz);
+        rect(ctx, sx0 + (sig > 0 ? c.skin.w - 3 : 1), sy0 + c.skin.tailRow, 2, 2, 5);
+      }
+    }
   }
 }
 
