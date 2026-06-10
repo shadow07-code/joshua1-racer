@@ -67,6 +67,30 @@ export function drawRoad(ctx, map, playerZ, speed = 0) {
       rect(ctx, (cx - dashW / 2) | 0, top, dashW, effLen, 2);   // light gray, no white/shadow
     }
   }
+
+}
+
+// ── Distance haze — a STATIC pale band fading down from the top edge (the
+// 100 m horizon). Drawn AFTER traffic/scenery so far objects emerge "out of
+// the haze", which reads as real atmospheric depth. Completely motionless
+// (screen-space, z-independent), so it adds zero optic flow — if anything it
+// softens the most distant, fastest-converging part of the view. Sized so a
+// soft fade is still visible below the race HUD strip (which covers rows 0-8).
+export function drawDistanceHaze(ctx) {
+  hazeBand(ctx, 0, 4, 13, 1.0);     // solid pale blue at the horizon
+  hazeBand(ctx, 4, 6, 13, 0.5);     // 50% checker
+  hazeBand(ctx, 10, 6, 13, 0.25);   // 25% sparse tail
+}
+
+// Screen-space haze helper: density 1 = solid, 0.5 = checkerboard,
+// 0.25 = every 4th pixel (offset per row so it doesn't form columns).
+function hazeBand(ctx, y0, rows, idx, density) {
+  if (density >= 1) { rect(ctx, 0, y0, W, rows, idx); return; }
+  const step = density >= 0.5 ? 2 : 4;
+  for (let y = y0; y < y0 + rows; y++) {
+    const off = (y * (step === 2 ? 1 : 3)) % step;   // stagger rows
+    for (let x = off; x < W; x += step) rect(ctx, x, y, 1, 1, idx);
+  }
 }
 
 export function project(map, playerZ, _x, entity) {

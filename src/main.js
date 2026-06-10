@@ -18,7 +18,7 @@ import {
   setMusicEnabled, setSfxEnabled, isMusicEnabled, isSfxEnabled, applyMix,
   getMusicTrack, setMusicTrack,
 } from "./audio.js";
-import { drawRoad, distToY } from "./road.js";
+import { drawRoad, drawDistanceHaze, distToY } from "./road.js";
 import { makePlayer, updatePlayer, drawPlayer, playerBox, applyCollisionLoss } from "./entities/player.js";
 import { makeTrafficSystem, updateTraffic, drawTraffic, checkTrafficHit, prepopulateTraffic, smashCar } from "./entities/traffic.js";
 import { makeOilSystem, drawOilSpills, checkOilHit } from "./entities/oilspills.js";
@@ -635,6 +635,7 @@ function drawWorld() {
   drawSmoke(ctx, g.map, g.player.z, g.player.x, g.player);
   drawTraffic(ctx, g.traffic, g.map, g.player.z, g.player.x);
   drawCops(ctx, g.cops, g.map, g.player.z, g.player.x);
+  drawDistanceHaze(ctx);   // atmosphere over the far field — cars emerge from it
   drawPlayer(ctx, g.player, g.map);
 }
 
@@ -698,6 +699,14 @@ function render() {
   }
   if (g.state === STATES.RACE || g.state === STATES.PAUSED) {
     drawWorld();
+    // Combo-step juice: a brief 2px gold frame around the play area (between
+    // the HUD strips). One static flash per shave — small, quick, not dizzy.
+    if (g.comboFlash > 0) {
+      rect(ctx, 0, 9, W, 2, 5);
+      rect(ctx, 0, H - 24, W, 2, 5);
+      rect(ctx, 0, 9, 2, H - 33, 5);
+      rect(ctx, W - 2, 9, 2, H - 33, 5);
+    }
     drawCombo(ctx, g.combo, g.comboTimer, RACE.comboWindow);
     if (g.combo < 2) drawNearMiss(ctx, g.nearMissTimer, SCORE.nearMissBonus);
     if (g.shieldMsgTimer > 0) drawShieldMsg(ctx, g.shieldMsg);

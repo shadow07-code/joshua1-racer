@@ -53,6 +53,11 @@ export function drawHud(ctx, {
   rect(ctx, 0, panelTop, W, 1, 1);
   rect(ctx, 0, panelTop + 1, W, 1, 2);
   rect(ctx, 0, H - 1, W, 1, 0);
+  // Subtle bevelled separators between the four cells (dark line + light edge).
+  for (const sx of [48, 88, 126]) {
+    rect(ctx, sx, panelTop + 4, 1, 15, 0);
+    rect(ctx, sx + 1, panelTop + 4, 1, 15, 3);
+  }
 
   // Cell 1 — speedometer (peaks at PHYS.topSpeedKmh, currently 200)
   drawSprite(ctx, ICN_SPEED, 3, panelTop + 7);
@@ -225,6 +230,21 @@ export function drawTitleScreen(ctx, allTimeBest) {
   // ── Logo ──
   textOutlinedCentered(ctx, "JOSHUA 1", 12, 5, 0, 3, 7);   // yellow on black, dk-red shadow
   textOutlinedCentered(ctx, "RACING",   32, 6, 0, 2, 7);   // red on black
+  // Gloss sweep — every ~3.5s a narrow angled band of white slides across the
+  // logo (the classic "premium metal" shine). Clipped redraw, so it costs
+  // nothing while idle and never touches the rest of the frame.
+  const sweep = (t % 3500) / 3500;
+  if (sweep < 0.24) {
+    const sx = -24 + (sweep / 0.24) * (W + 48);
+    ctx.save();
+    ctx.beginPath();
+    ctx.transform(1, 0, -0.35, 1, 0, 0);          // slight italic slant
+    ctx.rect(sx, 8, 9, 44);
+    ctx.clip();
+    textOutlinedCentered(ctx, "JOSHUA 1", 12, 1, 0, 3);   // white where the band passes
+    textOutlinedCentered(ctx, "RACING",   32, 1, 0, 2);
+    ctx.restore();
+  }
 
   // ── Best-score chip ──
   const chipW = 96, chipX = (W - chipW) / 2 | 0, chipY = 48;
@@ -479,10 +499,26 @@ export function drawNearMiss(ctx, timer, bonus) {
   textCentered(ctx, "NEAR MISS +" + (bonus || 100), 14, 21, 1);
 }
 
+// Deterministic full-screen starfield for the game-over backdrop (separate from
+// the title's upper-sky stars — these scatter across the whole height).
+const GO_STARS = (() => {
+  let s = 0x5eed;
+  const rnd = () => ((s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+  const out = [];
+  for (let i = 0; i < 26; i++) out.push({ x: (rnd() * W) | 0, y: (rnd() * H) | 0, ph: (rnd() * 1000) | 0 });
+  return out;
+})();
+
 export function drawGameOver(ctx, { name, score, hi, isNew, reason, passed, time, topSpeed, density, combo }) {
   const t = performance.now();
-  // Dark backdrop.
+  // Dark backdrop with a quiet twinkling starfield — ties the screen to the
+  // title's night-sky look instead of dead flat black.
   rect(ctx, 0, 0, W, H, 0);
+  for (const st of GO_STARS) {
+    const tw = (Math.floor(t / 420) + st.ph) % 6;
+    if (tw < 2) continue;                          // most stars rest dim/off
+    rect(ctx, st.x, st.y, 1, 1, tw === 2 ? 4 : 23);
+  }
 
   // The three action buttons live in an HTML bar pinned to the viewport bottom,
   // so the canvas only draws the banner + stats. Centre them within the upper
@@ -494,11 +530,13 @@ export function drawGameOver(ctx, { name, score, hi, isNew, reason, passed, time
   const avail = H * 0.62;
   const baseY = Math.max(4, ((avail - totalH) / 2) | 0);
 
-  // ── Top banner — "GAME OVER" ──
+  // ── Top banner — "GAME OVER" with premium trim ──
   const bannerY = baseY;
   rect(ctx, 0, bannerY, W, 26, 6);
   rect(ctx, 0, bannerY, W, 2, 7);
   rect(ctx, 0, bannerY + 24, W, 2, 7);
+  rect(ctx, 0, bannerY + 2, W, 1, 5);              // thin gold trim inside
+  rect(ctx, 0, bannerY + 23, W, 1, 5);
   textOutlinedCentered(ctx, reason, bannerY + 6, 1, 0, 2, 7);
 
   // ── New high-score flash (just below banner) ──
@@ -514,19 +552,23 @@ export function drawGameOver(ctx, { name, score, hi, isNew, reason, passed, time
   rect(ctx, 6, statsTop, W - 12, panelH, 4);
   rect(ctx, 6, statsTop, W - 12, 1, 1);
   rect(ctx, 6, statsTop + panelH - 1, W - 12, 1, 0);
-
-  // "RESULTS" label centred inside the panel top edge
+  // "RESULTS" header bar — its own darker strip with gold text.
+  rect(ctx, 7, statsTop + 1, W - 14, 10, 23);
   textCentered(ctx, "RESULTS", statsTop + 4, 5, 1);
 
   const col1 = 12;                  // label column left edge
   const col2 = W - 12;             // value column right edge
   let y = statsTop + 14;
+  let rowN = 0;
 
-  // Row helpers — label left, value right-aligned
+  // Row helpers — label left, value right-aligned, alternate rows shaded for
+  // an easy-to-scan ledger look.
   const statRow = (label, value, valIdx) => {
+    if (rowN % 2 === 1) rect(ctx, 7, y - 2, W - 14, rowH - 1, 23);
     text(ctx, label, col1, y, 13);
     textRight(ctx, value, col2, y, valIdx);
     y += rowH;
+    rowN++;
   };
 
   statRow("NAME",      (name || "AAA").slice(0, 10),         5);
@@ -554,6 +596,9 @@ export function drawShieldMsg(ctx, msg) {
 
 export function drawPaused(ctx) {
   const cy = (H / 2) | 0;
+  // Dim the frozen world to half brightness (fine 8-bit checker — static, calm)
+  // so the pause panel pops and the screen clearly reads as "not live".
+  ditherRect(ctx, 0, 0, W, H, 0, 0, 1);
   rect(ctx, 16, cy - 24, W - 32, 48, 0);
   rect(ctx, 16, cy - 24, W - 32, 2, 5);
   rect(ctx, 16, cy + 22, W - 32, 2, 5);

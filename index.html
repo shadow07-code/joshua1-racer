@@ -63,6 +63,27 @@
          aspect ever drifts (e.g. on rotate). */
       object-fit: contain;
     }
+    /* ── Premium screen treatment ──────────────────────────────────────
+       A static vignette + ultra-faint scanlines over everything. Both are
+       completely motionless, so they add depth and a CRT-arcade finish
+       WITHOUT adding any optic flow (the vignette actually softens the
+       fast-moving screen edges — it helps the high-speed comfort, not
+       hurts it). pointer-events:none keeps all input passing through. */
+    #fx-overlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 20;
+      background: radial-gradient(ellipse at center,
+                  transparent 52%, rgba(0, 0, 0, 0.22) 100%);
+    }
+    #fx-overlay::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: repeating-linear-gradient(to bottom,
+                  rgba(0, 0, 0, 0.045) 0 1px, transparent 1px 3px);
+    }
     /* PWA install banner */
     #install-banner {
       position: fixed;
@@ -187,7 +208,11 @@
       -webkit-tap-highlight-color: transparent;
     }
     #btn-install.show { display: inline-flex; }
-    #btn-install:active { background: rgba(139, 172, 15, 0.9); color: #0f380f; }
+    #btn-install:active {
+      background: rgba(139, 172, 15, 0.9); color: #0f380f;
+      transform: translateX(-50%) translateY(2px);
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+    }
 
     /* Title LEADERBOARD button — stacked just above the install button.
        Vertical position is set by ui.js per canvas scale. */
@@ -215,7 +240,22 @@
       -webkit-tap-highlight-color: transparent;
     }
     #btn-leaderboard.show { display: inline-flex; }
-    #btn-leaderboard:active { background: rgba(139, 172, 15, 0.9); color: #0f380f; }
+    #btn-leaderboard:active {
+      background: rgba(139, 172, 15, 0.9); color: #0f380f;
+      transform: translateX(-50%) translateY(2px);
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+    }
+
+    /* Chunky arcade-cabinet shadow under every raised control — a single,
+       static treatment that makes the whole UI read as physical buttons. */
+    #btn-install, #btn-leaderboard, .snd-row,
+    #gameover-actions .btn-go, #gameover-actions .btn-ghost {
+      box-shadow: 0 3px 0 rgba(0, 0, 0, 0.5);
+    }
+    .btn-go:active, .btn-ghost:active {
+      transform: translateY(2px);
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.5) !important;
+    }
 
     /* Modal panels — name entry + leaderboard. */
     .panel {
@@ -410,6 +450,9 @@
   <div id="stage">
     <canvas id="game" width="160" height="240"></canvas>
   </div>
+
+  <!-- Static vignette + scanline finish (no input, no motion) -->
+  <div id="fx-overlay" aria-hidden="true"></div>
 
   <div id="install-banner" role="dialog" aria-label="Install Joshua 1 Racer">
     <span class="msg" id="install-msg">📲 ADD TO HOME SCREEN — PLAY OFFLINE</span>
