@@ -489,6 +489,29 @@ export function drawCombo(ctx, combo, comboTimer, comboWindow) {
   rect(ctx, x - 4, y + 9, ((w + 8) * frac) | 0, 1, hot ? 9 : 17);
 }
 
+// NITRO RAMPAGE meter — a slim row of pips just under the combo banner.
+// Gold pips fill one per combo-tier near miss; a full row fires RAMPAGE.
+// After a rampage the row goes muted blue-gray and refills as the cooldown
+// cars are passed — once spent, gold building resumes. Hidden while a rampage
+// is running and when there's nothing to show (clean screen by default).
+export function drawRampageMeter(ctx, { meter, max, cooldown, cooldownMax, active }) {
+  if (active) return;
+  if (meter <= 0 && cooldown <= 0) return;
+  const cellW = 3, cellH = 2, gap = 1;
+  const wTot = max * (cellW + gap) - gap;
+  const x0 = ((W - wTot) / 2) | 0;
+  const y = 26;
+  rect(ctx, x0 - 2, y - 2, wTot + 4, cellH + 4, 0);          // dark plate
+  const cooling = cooldown > 0;
+  const fillN = cooling ? Math.max(0, cooldownMax - cooldown) : meter;
+  // One pip away from RAMPAGE: the filled pips flash so the moment reads.
+  const oneAway = !cooling && meter >= max - 1 && (Math.floor(performance.now() / 120) % 2 === 0);
+  const fillIdx = cooling ? 24 : (oneAway ? 1 : 5);          // blue-gray / yellow (white flash)
+  for (let i = 0; i < max; i++) {
+    rect(ctx, x0 + i * (cellW + gap), y, cellW, cellH, i < fillN ? fillIdx : 4);
+  }
+}
+
 // Discreet sub-combo near-miss flash — small unboxed text under the score strip.
 // Shown when a close shave happens below the combo speed gate: a quiet pat on
 // the back ("NEAR MISS +100") without the full combo banner treatment.

@@ -1,6 +1,6 @@
 // Player car — auto-accelerate with a start-of-race speed ramp, brake, steer, slip.
 import { PHYS, PLAYER_Y, W } from "../config.js";
-import { SPR_PLAYER } from "../sprites.js";
+import { SPR_PLAYER, SPR_PLAYER_L, SPR_PLAYER_R } from "../sprites.js";
 import { drawSpriteNN, groundShadow, ring, disc, rect } from "../render.js";
 import { roadCenterX } from "../road.js";
 
@@ -26,6 +26,7 @@ export function makePlayer() {
     lives: 3,        // endless survival — 3 hits and you're out
     rampage: 0,      // seconds of NITROUS RAMPAGE remaining (smash through traffic)
     rampageClear: 0, // seconds of cleared-road grace after a rampage ends
+    steerVis: 0,     // effective steer this frame (drives the lean sprite)
     _wasBraking: false,
   };
 }
@@ -83,6 +84,7 @@ export function updatePlayer(p, dt, input, map, callbacks) {
     steer = -steer;
     p.slip = Math.max(0, p.slip - dt);
   }
+  p.steerVis = steer;   // remember effective direction for the lean sprite
   const speedFrac = p.speed / PHYS.maxSpeed;
   const steerScale = 1 - (1 - PHYS.steerSpeedFactor) * speedFrac;
   p.x += steer * PHYS.steerSpeed * steerScale * dt;
@@ -146,9 +148,11 @@ export function drawPlayer(ctx, p, map) {
   const cxp = (cx + p.x) | 0;
   // RAMPAGE nitrous flames blasting from the twin exhausts (behind the car).
   if (p.rampage > 0) drawNitroFlames(ctx, cxp, (PLAYER_Y + halfH) | 0);
-  // Grounding shadow under the car, then the F1 sprite.
+  // Grounding shadow under the car, then the F1 sprite — leaned into the turn
+  // while steering (input-driven feedback only; the car sits still otherwise).
+  const spr = p.steerVis > 0.3 ? SPR_PLAYER_R : p.steerVis < -0.3 ? SPR_PLAYER_L : SPR_PLAYER;
   groundShadow(ctx, (cx + p.x) | 0, PLAYER_Y + halfH - 3, 6);
-  drawSpriteNN(ctx, SPR_PLAYER, cx + p.x - halfW + wobble, PLAYER_Y - halfH, PLAYER_SCALE);
+  drawSpriteNN(ctx, spr, cx + p.x - halfW + wobble, PLAYER_Y - halfH, PLAYER_SCALE);
   // RAMPAGE aura — a pulsing fiery ring around the car while nitrous is active.
   if (p.rampage > 0) {
     const cyp = (PLAYER_Y) | 0;

@@ -238,9 +238,15 @@ export function drawTraffic(ctx, sys, map, playerZ, playerX) {
     const p = project(map, playerZ, playerX, c);
     if (!p) continue;
     const hx = skinHalfX(c.skin), hz = skinHalfZ(c.skin);
+    // Pick the lean variant: drifting cars nose toward their drift (so lateral
+    // movement is readable at a glance); smashed cars lean into their skid.
+    const dirX = c.smashed ? c.vx : c.driftVx;
+    const spr = dirX > 0 ? (c.skin.sprR || c.skin.spr)
+              : dirX < 0 ? (c.skin.sprL || c.skin.spr)
+              : c.skin.spr;
     // Shadow hugs the car's visible base so it looks grounded, not flying.
     groundShadow(ctx, p.sx, p.sy + hz - 2, hx);
-    drawSpriteNN(ctx, c.skin.spr, p.sx - hx, p.sy - hz, c.skin.scale);
+    drawSpriteNN(ctx, spr, p.sx - hx, p.sy - hz, c.skin.scale);
   }
 }
 

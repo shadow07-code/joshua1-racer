@@ -32,7 +32,7 @@ import {
 import {
   drawHud, drawTitleScreen, drawMapSelect, drawDifficultySelect,
   drawGameOver, drawPaused, drawCountdown, drawTutorialOverlay, drawSteerHints, drawCombo, drawShieldMsg,
-  drawNearMiss,
+  drawNearMiss, drawRampageMeter,
 } from "./hud.js";
 import { registerServiceWorker, initInstallBanner, initInstallButton, setInstallButtonVisible } from "./pwa.js";
 import {
@@ -102,6 +102,8 @@ const g = {
   comboFlash: 0,        // brief screen-edge flash on each combo step
   comboBest: 0,         // best combo this run (for the game-over stats)
   nearMissTimer: 0,     // discreet sub-combo "NEAR MISS" flash timer
+  rampageMeter: 0,      // combo-tier near misses banked toward the next RAMPAGE
+  rampageCooldown: 0,   // cars still to pass before the meter can build again
   shieldMsg: "",        // transient "SHIELD!" / "SAVED!" popup text
   shieldMsgTimer: 0,
   countdownTime: 0,
@@ -259,6 +261,8 @@ function newRaceSetup() {
   g.comboFlash = 0;
   g.comboBest = 0;
   g.nearMissTimer = 0;
+  g.rampageMeter = 0;
+  g.rampageCooldown = 0;
   g.shieldMsg = "";
   g.shieldMsgTimer = 0;
 }
@@ -270,6 +274,7 @@ function takeHit(_invulnSec) {
   sfxCrash();
   g.player.lives -= 1;
   g.combo = 0; g.comboTimer = 0;        // a real crash breaks the streak
+  g.rampageMeter = 0;                   // ...and dumps the banked rampage meter
   if (g.player.lives <= 0) { endRace("GAME OVER"); return true; }
   return false;
 }
@@ -493,12 +498,17 @@ function updateRace(dt) {
   const clearDist = g.player.rampageClear > 0 ? RACE.rampageClearDist : 0;
   updateTraffic(g.traffic, dt, g.player.z, g.map, {
     playerX: g.player.x,
-    onPassed: () => { g.scoreState.score += SCORE.passBonus * Math.max(1, g.combo); },
+    onPassed: () => {
+      g.scoreState.score += SCORE.passBonus * Math.max(1, g.combo);
+      // Each pass burns down the post-rampage cooldown; once it's spent, the
+      // rampage meter is armed and near misses bank toward the next one.
+      if (g.rampageCooldown > 0) g.rampageCooldown -= 1;
+    },
     onNearMiss: () => {
       // Two tiers. Below comboKmh (100): every close shave still pays a flat
       // bonus with a discreet "NEAR MISS" flash — but no multiplier. At
       // comboKmh+ we enter NEAR MISS COMBO territory: shaves chain into a
-      // multiplier and every few steps triggers NITROUS RAMPAGE.
+      // multiplier AND (when armed) fill the rampage meter.
       const kmh = g.player.speed / PHYS.maxSpeed * (PHYS.topSpeedKmh || 200);
       if (kmh >= RACE.comboKmh) {
         g.combo += 1;
@@ -507,14 +517,19 @@ function updateRace(dt) {
         g.comboFlash = 0.18;
         g.scoreState.score += SCORE.nearMissBonus * g.combo;
         sfxCombo(g.combo);
-        // Risk → reward: every few combo steps triggers NITROUS RAMPAGE — a boost
-        // where the car smashes through traffic. (Doesn't re-trigger mid-rampage.)
-        if (g.combo % RACE.comboRampageEvery === 0 && g.player.rampage <= 0) {
-          g.player.rampage = RACE.rampageDuration;
-          g.player.boost = RACE.rampageDuration;
-          g.shieldMsg = "RAMPAGE!"; g.shieldMsgTimer = 1.6;
-          sfxShieldUp();
-          setEngineRampage(true);
+        // Risk → reward: an unbroken chain of `rampageNearMisses` shaves fires
+        // NITROUS RAMPAGE. The meter only builds while armed — never during a
+        // rampage, never during the post-rampage pass cooldown.
+        if (g.player.rampage <= 0 && g.rampageCooldown <= 0) {
+          g.rampageMeter += 1;
+          if (g.rampageMeter >= RACE.rampageNearMisses) {
+            g.rampageMeter = 0;
+            g.player.rampage = RACE.rampageDuration;
+            g.player.boost = RACE.rampageDuration;
+            g.shieldMsg = "RAMPAGE!"; g.shieldMsgTimer = 1.6;
+            sfxShieldUp();
+            setEngineRampage(true);
+          }
         }
       } else {
         g.scoreState.score += SCORE.nearMissBonus;
@@ -540,14 +555,17 @@ function updateRace(dt) {
         .slice(0, 2);
       for (const c of ahead) smashCar(c, g.player.x);
       g.shieldMsg = "CLEAR!"; g.shieldMsgTimer = 0.9;
+      // Lock the rampage meter until the cooldown's worth of cars are passed.
+      g.rampageCooldown = RACE.rampageCooldownPasses;
     }
   }
   if (g.player.rampageClear > 0) g.player.rampageClear = Math.max(0, g.player.rampageClear - dt);
 
   // Combo decay — lapse the streak if you go too long without a near-miss.
+  // A lapsed chain also dumps the banked rampage meter (it rewards UNBROKEN runs).
   if (g.comboTimer > 0) {
     g.comboTimer -= dt;
-    if (g.comboTimer <= 0) g.combo = 0;
+    if (g.comboTimer <= 0) { g.combo = 0; g.rampageMeter = 0; }
   }
   if (g.comboFlash > 0) g.comboFlash = Math.max(0, g.comboFlash - dt);
   if (g.nearMissTimer > 0) g.nearMissTimer = Math.max(0, g.nearMissTimer - dt);
@@ -708,6 +726,11 @@ function render() {
       rect(ctx, W - 2, 9, 2, H - 33, 5);
     }
     drawCombo(ctx, g.combo, g.comboTimer, RACE.comboWindow);
+    drawRampageMeter(ctx, {
+      meter: g.rampageMeter, max: RACE.rampageNearMisses,
+      cooldown: g.rampageCooldown, cooldownMax: RACE.rampageCooldownPasses,
+      active: g.player.rampage > 0,
+    });
     if (g.combo < 2) drawNearMiss(ctx, g.nearMissTimer, SCORE.nearMissBonus);
     if (g.shieldMsgTimer > 0) drawShieldMsg(ctx, g.shieldMsg);
     drawHud(ctx, {

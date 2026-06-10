@@ -13,6 +13,19 @@ function recolorBody(base, fromDark, fromMain, fromLight, toDark, toMain, toLigh
   }));
 }
 
+// ── Helper: 1px "lean" variants ───────────────────────────────────────────────
+// Shifts the nose rows one pixel toward the steer/drift direction (and tail
+// rows the opposite way) so a car visibly angles into its lateral movement.
+// Only rows with transparent edge cells are shifted, so nothing falls off.
+function shiftRow(row, dir) {
+  return dir > 0 ? [_, ...row.slice(0, -1)] : [...row.slice(1), _];
+}
+function leanSprite(spr, noseRows, dir, tailRows = []) {
+  return spr.map((r, i) =>
+    noseRows.includes(i) ? shiftRow(r, dir) :
+    tailRows.includes(i) ? shiftRow(r, -dir) : r);
+}
+
 // ─── SPORTS CAR (player + AI rivals) — 14w × 20h, very detailed ───────────────
 // Body uses indices 6(main), 7(dark/shadow), 8(highlight).
 // 13 = windshield blue, 5 = headlight yellow, 9 = taillight orange, 0 = outline.
@@ -47,28 +60,31 @@ export const SPR_AI_GREEN_LEGACY   = recolorBody(SPR_SPORTS, 7, 6, 8, 11, 17, 10
 // Open-wheel F1 silhouette at the smaller (25%-reduced) size: pointed nose, a
 // full-width front + rear wing, four exposed black wheels with grey hubs, and a
 // central cockpit with white helmet + yellow visor. The "J" sits on the engine
-// cover. Body tones (6 main, 7 shadow) recolour, so AI liveries shade the same.
-//   6 body | 7 body-shadow | 0 outline/tyres/wings | 4 wheel hub
-//   13 cockpit glass | 5 visor | 1 white (wings, helmet, the "J")
+// cover. Detail pass: consistent top-left lighting (lit left flank 8, shaded
+// right 7), light-catch glints on the top wheel hubs, and body-colour wing
+// endplates. Body tones (6 main, 7 shadow, 8 highlight) recolour, so AI
+// liveries shade the same way.
+//   6 body | 7 body-shadow | 8 body-highlight | 0 outline/tyres/wings
+//   4 wheel hub | 2 hub glint | 13 cockpit glass | 5 visor | 1 white
 const SPR_F1_BASE = [
   [_,_,_,_,_,0,0,_,_,_,_,_],       //  0 nose tip
-  [_,_,_,_,0,6,6,0,_,_,_,_],       //  1 nose
-  [_,0,1,1,1,6,6,1,1,1,0,_],       //  2 front wing (nose pokes through)
-  [_,_,_,0,0,6,6,0,0,_,_,_],       //  3 wing root
-  [_,_,_,0,7,6,6,7,0,_,_,_],       //  4 chassis
-  [0,4,0,0,7,6,6,7,0,0,4,0],       //  5 front wheels + chassis
-  [0,4,0,0,7,6,6,7,0,0,4,0],       //  6 front wheels + chassis
-  [_,_,_,0,7,6,6,7,0,_,_,_],       //  7 chassis
-  [_,_,_,0,6,13,13,6,0,_,_,_],     //  8 cockpit glass
+  [_,_,_,_,0,8,6,0,_,_,_,_],       //  1 nose (lit left)
+  [_,0,6,1,1,8,6,1,1,6,0,_],       //  2 front wing — body-colour endplates
+  [_,_,_,0,0,8,6,0,0,_,_,_],       //  3 wing root
+  [_,_,_,0,8,6,6,7,0,_,_,_],       //  4 chassis
+  [0,2,0,0,8,6,6,7,0,0,2,0],       //  5 front wheels (hub glint) + chassis
+  [0,4,0,0,8,6,6,7,0,0,4,0],       //  6 front wheels + chassis
+  [_,_,_,0,8,6,6,7,0,_,_,_],       //  7 chassis
+  [_,_,_,0,8,13,13,6,0,_,_,_],     //  8 cockpit glass
   [_,_,_,0,13,1,1,13,0,_,_,_],     //  9 helmet (white)
   [_,_,_,0,13,5,5,13,0,_,_,_],     // 10 visor (yellow)
-  [_,_,_,0,7,6,6,7,0,_,_,_],       // 11 engine cover (J)
-  [_,_,_,0,7,6,6,7,0,_,_,_],       // 12 engine cover (J)
-  [_,_,_,0,7,6,6,7,0,_,_,_],       // 13 engine cover (J)
-  [_,_,_,0,7,6,6,7,0,_,_,_],       // 14 engine cover (J)
-  [0,4,0,0,7,6,6,7,0,0,4,0],       // 15 rear wheels + body
-  [0,4,0,0,7,6,6,7,0,0,4,0],       // 16 rear wheels + body
-  [_,0,1,1,1,1,1,1,1,1,0,_],       // 17 rear wing
+  [_,_,_,0,8,6,6,7,0,_,_,_],       // 11 engine cover (J)
+  [_,_,_,0,8,6,6,7,0,_,_,_],       // 12 engine cover (J)
+  [_,_,_,0,8,6,6,7,0,_,_,_],       // 13 engine cover (J)
+  [_,_,_,0,8,6,6,7,0,_,_,_],       // 14 engine cover (J)
+  [0,2,0,0,8,6,6,7,0,0,2,0],       // 15 rear wheels (hub glint) + body
+  [0,4,0,0,8,6,6,7,0,0,4,0],       // 16 rear wheels + body
+  [_,0,6,1,1,1,1,1,1,6,0,_],       // 17 rear wing — body-colour endplates
 ];
 
 // Stamp a white "J" on the engine cover (player only — AI rivals stay plain).
@@ -82,8 +98,14 @@ function stampJ(sprite) {
   return out;
 }
 
-// PLAYER — red F1 with "J" on the engine cover.
-export const SPR_PLAYER = stampJ(SPR_F1_BASE);
+// PLAYER — red F1 with "J" on the engine cover, plus 1px steering-lean variants:
+// the nose (rows 0-3) tips toward the turn while the rear wing counters the
+// other way, so the car reads as yawing into the corner the moment you steer.
+const F1_NOSE_ROWS = [0, 1, 2, 3];
+const F1_TAIL_ROWS = [17];
+export const SPR_PLAYER   = stampJ(SPR_F1_BASE);
+export const SPR_PLAYER_L = stampJ(leanSprite(SPR_F1_BASE, F1_NOSE_ROWS, -1, F1_TAIL_ROWS));
+export const SPR_PLAYER_R = stampJ(leanSprite(SPR_F1_BASE, F1_NOSE_ROWS, +1, F1_TAIL_ROWS));
 
 // AI rivals — all the SAME blue F1 (player is the only red car).
 export const SPR_AI_BLUE   = recolorBody(SPR_F1_BASE, 7, 6, 8, 4, 16, 13);
@@ -109,7 +131,7 @@ const SEDAN_BASE = [
   [_,0,5,6,6,6,5,0,_],   //  1 headlights
   [_,0,7,6,8,6,7,0,_],   //  2 hood — dark sides, light centre
   [0,0,7,6,6,6,7,0,0],   //  3 hood + front wheels
-  [_,0,7,3,3,3,7,0,_],   //  4 windshield (grey glass, dark pillars)
+  [_,0,7,2,3,3,7,0,_],   //  4 windshield (glass glint top-left)
   [_,0,7,6,6,6,7,0,_],   //  5 roof
   [_,0,7,6,6,6,7,0,_],   //  6 roof
   [_,0,7,3,3,3,7,0,_],   //  7 rear window
@@ -128,6 +150,15 @@ export const SPR_SEDAN_BLACK  = recolorBody(SEDAN_BASE, 7, 6, 8, 0, 4, 3);   // 
 export const SPR_SEDAN_WHITE  = recolorBody(SEDAN_BASE, 7, 6, 8, 2, 1, 1);   // white
 export const SPR_SEDAN_ORANGE = recolorBody(SEDAN_BASE, 7, 6, 8, 22, 9, 5);  // orange
 
+// TAXI — yellow sedan with a rooftop sign block and a black-and-cream checker
+// band across the trunk (the side the player actually sees while passing).
+export const SPR_TAXI_CAB = (() => {
+  const t = recolorBody(SEDAN_BASE, 7, 6, 8, 9, 5, 21);
+  t[5][4] = 0;                 // rooftop TAXI sign
+  t[9][3] = 0; t[9][5] = 0;    // checker band across the trunk
+  return t;
+})();
+
 // SUV — 10w × 18h. Taller, boxier wagon: short hood, big upright greenhouse,
 // long roof with roof-rails, wraparound rear glass. Reads clearly apart from the
 // lower sedan. Same width as the sedan (no bigger).
@@ -136,7 +167,7 @@ const SUV_BASE = [
   [_,0,5,6,6,6,5,0,_],   //  1 headlights
   [_,0,7,6,8,6,7,0,_],   //  2 short hood — dark sides, light centre
   [0,0,7,6,6,6,7,0,0],   //  3 hood + front wheels
-  [_,0,7,3,3,3,7,0,_],   //  4 windshield (grey glass, dark pillars)
+  [_,0,7,2,3,3,7,0,_],   //  4 windshield (glass glint top-left)
   [_,0,7,6,6,6,7,0,_],   //  5 tall roof
   [_,0,7,6,8,6,7,0,_],   //  6 tall roof (light centre)
   [_,0,7,6,6,6,7,0,_],   //  7 tall roof
@@ -162,14 +193,14 @@ const TRUCK_BASE = [
   [_,0,5,6,6,6,5,0,_],   //  1 headlights
   [_,0,7,6,8,6,7,0,_],   //  2 cab hood (light centre)
   [0,0,7,6,6,6,7,0,0],   //  3 cab + front wheels
-  [_,0,7,3,3,3,7,0,_],   //  4 cab windshield
+  [_,0,7,2,3,3,7,0,_],   //  4 cab windshield (glass glint)
   [_,0,4,4,4,4,4,0,_],   //  5 cab / box divider
   [_,0,7,6,6,6,7,0,_],   //  6 cargo box
   [_,0,7,6,8,6,7,0,_],   //  7 cargo box (light centre)
   [_,0,7,6,6,6,7,0,_],   //  8 cargo box
   [0,0,7,6,6,6,7,0,0],   //  9 cargo box + mid wheels
   [_,0,7,6,6,6,7,0,_],   // 10 cargo box
-  [_,0,7,6,8,6,7,0,_],   // 11 cargo box (light centre)
+  [_,0,7,25,25,25,7,0,_],// 11 cargo box — cream livery band
   [_,0,7,6,6,6,7,0,_],   // 12 cargo box
   [0,0,7,6,6,6,7,0,0],   // 13 cargo box + rear wheels
   [_,0,7,6,6,6,7,0,_],   // 14 cargo box
@@ -186,17 +217,17 @@ const BUS_BASE = [
   [_,0,0,0,0,0,0,0,0,_],
   [0,8,6,6,6,6,6,6,8,0],
   [0,6,7,7,7,7,7,7,6,0],
-  [0,6,3,3,3,3,3,3,6,0],   // windshield
+  [0,6,2,3,3,3,3,3,6,0],   // windshield (glass glint)
   [0,6,3,1,3,3,1,3,6,0],
   [0,6,6,3,3,3,3,6,6,0],
   [0,6,6,6,6,6,6,6,6,0],
-  [0,6,3,3,6,6,3,3,6,0],   // window row 1
+  [0,6,23,3,6,6,3,3,6,0],  // window row 1 (passenger silhouette)
   [0,6,3,3,6,6,3,3,6,0],
   [0,6,6,6,6,6,6,6,6,0],
-  [0,6,3,3,6,6,3,3,6,0],   // window row 2
+  [0,6,3,3,6,6,3,23,6,0],  // window row 2 (passenger silhouette)
   [0,6,3,3,6,6,3,3,6,0],
   [0,6,6,6,6,6,6,6,6,0],
-  [0,6,3,3,6,6,3,3,6,0],   // window row 3
+  [0,6,3,23,6,6,3,3,6,0],  // window row 3 (passenger silhouette)
   [0,6,3,3,6,6,3,3,6,0],
   [0,6,6,6,6,6,6,6,6,0],
   [0,6,3,3,3,3,3,3,6,0],   // rear window
@@ -307,25 +338,36 @@ export const SPR_VAN_BROWN    = SPR_SEDAN_BLACK;
 // `scale` is the draw factor. Kept at 1.0 (native pixels) so sprites stay crisp —
 // fractional scaling was what muddied the art. Collision half-sizes derive from
 // w/h * scale, so the smaller sprites also have smaller hitboxes.
+// Each skin also carries pre-built lean variants (sprL/sprR): drawTraffic picks
+// one by the car's lateral drift, so drifting cars visibly nose toward where
+// they're going — you can READ which cars are tracking across the road.
 const TS = 1.0;
+function mkSkin(spr, w, h, speedMul, leanRows = [0, 1, 2]) {
+  return {
+    spr, w, h, scale: TS, speedMul,
+    sprL: leanRows.length ? leanSprite(spr, leanRows, -1) : spr,
+    sprR: leanRows.length ? leanSprite(spr, leanRows, +1) : spr,
+  };
+}
 export const TRAFFIC_SKINS = [
-  // Sedans (5 colours) — small + nippy
-  { spr: SPR_SEDAN_SILVER, w: 9,  h: 14, scale: TS, speedMul: 0.30 },
-  { spr: SPR_SEDAN_BLUE,   w: 9,  h: 14, scale: TS, speedMul: 0.30 },
-  { spr: SPR_SEDAN_RED,    w: 9,  h: 14, scale: TS, speedMul: 0.32 },
-  { spr: SPR_SEDAN_BLACK,  w: 9,  h: 14, scale: TS, speedMul: 0.28 },
-  { spr: SPR_SEDAN_WHITE,  w: 9,  h: 14, scale: TS, speedMul: 0.30 },
+  // Sedans (5 colours + taxi) — small + nippy
+  mkSkin(SPR_SEDAN_SILVER, 9, 14, 0.30),
+  mkSkin(SPR_SEDAN_BLUE,   9, 14, 0.30),
+  mkSkin(SPR_SEDAN_RED,    9, 14, 0.32),
+  mkSkin(SPR_SEDAN_BLACK,  9, 14, 0.28),
+  mkSkin(SPR_SEDAN_WHITE,  9, 14, 0.30),
+  mkSkin(SPR_TAXI_CAB,     9, 14, 0.32),
   // SUVs (3 colours) — a touch taller, slower
-  { spr: SPR_SUV_WHITE,    w: 9,  h: 16, scale: TS, speedMul: 0.24 },
-  { spr: SPR_SUV_BLACK,    w: 9,  h: 16, scale: TS, speedMul: 0.22 },
-  { spr: SPR_SUV_BLUE,     w: 9,  h: 16, scale: TS, speedMul: 0.24 },
-  // Trucks (3 colours) — long box trucks, big + slow
-  { spr: SPR_TRUCK_BLUE,   w: 9,  h: 18, scale: TS, speedMul: 0.18 },
-  { spr: SPR_TRUCK_WHITE,  w: 9,  h: 18, scale: TS, speedMul: 0.18 },
-  { spr: SPR_TRUCK_ORANGE, w: 9,  h: 18, scale: TS, speedMul: 0.20 },
-  // Buses (2 colours) — biggest + slowest
-  { spr: SPR_BUS_WHITE,    w: 10, h: 22, scale: TS, speedMul: 0.16 },
-  { spr: SPR_BUS_ORANGE,   w: 10, h: 22, scale: TS, speedMul: 0.16 },
+  mkSkin(SPR_SUV_WHITE,    9, 16, 0.24),
+  mkSkin(SPR_SUV_BLACK,    9, 16, 0.22),
+  mkSkin(SPR_SUV_BLUE,     9, 16, 0.24),
+  // Trucks (3 colours) — long box trucks, big + slow (only the cab leans)
+  mkSkin(SPR_TRUCK_BLUE,   9, 18, 0.18),
+  mkSkin(SPR_TRUCK_WHITE,  9, 18, 0.18),
+  mkSkin(SPR_TRUCK_ORANGE, 9, 18, 0.20),
+  // Buses (2 colours) — biggest + slowest; too long to lean visibly
+  mkSkin(SPR_BUS_WHITE,    10, 22, 0.16, []),
+  mkSkin(SPR_BUS_ORANGE,   10, 22, 0.16, []),
 ];
 
 // ─── Scenery ──────────────────────────────────────────────────────────────────

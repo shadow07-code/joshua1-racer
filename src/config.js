@@ -104,11 +104,16 @@ export const RACE = {
   // Near-miss rewards, two tiers:
   //   below comboKmh — every close shave pays a flat, discreet bonus (no combo);
   //   at comboKmh+   — NEAR MISS COMBO territory: each shave bumps the
-  //   multiplier, resetting after comboWindow seconds without another. Every
-  //   `comboRampageEvery` steps triggers NITROUS RAMPAGE.
+  //   multiplier, resetting after comboWindow seconds without another, and
+  //   fills the rampage meter (see below).
   comboKmh: 100,
   comboWindow: 2.8,
-  comboRampageEvery: 8,
+  // RAMPAGE pacing: an unbroken chain of `rampageNearMisses` combo-tier near
+  // misses fills the nitro meter and fires NITROUS RAMPAGE. When a rampage
+  // ends the meter is LOCKED until `rampageCooldownPasses` cars have been
+  // passed — no back-to-back rampages.
+  rampageNearMisses: 10,
+  rampageCooldownPasses: 10,
   // RAMPAGE: a nitrous boost where the car smashes through traffic (each smash
   // adds to the combo). When it ends, an instantaneous shockwave from the car
   // kicks out just the next 2 vehicles ahead — room to maneuver, no long clear.
