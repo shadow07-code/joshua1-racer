@@ -105,6 +105,7 @@ function spawnRow(sys, map) {
       x,
       laneIdx: lane,
       speed,
+      cruise: speed,                                   // preferred speed to recover to
       passed: false,
       nearMissed: false,
       driftVx: 0,                                      // engages after the lead-in
@@ -124,6 +125,23 @@ export function prepopulateTraffic(sys, map, distance = 600) {
   while (sys.nextRowZ < distance) {
     spawnRow(sys, map);
   }
+}
+
+// Merge safety check: is another car occupying (or nearly occupying) the space
+// this car is drifting toward? Blocked drivers HOLD their lane — blinker still
+// going — and resume the merge once the gap is clear. This is what keeps
+// traffic from ever steering into each other (no snap-apart correction needed).
+function driftBlocked(cars, c) {
+  const dir = c.driftVx > 0 ? 1 : -1;
+  const cHx = skinHalfX(c.skin), cHz = skinHalfZ(c.skin);
+  for (const o of cars) {
+    if (o === c || o.smashed) continue;
+    if (Math.abs(o.z - c.z) >= cHz + skinHalfZ(o.skin) + 6) continue; // not alongside
+    const dx = (o.x - c.x) * dir;                  // lateral distance, drift-signed
+    if (dx <= 0) continue;                         // on the other side — irrelevant
+    if (dx < cHx + skinHalfX(o.skin) + 8) return true;  // gap's taken — wait
+  }
+  return false;
 }
 
 // Knock a car off the road — used by RAMPAGE smashes and the post-rampage road
@@ -179,9 +197,10 @@ export function updateTraffic(sys, dt, playerZ, map, cbs, clearAheadDist = 0) {
 
     // ── Steady lateral drift (assigned at spawn, engaged after the signal) ──
     // The car tracks across the road at a constant rate — predictable and
-    // readable. When it reaches a road edge it straightens out (and the
-    // indicator stops). No random swerves.
-    if (c.driftVx) {
+    // readable. It WAITS (lane held, blinker on) whenever the space it's
+    // merging into is occupied, and when it reaches a road edge it straightens
+    // out (indicator stops). No random swerves, no steering into anyone.
+    if (c.driftVx && !driftBlocked(sys.list, c)) {
       c.x += c.driftVx * dt;
       const lim = halfRoad - 6;
       if (c.x >= lim)       { c.x = lim;  c.driftVx = 0; }
@@ -212,34 +231,44 @@ export function updateTraffic(sys, dt, playerZ, map, cbs, clearAheadDist = 0) {
   sys.list = sys.list.filter(c => c.z > playerZ - 50);
 }
 
-// Traffic-vs-traffic separation. Cars overlapping laterally keep a minimum
-// longitudinal gap from the car ahead and match its speed (car-following), so
-// they never stack. A small random chance lets a follower briefly fail and bump.
+// Traffic-vs-traffic car-following. Each car watches the nearest in-lane car
+// ahead: it BRAKES smoothly (harder the closer it gets) through a follow zone
+// so it settles behind the leader without ever touching it — no position
+// snapping, no teleports. With the lane clear again it eases back up to its
+// preferred cruise speed.
 function resolveTrafficSeparation(sys, dt) {
   const cars = sys.list;
   cars.sort((a, b) => a.z - b.z);   // rear → front
   for (let i = 0; i < cars.length; i++) {
     const c = cars[i];
     if (c.smashed) continue;                                // off-road, ignore
+    let leader = null, gap = 0, minGap = 0;
     for (let j = i + 1; j < cars.length; j++) {
       const o = cars[j];
       if (o.smashed) continue;
-      const gap = o.z - c.z;
-      if (gap > 45) break;                                  // nothing close ahead
+      const dz = o.z - c.z;
+      if (dz > 45) break;                                   // nothing close ahead
       const latClear = skinHalfX(c.skin) + skinHalfX(o.skin) + 1.5;
       if (Math.abs(o.x - c.x) >= latClear) continue;        // different lane — ignore
-      const minGap = (skinHalfZ(c.skin) + skinHalfZ(o.skin)) * 0.95;
-      if (gap < minGap) {
-        if (c.bumpT == null) c.bumpT = 0;
-        if (c.bumpT <= 0 && Math.random() < 0.0008) c.bumpT = 0.4;  // rare bump window
-        if (c.bumpT > 0) {
-          c.bumpT -= dt;                                    // allow brief contact
-        } else {
-          c.z = o.z - minGap;                               // no stacking
-          if (c.speed > o.speed) c.speed = o.speed;         // ease off behind it
-        }
-      }
+      leader = o; gap = dz;
+      minGap = (skinHalfZ(c.skin) + skinHalfZ(o.skin)) * 0.95;
       break;                                                // only the nearest matters
+    }
+    const followGap = minGap + 10;                          // braking starts 10m out
+    if (leader && gap < followGap) {
+      if (c.speed > leader.speed) {
+        // Ease toward the leader's speed, harder the deeper into the zone.
+        const urgency = Math.min(1, (followGap - gap) / 10);
+        c.speed += (leader.speed - c.speed) * Math.min(1, dt * (2 + 8 * urgency));
+      }
+      if (gap < minGap) {
+        // Contact imminent (e.g. the leader braked hard): match speed and ease
+        // apart at a gentle visible rate instead of snapping positions.
+        if (c.speed > leader.speed) c.speed = leader.speed;
+        c.z -= Math.min(minGap - gap, 18 * dt);
+      }
+    } else if (c.cruise != null && c.speed < c.cruise) {
+      c.speed = Math.min(c.cruise, c.speed + 6 * dt);       // lane clear — pick back up
     }
   }
 }
@@ -274,14 +303,18 @@ export function drawTraffic(ctx, sys, map, playerZ, playerX) {
   }
 }
 
+// Player-vs-traffic collision is EVASION-FRIENDLY: every vehicle's collidable
+// size is 8% smaller than its sprite (HIT_SCALE), and the box factors are snug
+// — especially longitudinally (0.34, was 0.42), so a car closing on a vehicle's
+// rear bumper has visibly more room to swerve out before the hit registers.
+// Clipping a corner reads as a great dodge, not a cheap death.
+const HIT_SCALE = 0.92;
 export function checkTrafficHit(sys, box) {
   for (const c of sys.list) {
     if (c.smashed) continue;                 // already knocked off the road
-    const hx = skinHalfX(c.skin), hz = skinHalfZ(c.skin);
-    // Snug hitbox on ALL sides — collide only on real visual contact, not with a
-    // phantom margin. Lateral 0.72, longitudinal 0.42 (matched to the sprites).
-    const x1 = c.x - hx * 0.72, x2 = c.x + hx * 0.72;
-    const z1 = c.z - hz * 0.42, z2 = c.z + hz * 0.42;
+    const hx = skinHalfX(c.skin) * HIT_SCALE, hz = skinHalfZ(c.skin) * HIT_SCALE;
+    const x1 = c.x - hx * 0.70, x2 = c.x + hx * 0.70;
+    const z1 = c.z - hz * 0.34, z2 = c.z + hz * 0.34;
     if (box.x1 < x2 && box.x2 > x1 && box.z1 < z2 && box.z2 > z1) return c;
   }
   return null;
