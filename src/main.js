@@ -123,7 +123,10 @@ const TRACK_KEY = "joshua1.musicTrack";     // "0" | "1" | "2"
 
 function loadToggle(key) { try { const v = localStorage.getItem(key); return v === null ? true : v === "1"; } catch { return true; } }
 function saveToggle(key, on) { try { localStorage.setItem(key, on ? "1" : "0"); } catch {} }
-function loadTrack() { try { const v = localStorage.getItem(TRACK_KEY); return v === null ? 0 : parseInt(v) || 0; } catch { return 0; } }
+// Default music = Track 1 ("The Final Bend"): a brand-new player (no saved
+// choice) starts with SFX on AND music on. A player who explicitly picked a
+// track before — including OFF — keeps their saved choice.
+function loadTrack() { try { const v = localStorage.getItem(TRACK_KEY); return v === null ? 1 : parseInt(v) || 0; } catch { return 1; } }
 function saveTrack(n) { try { localStorage.setItem(TRACK_KEY, String(n)); } catch {} }
 
 function refreshAudioButtons() {

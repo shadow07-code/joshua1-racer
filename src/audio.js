@@ -31,8 +31,8 @@ export function getMusicTrack() { return _musicTrack; }
 export function setMusicTrack(n) {
   _musicTrack = n;
   // Push the per-track volume onto the live music channel so switching tracks
-  // also rebalances the mix (ambient louder, chiptune quieter).
-  musicVol = (n === 1) ? MUSIC_VOL_AMBIENT : MUSIC_VOL_CHIPTUNE;
+  // also rebalances the mix (Track 1 = the produced MP3, Track 2 = chiptune).
+  musicVol = (n === 1) ? MUSIC_VOL_TRACK1 : MUSIC_VOL_CHIPTUNE;
   if (musicGain && musicEnabled) musicGain.gain.value = musicVol;
 }
 
@@ -44,12 +44,14 @@ export function toggleMute() { setMuted(!muted); return muted; }
 // Rebalanced mix: music sits lower so the car/engine and effects come forward.
 // Two separate enable flags drive the two toolbar toggles.
 let musicEnabled = true, sfxEnabled = true;
-// Per-track music volume — Track 1 (ambient) sits forward to match the engine,
-// Track 2 (chiptune) sits lower so it doesn't dominate. setMusicTrack() pushes
-// the appropriate one onto musicGain so the live mix follows the user's choice.
-const MUSIC_VOL_AMBIENT = 0.52;
+// Per-track music volume — Track 1 (the produced "The Final Bend" MP3) sits
+// forward as the featured score; Track 2 (chiptune) sits lower so it doesn't
+// dominate. setMusicTrack() pushes the appropriate one onto musicGain so the
+// live mix follows the user's choice. MUSIC_VOL_TRACK1 is the main lever if the
+// song ever feels too loud/quiet against the engine + SFX.
+const MUSIC_VOL_TRACK1 = 0.50;
 const MUSIC_VOL_CHIPTUNE = 0.18;
-let musicVol = MUSIC_VOL_CHIPTUNE;   // current active volume (updated by setMusicTrack)
+let musicVol = MUSIC_VOL_TRACK1;     // current active volume (updated by setMusicTrack)
 let sfxVol   = 1.10;
 
 export function isMusicEnabled() { return musicEnabled; }
@@ -82,6 +84,9 @@ export function initAudio() {
     musicGain = ctx.createGain(); musicGain.gain.value = musicEnabled ? musicVol : 0; musicGain.connect(masterGain);
     sfxGain   = ctx.createGain(); sfxGain.gain.value   = sfxEnabled   ? sfxVol   : 0; sfxGain.connect(masterGain);
     inited = true;
+    // Begin decoding the Track-1 MP3 now (works while the context is suspended)
+    // so it's ready the moment the player starts a race or previews it.
+    loadMusic1().catch(() => {});
   } catch {}
 }
 
@@ -90,97 +95,57 @@ export function resumeAudio() { if (ctx && ctx.state === "suspended") ctx.resume
 // the engine drone stop immediately on mobile). Pairs with resumeAudio().
 export function suspendAudio() { if (ctx && ctx.state === "running") { try { ctx.suspend(); } catch {} } }
 
-// ── TRACK 1: Ambient driving score ───────────────────────────────────────────
-// Motivating, adventurous — a pulsing 8th-note bass ostinato that never stops
-// pushing forward, warm pad drones, and a heroic minor-key melody riding on
-// top. Light four-on-the-floor groove. Anthemic Em → C → G → D progression
-// (the classic "keep going" axis) so it lifts without ever getting busy or
-// fighting the engine/SFX. Tempo tracks player speed like the original.
+// ── TRACK 1: "The Final Bend" (produced MP3, looped) ─────────────────────────
+// Track 1 is a real produced music file (not a procedural synth). It's decoded
+// once into an AudioBuffer and played through a single looping
+// AudioBufferSourceNode routed to musicGain — so the existing mute / volume /
+// pause(suspend) plumbing controls it for free, and it loops seamlessly for as
+// long as the race runs (covers any race longer than the track).
+const MUSIC1_URL = new URL("../audio/the-final-bend.mp3", import.meta.url).href;
+let _music1Buffer = null;     // decoded PCM (null until loaded)
+let _music1Promise = null;    // in-flight load (de-dupes concurrent requests)
+let _music1Source = null;     // the live looping source while Track 1 plays
 
-// One chord per bar, 8-bar loop.
-const AMB_PROG  = ["E", "C", "G", "D", "E", "C", "D", "E"];
-const AMB_FIFTH = { E: "B", C: "G", G: "D", D: "A" };
-// Driving bass ostinato: 8 eighth-notes per bar on the chord root; the octave
-// kicks UP on beats 2 and 4 for a gallop that keeps the pulse alive.
-const AMB_BASS_OCT_UP = new Set([4, 12]);          // sixteenth positions
-
-// Heroic lead melody (triangle, octave 5) — one phrase per bar, 8 bars,
-// rises through the first half and resolves home in the second.
-const AMB_MELODY = [
-  // Bar 1 (Em) — opening call
-  ["E",5,4],["G",5,2],["A",5,2],["B",5,6],["-",0,2],
-  // Bar 2 (C) — answer, reaching up
-  ["G",5,4],["A",5,2],["B",5,2],["C",6,6],["B",5,2],
-  // Bar 3 (G) — settle
-  ["B",5,4],["A",5,2],["G",5,2],["D",5,8],
-  // Bar 4 (D) — push forward
-  ["F#",5,4],["A",5,2],["G",5,2],["F#",5,4],["D",5,4],
-  // Bar 5 (Em) — restate with drive
-  ["E",5,2],["-",0,2],["E",5,2],["G",5,2],["B",5,4],["A",5,4],
-  // Bar 6 (C) — climb to the peak
-  ["G",5,4],["A",5,2],["B",5,2],["C",6,8],
-  // Bar 7 (D) — turn for home
-  ["A",5,4],["F#",5,2],["D",5,2],["F#",5,4],["A",5,4],
-  // Bar 8 (Em) — resolve
-  ["B",5,6],["G",5,2],["E",5,8],
-];
-
-// Synth helper: soft sine pad (for ambient drones)
-function playSine(name, oct, t, dur16, sixteenthSec, gain) {
-  if (!ctx || name === "-") return;
-  const f = noteHz(name, oct); if (!f) return;
-  const dur = dur16 * sixteenthSec;
-  const osc = ctx.createOscillator(); osc.type = "sine"; osc.frequency.value = f;
-  const g = ctx.createGain();
-  g.gain.setValueAtTime(0, t);
-  g.gain.linearRampToValueAtTime(gain, t + Math.min(0.15, dur * 0.3));
-  g.gain.setValueAtTime(gain, t + dur * 0.7);
-  g.gain.linearRampToValueAtTime(0, t + dur);
-  osc.connect(g); g.connect(musicGain);
-  osc.start(t); osc.stop(t + dur + 0.02);
+function loadMusic1() {
+  if (_music1Buffer) return Promise.resolve(_music1Buffer);
+  if (_music1Promise) return _music1Promise;
+  if (!ctx) return Promise.reject(new Error("no audio context"));
+  _music1Promise = fetch(MUSIC1_URL)
+    .then((r) => { if (!r.ok) throw new Error("fetch " + r.status); return r.arrayBuffer(); })
+    .then((data) => new Promise((resolve, reject) => {
+      // decodeAudioData supports both the modern promise form and the legacy
+      // callback form (older Safari) — handle whichever the browser returns.
+      const ret = ctx.decodeAudioData(data, resolve, reject);
+      if (ret && typeof ret.then === "function") ret.then(resolve, reject);
+    }))
+    .then((decoded) => { _music1Buffer = decoded; return decoded; })
+    .catch((err) => { _music1Promise = null; throw err; });
+  return _music1Promise;
 }
 
-let ambMelIdx = 0, ambMelTick = 0;
-let ambChordIdx = 0, ambBarTick = 16;
-
-function scheduleAmbient(now, sixteenthSec, lookahead) {
-  while (nextTickTime < now + lookahead) {
-    const t = nextTickTime;
-
-    // Bar boundary: advance the chord, lay the pad drone (root + 5th sines).
-    if (ambBarTick >= 16) {
-      ambBarTick = 0;
-      const root = AMB_PROG[ambChordIdx % AMB_PROG.length];
-      playSine(root, 3, t, 16, sixteenthSec, 0.09);
-      playSine(AMB_FIFTH[root], 3, t, 16, sixteenthSec, 0.05);
-      ambChordIdx++;
-    }
-    const pos = ambBarTick;
-    const root = AMB_PROG[(ambChordIdx - 1 + AMB_PROG.length) % AMB_PROG.length];
-
-    // Driving bass ostinato — 8th-note triangle pulse on the chord root, with
-    // octave-up kicks on beats 2 & 4. This is the "keeps you going" engine.
-    if (pos % 2 === 0) {
-      playTri(root, AMB_BASS_OCT_UP.has(pos) ? 3 : 2, t, 2, sixteenthSec, 0.16);
-    }
-
-    // Heroic lead (triangle)
-    if (ambMelTick <= 0) {
-      const ev = AMB_MELODY[ambMelIdx % AMB_MELODY.length];
-      ambMelTick = ev[2];
-      playTri(ev[0], ev[1], t, ev[2], sixteenthSec, 0.11);
-      ambMelIdx++;
-    }
-
-    // Groove: light four-on-the-floor kick, soft snare backbeat, hat 8ths.
-    if (pos % 4 === 0) playNoiseHit(t, 0.06, 0.11, 85);            // kick 1-2-3-4
-    if (pos === 4 || pos === 12) playNoiseHit(t, 0.05, 0.06, 2000); // soft snare
-    if (pos % 2 === 0) playNoiseHit(t, 0.012, 0.025, 6500);         // hats
-
-    ambBarTick++;
-    ambMelTick--;
-    nextTickTime += sixteenthSec;
+function startMusic1File() {
+  if (!ctx) return;
+  if (!_music1Buffer) {
+    // Not decoded yet — load, then start if we're still on Track 1.
+    loadMusic1().then(() => {
+      if (_musicTrack === 1 && !_music1Source) startMusic1File();
+    }).catch(() => {});
+    return;
   }
+  stopMusic1File();
+  const src = ctx.createBufferSource();
+  src.buffer = _music1Buffer;
+  src.loop = true;                 // seamless loop for the whole race
+  src.connect(musicGain);
+  src.start();
+  _music1Source = src;
+}
+
+function stopMusic1File() {
+  if (!_music1Source) return;
+  try { _music1Source.stop(); } catch {}
+  try { _music1Source.disconnect(); } catch {}
+  _music1Source = null;
 }
 
 // ── TRACK 2: Original chiptune ──────────────────────────────────────────────
@@ -408,13 +373,11 @@ function extraPercussion(t, sixteenthSec, pos) {
 
 function tickScheduler() {
   if (!ctx) return;
+  // Only Track 2 (chiptune) is scheduled note-by-note; Track 1 is a file source
+  // that loops itself, and the interval is never started for it.
   const bpm = baseBPM * bpmMultiplier;
   const sixteenthSec = (60 / bpm) / 4;
-  if (_musicTrack === 1) {
-    scheduleAmbient(ctx.currentTime, sixteenthSec, 0.4);
-  } else {
-    scheduleAhead(ctx.currentTime, sixteenthSec, 0.4);
-  }
+  scheduleAhead(ctx.currentTime, sixteenthSec, 0.4);
 }
 
 export function startMusic(mapKind) {
@@ -424,13 +387,12 @@ export function startMusic(mapKind) {
   currentMap = mapKind || "city";
   baseBPM = currentMap === "jungle" ? MUSIC.jungleBPM : MUSIC.cityBPM;
   bpmMultiplier = 1.0;
-  // Reset original chiptune state
+  // Track 1 — the produced MP3, looped (no note scheduler).
+  if (_musicTrack === 1) { startMusic1File(); return; }
+  // Track 2 — reset the original chiptune state and run the note scheduler.
   leadIdx = bassIdx = drumCursor = arpCursor = barCursor = 0;
   barTickLeft = 16;
   leadTickLeft = bassTickLeft = 0;
-  // Reset ambient state
-  ambMelIdx = ambMelTick = 0;
-  ambChordIdx = 0; ambBarTick = 16;
   nextTickTime = ctx.currentTime + 0.05;
   tickScheduler();
   musicTimer = setInterval(tickScheduler, 200);
@@ -438,6 +400,7 @@ export function startMusic(mapKind) {
 
 export function stopMusic() {
   if (musicTimer) { clearInterval(musicTimer); musicTimer = null; }
+  stopMusic1File();                         // also halt the looping Track-1 file
 }
 
 export function setMusicIntensity(level) {
