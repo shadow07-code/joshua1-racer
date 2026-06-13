@@ -52,7 +52,9 @@ let musicEnabled = true, sfxEnabled = true;
 const MUSIC_VOL_TRACK1 = 0.50;
 const MUSIC_VOL_CHIPTUNE = 0.18;
 let musicVol = MUSIC_VOL_TRACK1;     // current active volume (updated by setMusicTrack)
-let sfxVol   = 1.10;
+// SFX bus turned down 40% (1.10 → 0.66) so the blips/crashes/engine sit
+// politely under the music instead of fighting it. This is the master SFX lever.
+let sfxVol   = 0.66;
 
 export function isMusicEnabled() { return musicEnabled; }
 export function isSfxEnabled()   { return sfxEnabled; }
@@ -425,9 +427,11 @@ export function playFlourish() {
 }
 
 // ── SFX ───────────────────────────────────────────────────────────────────────
-// Multi-oscillator F1 engine: two detuned sawtooths for a thick, raw tone
-// layered with a sub-octave square for low-end growl. During RAMPAGE the
-// filter opens up and the gain pushes harder for a rawer, angrier sound.
+// Multi-oscillator engine voiced as a SWEET FERRARI rather than a raw F1 rasp:
+// two gently-detuned sawtooths (8c) through a low-Q (1.0) lowpass for a smooth,
+// refined tone, plus a light sub-octave square for body (not heavy growl). The
+// whole SFX bus also sits 40% lower so it never fights the music. During RAMPAGE
+// the filter opens for an exciting snarl — aggressive, but no longer ear-splitting.
 let engineOsc2 = null, engineGainSub = null, engineOscSub = null;
 let engineFilt = null;
 let _engineRampage = false;
@@ -440,11 +444,13 @@ export function startEngine() {
   // both pitch and filter open progressively with speed so the high-RPM
   // scream is reserved for actual top speed instead of arriving early.
   engineOsc = ctx.createOscillator(); engineOsc.type = "sawtooth"; engineOsc.frequency.value = 38;
-  engineOsc2 = ctx.createOscillator(); engineOsc2.type = "sawtooth"; engineOsc2.frequency.value = 38; engineOsc2.detune.value = 12;
+  // Gentler detune (8c, was 12) → smoother "layered cylinders" shimmer, less beat roughness.
+  engineOsc2 = ctx.createOscillator(); engineOsc2.type = "sawtooth"; engineOsc2.frequency.value = 38; engineOsc2.detune.value = 8;
   engineOscSub = ctx.createOscillator(); engineOscSub.type = "square"; engineOscSub.frequency.value = 19;
   engineGain = ctx.createGain(); engineGain.gain.value = 0;
   engineGainSub = ctx.createGain(); engineGainSub.gain.value = 0;
-  engineFilt = ctx.createBiquadFilter(); engineFilt.type = "lowpass"; engineFilt.frequency.value = 320; engineFilt.Q.value = 1.4;
+  // Lower Q (1.0, was 1.4) removes the nasal/peaky resonance for a sweeter tone.
+  engineFilt = ctx.createBiquadFilter(); engineFilt.type = "lowpass"; engineFilt.frequency.value = 320; engineFilt.Q.value = 1.0;
   engineOsc.connect(engineFilt); engineOsc2.connect(engineFilt);
   engineFilt.connect(engineGain); engineGain.connect(sfxGain);
   engineOscSub.connect(engineGainSub); engineGainSub.connect(sfxGain);
@@ -472,27 +478,31 @@ export function setEngine(speed01) {
   engineOsc.frequency.setTargetAtTime(f, t, 0.06);
   engineOsc2.frequency.setTargetAtTime(f * 1.006, t, 0.06);
   engineOscSub.frequency.setTargetAtTime(f * 0.5, t, 0.06);
-  // Filter opens with speed: muffled low rumble at rest → bright F1 rasp at top.
-  // (During rampage the filter is owned by setEngineRampage — don't fight it.)
+  // Filter opens with speed: muffled low rumble at rest → bright but SMOOTH top.
+  // Ceiling trimmed (1650, was 1900) so the high end sings rather than rasps;
+  // a Ferrari is bright but refined, not buzzy. (Rampage owns the filter — see below.)
   if (!_engineRampage) {
-    engineFilt.frequency.setTargetAtTime(320 + 1900 * curve, t, 0.08);
+    engineFilt.frequency.setTargetAtTime(320 + 1650 * curve, t, 0.08);
   }
   const vol = 0.030 + 0.055 * curve;
   engineGain.gain.setTargetAtTime(vol, t, 0.06);
-  engineGainSub.gain.setTargetAtTime(vol * 0.70, t, 0.06);
+  // Lighter sub-octave growl (0.55, was 0.70) sheds the heavy/oppressive low end.
+  engineGainSub.gain.setTargetAtTime(vol * 0.55, t, 0.06);
 }
 export function setEngineRampage(on) {
   if (!engineFilt || !ctx || _engineRampage === on) return;
   _engineRampage = on;
   const t = ctx.currentTime;
   if (on) {
-    engineFilt.frequency.setTargetAtTime(2600, t, 0.08);
-    engineFilt.Q.setTargetAtTime(2.6, t, 0.08);
+    // Aggressive but no longer harsh: lower ceiling (2200, was 2600) + softer Q
+    // (2.0, was 2.6) keep the rampage snarl exciting without the ear-splitting rasp.
+    engineFilt.frequency.setTargetAtTime(2200, t, 0.08);
+    engineFilt.Q.setTargetAtTime(2.0, t, 0.08);
     engineGain.gain.setTargetAtTime(0.14, t, 0.06);
     engineGainSub.gain.setTargetAtTime(0.10, t, 0.06);
   } else {
     // Hand the filter back to setEngine (it re-tracks speed on the next frame).
-    engineFilt.Q.setTargetAtTime(1.4, t, 0.15);
+    engineFilt.Q.setTargetAtTime(1.0, t, 0.15);
   }
 }
 
