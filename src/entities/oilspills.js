@@ -7,23 +7,29 @@ import { SPR_OIL_SPILL } from "../sprites.js";
 
 const OIL = { sprite: SPR_OIL_SPILL, w: 12, h: 8, halfX: 6, halfZ: 4 };
 
-// Two oil spills per lap at deterministic z offsets so all racers see the same
-// hazards. Lateral position randomized per race for variety.
-const SPILLS_PER_LAP = 2;
-
+// ENDLESS spawning: a slick is placed every [oilSpacingMin..Max] metres of road
+// at a random lane offset (never dead-centre, so it's always dodgeable). The old
+// lap-based generator produced ZERO spills in endless mode (RACE.totalLaps was
+// removed), so oil was a dead feature — this restores it as occasional spice.
 export function makeOilSystem(map) {
-  const list = [];
-  for (let lap = 0; lap < RACE.totalLaps; lap++) {
-    for (let i = 0; i < SPILLS_PER_LAP; i++) {
-      const z = lap * RACE.lapLength + (RACE.lapLength * (i + 1)) / (SPILLS_PER_LAP + 1);
-      const halfRoad = map.roadHalfWidth;
-      // Place inside the road but away from dead center so player can steer clear.
-      const side = Math.random() < 0.5 ? -1 : 1;
-      const x = side * (4 + Math.random() * (halfRoad - 14));
-      list.push({ z, x, alive: true });
-    }
+  return { list: [], nextSpillZ: 320, hitsPlayer: 0 };
+}
+
+function oilGap() {
+  return RACE.oilSpacingMin + Math.random() * (RACE.oilSpacingMax - RACE.oilSpacingMin);
+}
+
+// Spawn ahead of the player and cull behind. Call once per frame in the race loop.
+export function updateOil(sys, playerZ, map) {
+  const ahead = playerZ + VIEW_AHEAD + 40;
+  while (sys.nextSpillZ < ahead) {
+    const halfRoad = map.roadHalfWidth;
+    const side = Math.random() < 0.5 ? -1 : 1;
+    const x = side * (4 + Math.random() * (halfRoad - 14));
+    sys.list.push({ z: sys.nextSpillZ, x, alive: true });
+    sys.nextSpillZ += oilGap();
   }
-  return { list, hitsPlayer: 0 };
+  sys.list = sys.list.filter(o => o.z > playerZ - 20);
 }
 
 export function drawOilSpills(ctx, sys, map, playerZ, playerX) {

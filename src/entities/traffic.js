@@ -210,13 +210,29 @@ export function updateTraffic(sys, dt, playerZ, map, cbs, clearAheadDist = 0) {
     if (!c.passed && c.z < playerZ - 4) {
       c.passed = true;
       sys.passedCount++;
-      cbs?.onPassed?.();
+      // THREAD THE NEEDLE: did the player split a tight 2-car gap? Look for a
+      // second live car at nearly the same z, on the OPPOSITE side of the car,
+      // within a narrow combined gap. Mark both so the pair only scores once.
+      let threaded = false;
+      if (!c.threadCounted) {
+        const px = cbs?.playerX ?? 0;
+        for (const o of sys.list) {
+          if (o === c || o.smashed || o.threadCounted) continue;
+          if (Math.abs(o.z - c.z) > 12) continue;
+          if ((o.x - px) * (c.x - px) < 0 && Math.abs(o.x - c.x) < 30) {
+            threaded = true; c.threadCounted = true; o.threadCounted = true; break;
+          }
+        }
+      }
+      cbs?.onPassed?.(threaded);
     }
     if (!c.nearMissed && c.passed && Math.abs(c.z - playerZ) < 18) {
       const closenessPx = Math.abs(c.x - (cbs?.playerX ?? 0));
       if (closenessPx < 18) {
         c.nearMissed = true;
-        cbs?.onNearMiss?.();
+        // tightness 0..1 (1 = the closest possible shave) drives the precision bonus.
+        const tightness = Math.max(0, Math.min(1, 1 - closenessPx / 18));
+        cbs?.onNearMiss?.(tightness);
       }
     }
   }

@@ -120,6 +120,15 @@ export const RACE = {
   rampageDuration: 7,      // seconds of nitrous smashing
   rampageClearTime: 0,     // no clear-road grace — the exit shockwave is instantaneous
   rampageClearDist: 120,   // search range for the exit shockwave (next 2 cars within this)
+  // Tension/release pacing: traffic spacing breathes ±densityWaveAmp around the
+  // ramped base on a densityWavePeriod-second cycle (surge → breather → surge).
+  densityWaveAmp: 0.18,
+  densityWavePeriod: 22,
+  // Endless non-lethal oil slicks — one every [min..max] metres of road.
+  oilSpacingMin: 260,
+  oilSpacingMax: 440,
+  // Distance milestone banner cadence (metres). Speed milestones are fixed.
+  milestoneEveryM: 1000,
 };
 
 // Spawn rates and traffic-row spacing.
@@ -142,6 +151,15 @@ export const SCORE = {
   mediumBonus: 1.0,
   hardBonus: 1.5,
   survivalSecondBonus: 10, // per second alive
+  // Skill-depth multipliers (combo-tier near misses + passes):
+  //   speedBonusMax — extra fraction at top speed (0 at comboKmh → this at top).
+  //   precisionMax  — extra fraction for a pixel-perfect shave (tightness 0→1).
+  //   precisionPx   — gap (px) at/under which a shave counts as PERFECT.
+  //   threadBonus   — flat bonus for splitting a tight 2-car gap.
+  speedBonusMax: 1.0,
+  precisionMax: 1.5,
+  precisionPx: 8,
+  threadBonus: 200,
 };
 
 export const MUSIC = {

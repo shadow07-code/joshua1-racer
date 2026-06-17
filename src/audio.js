@@ -622,6 +622,36 @@ export function sfxCombo(level) {
   o2.start(t); o2.stop(t + 0.12);
 }
 
+// Combo MILESTONE (x5/x10/…) — a bright triumphant four-note flourish.
+export function sfxComboMilestone() {
+  if (!ctx) return;
+  const t = ctx.currentTime, sec = 0.06;
+  [523, 659, 784, 1046].forEach((f, i) => {
+    const o = ctx.createOscillator(); o.type = "square"; o.frequency.value = f;
+    const g = ctx.createGain(); g.gain.value = 0;
+    g.gain.linearRampToValueAtTime(0.20, t + i * sec + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.001, t + i * sec + 0.18);
+    o.connect(g); g.connect(sfxGain);
+    o.start(t + i * sec); o.stop(t + i * sec + 0.2);
+  });
+}
+
+// Rampage CHARGE — a short rising blip whose pitch climbs with `step` (0..3) so
+// the last few near-misses before a rampage audibly "spin up" the nitrous.
+export function sfxRampageCharge(step = 0) {
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  const base = 300 * Math.pow(2, Math.max(0, Math.min(3, step)) / 3);
+  const o = ctx.createOscillator(); o.type = "triangle";
+  o.frequency.setValueAtTime(base, t);
+  o.frequency.exponentialRampToValueAtTime(base * 1.5, t + 0.18);
+  const g = ctx.createGain(); g.gain.value = 0;
+  g.gain.linearRampToValueAtTime(0.10, t + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+  o.connect(g); g.connect(sfxGain);
+  o.start(t); o.stop(t + 0.24);
+}
+
 // Shield EARNED — a bright ascending arpeggio (you powered up).
 export function sfxShieldUp() {
   if (!ctx) return;

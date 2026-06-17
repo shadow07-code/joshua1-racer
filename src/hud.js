@@ -504,9 +504,11 @@ export function drawRampageMeter(ctx, { meter, max, cooldown, cooldownMax, activ
   rect(ctx, x0 - 2, y - 2, wTot + 4, cellH + 4, 0);          // dark plate
   const cooling = cooldown > 0;
   const fillN = cooling ? Math.max(0, cooldownMax - cooldown) : meter;
-  // One pip away from RAMPAGE: the filled pips flash so the moment reads.
-  const oneAway = !cooling && meter >= max - 1 && (Math.floor(performance.now() / 120) % 2 === 0);
-  const fillIdx = cooling ? 24 : (oneAway ? 1 : 5);          // blue-gray / yellow (white flash)
+  // Build-up (J3): the last 3 pips pulse before RAMPAGE, faster the closer it gets.
+  const near = !cooling && meter >= max - 3 && meter < max;
+  const period = meter >= max - 1 ? 90 : 150;
+  const pulse = near && (Math.floor(performance.now() / period) % 2 === 0);
+  const fillIdx = cooling ? 24 : (pulse ? 1 : 5);           // blue-gray / yellow (white pulse)
   for (let i = 0; i < max; i++) {
     rect(ctx, x0 + i * (cellW + gap), y, cellW, cellH, i < fillN ? fillIdx : 4);
   }
@@ -522,6 +524,42 @@ export function drawNearMiss(ctx, timer, bonus) {
   textCentered(ctx, "NEAR MISS +" + (bonus || 100), 14, 21, 1);
 }
 
+// Floating score popups (J1) — small "+N / PERFECT +N / SMASH xN / THREAD +N"
+// numbers that drift up ~8px and fade at the point of action. Each floater is
+// { text, idx, x, y, age }. Pure screen-space UI — no world motion.
+export function drawFloaters(ctx, floaters) {
+  if (!floaters || !floaters.length) return;
+  const now = performance.now();
+  for (const f of floaters) {
+    const k = f.age / 0.7;                                  // 0..1 lifetime
+    if (k >= 1) continue;
+    if (k > 0.6 && Math.floor(now / 60) % 2 === 0) continue; // blink-fade tail
+    const y = (f.y - k * 8) | 0;
+    const w = f.text.length * 4 - 1;
+    textOutlined(ctx, f.text, (f.x - w / 2) | 0, y, f.idx, 0);
+  }
+}
+
+// Combo MILESTONE flash (J2) — a brief centred shout when the streak crosses
+// x5/x10/x15…  Sits just below the combo banner.
+export function drawComboMilestone(ctx, label, timer) {
+  if (timer <= 0 || !label) return;
+  const idx = Math.floor(performance.now() / 80) % 2 ? 5 : 9;   // gold ↔ orange
+  textOutlinedCentered(ctx, label, (H * 0.20) | 0, idx, 0, 1, 7);
+}
+
+// Distance / speed milestone banner (V3) — a small boxed centre banner that
+// gives the endless run a sense of progress.
+export function drawMilestone(ctx, label, timer) {
+  if (timer <= 0 || !label) return;
+  const w = label.length * 4 - 1;
+  const x = ((W - w) / 2) | 0, y = (H * 0.30) | 0;
+  rect(ctx, x - 5, y - 3, w + 10, 13, 0);
+  rect(ctx, x - 5, y - 3, w + 10, 1, 5);
+  rect(ctx, x - 5, y + 9, w + 10, 1, 5);
+  textCentered(ctx, label, y, 1);
+}
+
 // Deterministic full-screen starfield for the game-over backdrop (separate from
 // the title's upper-sky stars — these scatter across the whole height).
 const GO_STARS = (() => {
@@ -532,7 +570,7 @@ const GO_STARS = (() => {
   return out;
 })();
 
-export function drawGameOver(ctx, { name, score, hi, isNew, reason, passed, time, topSpeed, density, combo }) {
+export function drawGameOver(ctx, { name, score, hi, isNew, reason, passed, time, topSpeed, combo, smashed, rampages }) {
   const t = performance.now();
   // Dark backdrop with a quiet twinkling starfield — ties the screen to the
   // title's night-sky look instead of dead flat black.
@@ -547,7 +585,7 @@ export function drawGameOver(ctx, { name, score, hi, isNew, reason, passed, time
   // so the canvas only draws the banner + stats. Centre them within the upper
   // ~62% of the screen so they never sit behind that bar.
   const rowH = 12;
-  const panelH = rowH * 8 + 10;     // 8 stat rows + padding
+  const panelH = rowH * 9 + 10;     // 9 stat rows + padding
   const newHiH = isNew ? 14 : 0;
   const totalH = 26 + 8 + newHiH + panelH;
   const avail = H * 0.62;
@@ -602,12 +640,8 @@ export function drawGameOver(ctx, { name, score, hi, isNew, reason, passed, time
   statRow("TOP SPEED", (topSpeed || 0) + " KMH",             9);
 
   statRow("BEST COMBO", "X" + (combo || 0),                   17);
-
-  // Density — show as percentage increase, or "BASE" if no scaling happened
-  const densityPct = density && density > 1.001
-    ? "+" + Math.round((density - 1) * 100) + "%"
-    : "BASE";
-  statRow("DENSITY",   densityPct,                           14);
+  statRow("SMASHED",    pad(smashed != null ? smashed : 0, 3), 9);
+  statRow("RAMPAGES",   "X" + (rampages || 0),                 5);
 }
 
 // Big transient popup (SHIELD! / SAVED!) centred over the action — blinks.
