@@ -129,6 +129,9 @@ export const RACE = {
   oilSpacingMax: 440,
   // Distance milestone banner cadence (metres). Speed milestones are fixed.
   milestoneEveryM: 1000,
+  // Occasional RAMPAGE booster pickups — one spawned every [min..max] metres.
+  boosterSpacingMin: 800,
+  boosterSpacingMax: 1500,
 };
 
 // Spawn rates and traffic-row spacing.
@@ -155,11 +158,11 @@ export const SCORE = {
   //   speedBonusMax — extra fraction at top speed (0 at comboKmh → this at top).
   //   precisionMax  — extra fraction for a pixel-perfect shave (tightness 0→1).
   //   precisionPx   — gap (px) at/under which a shave counts as PERFECT.
-  //   threadBonus   — flat bonus for splitting a tight 2-car gap.
+  //   sandwichBonus — flat bonus for splitting a tight 2-car gap (a "sandwich").
   speedBonusMax: 1.0,
   precisionMax: 1.5,
   precisionPx: 8,
-  threadBonus: 200,
+  sandwichBonus: 200,
 };
 
 export const MUSIC = {

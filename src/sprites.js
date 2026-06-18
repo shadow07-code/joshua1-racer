@@ -568,5 +568,21 @@ export const SPR_STAR = [
   [_,5,5,5,_],
   [5,_,_,_,5],
 ];
+
+// RAMPAGE BOOSTER pickup — a blue nitrous canister topped with a flame, with a
+// yellow label band. Collecting it instantly fires a RAMPAGE. 7w × 11h.
+export const SPR_BOOST = [
+  [_,_,_,5,_,_,_],     //  0 flame tip
+  [_,_,9,5,9,_,_],     //  1 flame
+  [_,_,0,0,0,_,_],     //  2 cap
+  [_,0,13,16,13,0,_],  //  3 neck
+  [0,13,1,16,16,13,0], //  4 body (white glint)
+  [0,16,16,16,16,16,0],
+  [0,16,16,16,16,16,0],
+  [0,16,5,5,5,16,0],   //  7 yellow label band
+  [0,16,16,16,16,16,0],
+  [_,0,16,16,16,0,_],  //  9 base taper
+  [_,_,0,0,0,_,_],     // 10 base
+];
 // Old icons kept just to satisfy any stale import.
 export const ICN_NITRO = ICN_FLAG;

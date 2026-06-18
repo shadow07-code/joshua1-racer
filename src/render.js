@@ -245,3 +245,52 @@ export function textRight(ctx, str, x, y, paletteIdx = 0, scale = 1) {
   const w = String(str).length * 4 * scale - scale;
   text(ctx, str, x - w, y, paletteIdx, scale);
 }
+
+// Fire-styled text — each glyph ROW is coloured as a vertical flame gradient
+// (hot white/yellow at the top → orange → red at the bottom) with flickering
+// tongues licking up off the top edge, so the words literally look ablaze.
+// Used for the combo milestones. Animated by `t`.
+const FLAME_ROWS = [1, 5, 9, 9, 6];   // font rows 0..4: white, yellow, orange, orange, red
+export function textFlame(ctx, str, x, y, t = performance.now(), scale = 1) {
+  const upper = String(str).toUpperCase();
+  // 1px dark outline for legibility over a busy road.
+  for (let i = 0; i < upper.length; i++) {
+    const g = FONT_3x5[upper[i]] || FONT_3x5["?"];
+    const gx = x + i * 4 * scale;
+    for (let r = 0; r < 5; r++) for (let c = 0; c < 3; c++) {
+      if (!g[r][c]) continue;
+      ctx.fillStyle = PALETTE[0];
+      ctx.fillRect((gx + c * scale - 1) | 0, (y + r * scale) | 0, scale, scale);
+      ctx.fillRect((gx + c * scale + 1) | 0, (y + r * scale) | 0, scale, scale);
+      ctx.fillRect((gx + c * scale) | 0, (y + r * scale - 1) | 0, scale, scale);
+      ctx.fillRect((gx + c * scale) | 0, (y + r * scale + 1) | 0, scale, scale);
+    }
+  }
+  // Fire body + flickering tongues.
+  for (let i = 0; i < upper.length; i++) {
+    const g = FONT_3x5[upper[i]] || FONT_3x5["?"];
+    const gx = x + i * 4 * scale;
+    for (let c = 0; c < 3; c++) {
+      if (g[0][c] || g[1][c]) {                         // tongue above a lit top column
+        const f = Math.sin(t / 60 + (gx + c) * 1.3) + Math.sin(t / 95 + c * 2.1);
+        if (f > 0.2) {
+          ctx.fillStyle = PALETTE[f > 1.1 ? 1 : 5];
+          const lift = f > 1.4 ? 2 : 1;
+          ctx.fillRect((gx + c * scale) | 0, (y - lift * scale) | 0, scale, scale);
+        }
+      }
+      for (let r = 0; r < 5; r++) {
+        if (!g[r][c]) continue;
+        let idx = FLAME_ROWS[r];
+        if (r > 0 && ((Math.floor(t / 80) + c + r) % 6) === 0) idx = FLAME_ROWS[r - 1]; // shimmer hotter
+        ctx.fillStyle = PALETTE[idx];
+        ctx.fillRect((gx + c * scale) | 0, (y + r * scale) | 0, scale, scale);
+      }
+    }
+  }
+  return x + upper.length * 4 * scale;
+}
+export function textFlameCentered(ctx, str, y, t = performance.now(), scale = 1) {
+  const w = String(str).length * 4 * scale - scale;
+  return textFlame(ctx, str, ((W - w) / 2) | 0, y, t, scale);
+}

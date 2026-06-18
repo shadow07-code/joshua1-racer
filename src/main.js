@@ -12,7 +12,7 @@ import {
   playFlourish,
   startEngine, setEngine, stopEngine, setEngineRampage,
   sfxAccelAccent, sfxBrake, sfxPickup, sfxCrash, sfxBump, sfxBarrelDrop, sfxCombo,
-  sfxShieldUp, sfxShieldHit, sfxShockwave, sfxComboMilestone, sfxRampageCharge,
+  sfxShieldUp, sfxShieldHit, sfxShockwave, sfxComboMilestone, sfxRampageCharge, sfxNitrous,
   sfxMenuMove, sfxMenuSelect, sfxFinish, sfxCountdownBeep,
   startHeliSound, stopHeliSound,
   setMusicEnabled, setSfxEnabled, isMusicEnabled, isSfxEnabled, applyMix,
@@ -22,6 +22,7 @@ import { drawRoad, drawDistanceHaze, distToY } from "./road.js";
 import { makePlayer, updatePlayer, drawPlayer, playerBox, applyCollisionLoss } from "./entities/player.js";
 import { makeTrafficSystem, updateTraffic, drawTraffic, checkTrafficHit, prepopulateTraffic, smashCar } from "./entities/traffic.js";
 import { makeOilSystem, updateOil, drawOilSpills, checkOilHit } from "./entities/oilspills.js";
+import { makePickupSystem, updatePickups, drawPickups, checkPickup } from "./entities/pickups.js";
 import { makeCopsSystem, updateCops, drawCops, checkBarrelHit } from "./entities/cops.js";
 import { updateSmoke, drawSmoke } from "./entities/smoke.js";
 import { makeScenerySystem, updateScenery, drawScenery } from "./scenery.js";
@@ -88,6 +89,7 @@ const g = {
   traffic: null,
   scenery: null,
   oils: null,
+  pickups: null,
   scoreState: makeScoreState(),
   isNewHi: false,
   endReason: "GAME OVER",
@@ -258,6 +260,7 @@ function newRaceSetup() {
   g.player = makePlayer();
   g.traffic = makeTrafficSystem({ rowGapZ: baseRowGapForMap(g.map) });
   g.oils = makeOilSystem(g.map);
+  g.pickups = makePickupSystem();
   g.cops = makeCopsSystem();
   g.scenery = makeScenerySystem();
   for (let i = 0; i < 25; i++) updateScenery(g.scenery, 0, g.map, 0.016, SPAWN.sceneryPerMeter);
@@ -305,7 +308,8 @@ function speedScore01() {
   return Math.max(0, Math.min(1, (kmh - RACE.comboKmh) / Math.max(1, top - RACE.comboKmh)));
 }
 // J2: celebrate when the combo crosses a milestone tier (once per tier per streak).
-const COMBO_TIERS = [[30, "LEGENDARY!"], [20, "INSANE!"], [15, "GODLIKE!"], [10, "UNREAL!"], [5, "ON FIRE!"]];
+// Fire ladder — fewer, higher-stakes tiers; "ON FIRE" is earned, not handed out.
+const COMBO_TIERS = [[40, "FIRESTORM!"], [25, "INFERNO!"], [15, "ON FIRE!"], [8, "SIZZLING!"]];
 function checkComboMilestone() {
   for (const [tier, label] of COMBO_TIERS) {
     if (g.combo >= tier && g.comboMilestone < tier) {
@@ -342,7 +346,7 @@ function registerSmash() {
   const gain = SCORE.smashBonus * g.combo;
   g.scoreState.score += gain;
   g.smashTotal += 1;
-  addFloater("SMASH x" + g.combo, 9);
+  // No per-smash popup — the COMBO xN banner already climbs fast during a rampage.
   sfxCombo(g.combo);
   checkComboMilestone();
 }
@@ -559,14 +563,14 @@ function updateRace(dt) {
   const clearDist = g.player.rampageClear > 0 ? RACE.rampageClearDist : 0;
   updateTraffic(g.traffic, dt, g.player.z, g.map, {
     playerX: g.player.x,
-    onPassed: (threaded) => {
+    onPassed: (sandwich) => {
       // S1: passes pay more the faster you're going (above the combo gate).
       const gain = SCORE.passBonus * Math.max(1, g.combo) * (1 + SCORE.speedBonusMax * speedScore01());
       g.scoreState.score += gain;
-      // S3: splitting a tight 2-car gap pays a flat THREAD bonus + popup.
-      if (threaded) {
-        g.scoreState.score += SCORE.threadBonus;
-        addFloater("THREAD +" + SCORE.threadBonus, 17);
+      // S3: splitting a tight 2-car gap is a SANDWICH — flat bonus + popup.
+      if (sandwich) {
+        g.scoreState.score += SCORE.sandwichBonus;
+        addFloater("SANDWICH +" + SCORE.sandwichBonus, 17);
         sfxPickup();
       }
       // Each pass burns down the post-rampage cooldown; once it's spent, the
@@ -590,7 +594,9 @@ function updateRace(dt) {
         g.comboFlash = 0.18;
         const gain = Math.round(SCORE.nearMissBonus * g.combo * (1 + SCORE.speedBonusMax * speedScore01()) * precision);
         g.scoreState.score += gain;
-        addFloater((perfect ? "PERFECT +" : "+") + gain, perfect ? 1 : 5);
+        // Only the rare PERFECT shave gets a popup now — ordinary combo shaves
+        // just feed the COMBO xN banner (keeps the screen uncluttered).
+        if (perfect) addFloater("PERFECT!", 1);
         sfxCombo(g.combo);
         checkComboMilestone();
         // Risk → reward: an unbroken chain of `rampageNearMisses` shaves fires
@@ -616,7 +622,7 @@ function updateRace(dt) {
         const gain = Math.round(SCORE.nearMissBonus * precision);
         g.scoreState.score += gain;
         g.nearMissTimer = 0.8;          // discreet flash, no combo
-        if (perfect) addFloater("PERFECT +" + gain, 1);
+        if (perfect) addFloater("PERFECT!", 1);
         sfxPickup();
       }
     },
@@ -669,7 +675,7 @@ function updateRace(dt) {
   for (const m of [150, 180, 200]) {
     if (g.topSpeedKmh >= m && !g.speedMilesHit[m]) {
       g.speedMilesHit[m] = true;
-      g.milestoneLabel = m + " KM/H CLUB";
+      g.milestoneLabel = m + " KM/H";
       g.milestoneTimer = 1.4;
     }
   }
@@ -688,6 +694,8 @@ function updateRace(dt) {
 
   // Endless non-lethal oil slicks — spawn ahead, cull behind.
   updateOil(g.oils, g.player.z, g.map);
+  // Occasional rampage booster pickups.
+  updatePickups(g.pickups, g.player.z, g.map, dt);
 
   // Decay player's oil-slip timer.
   if (g.player.oilTimer > 0) g.player.oilTimer = Math.max(0, g.player.oilTimer - dt);
@@ -732,6 +740,23 @@ function updateRace(dt) {
       sfxBrake();
     }
   }
+  // Rampage BOOSTER pickup — grabbing one instantly fires a RAMPAGE (bypasses the
+  // near-miss meter + cooldown). Collectible even mid-rampage (just refreshes it).
+  const boost = checkPickup(g.pickups, playerBox(g.player));
+  if (boost) {
+    const wasActive = g.player.rampage > 0;
+    g.player.rampage = RACE.rampageDuration;
+    g.player.boost = RACE.rampageDuration;
+    g.rampageMeter = 0;
+    g.rampageCooldown = 0;
+    sfxNitrous();
+    if (!wasActive) {
+      g.rampagesUsed += 1;
+      g.rampageFlash = 0.12;
+      g.shieldMsg = "RAMPAGE!"; g.shieldMsgTimer = 1.6;
+      setEngineRampage(true);
+    }
+  }
 
   tickScore(g.scoreState, g.player.z, 1);
   // Per-second time bonus accumulated continuously.
@@ -758,6 +783,7 @@ function drawWorld() {
   drawOilSpills(ctx, g.oils, g.map, g.player.z, g.player.x);
   drawSmoke(ctx, g.map, g.player.z, g.player.x, g.player);
   drawTraffic(ctx, g.traffic, g.map, g.player.z, g.player.x);
+  drawPickups(ctx, g.pickups, g.map, g.player.z, g.player.x);
   drawCops(ctx, g.cops, g.map, g.player.z, g.player.x);
   drawDistanceHaze(ctx);   // atmosphere over the far field — cars emerge from it
   drawPlayer(ctx, g.player, g.map);

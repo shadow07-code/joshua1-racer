@@ -3,7 +3,7 @@
 import { W, H, PHYS, RACE } from "./config.js";
 import {
   rect, text, textRight, textCentered, drawSprite, drawSpriteScaled,
-  disc, ditherRect, groundShadow, textOutlined, textOutlinedCentered,
+  disc, ditherRect, groundShadow, textOutlined, textOutlinedCentered, textFlameCentered,
 } from "./render.js";
 import {
   SPR_PLAYER, SPR_AI_BLUE, SPR_AI_GREEN, SPR_AI_ORANGE, SPR_PALM, SPR_TREE,
@@ -468,7 +468,7 @@ export function drawTutorialOverlay(ctx, tut) {
   textOutlinedCentered(ctx, prompt, 30, (phase === "done" && !blink) ? 1 : 5, 0, 1);
 }
 
-// NEAR MISS COMBO banner — appears at the top once the multiplier is ≥2, pulses
+// COMBO banner — appears at the top once the multiplier is ≥2, pulses
 // hotter as it climbs, with a draining timer bar. Pure "juice" for close dodges.
 export function drawCombo(ctx, combo, comboTimer, comboWindow) {
   if (!combo || combo < 2) return;
@@ -477,7 +477,7 @@ export function drawCombo(ctx, combo, comboTimer, comboWindow) {
   const hot = combo >= 5;
   const blink = Math.floor(t / 110) % 2 === 0;
   const idx = hot ? (blink ? 5 : 9) : 5;            // yellow, flickering orange when hot
-  const label = "NEAR MISS COMBO x" + combo;
+  const label = "COMBO x" + combo;
   const w = label.length * 4 - 1;
   const x = ((W - w) / 2) | 0;
   rect(ctx, x - 4, y - 2, w + 8, 11, 0);            // dark plate
@@ -521,12 +521,12 @@ export function drawNearMiss(ctx, timer, bonus) {
   if (timer <= 0) return;
   // Fade out by blinking faster as the timer runs down.
   if (timer < 0.3 && Math.floor(performance.now() / 90) % 2 === 0) return;
-  textCentered(ctx, "NEAR MISS +" + (bonus || 100), 14, 21, 1);
+  textCentered(ctx, "+" + (bonus || 100), 14, 21, 1);
 }
 
-// Floating score popups (J1) — small "+N / PERFECT +N / SMASH xN / THREAD +N"
-// numbers that drift up ~8px and fade at the point of action. Each floater is
-// { text, idx, x, y, age }. Pure screen-space UI — no world motion.
+// Floating score popups (J1) — rare "PERFECT! / SANDWICH +N" callouts that drift
+// up ~8px and fade at the point of action (ordinary shaves just feed the COMBO
+// banner). Each floater is { text, idx, x, y, age }. Screen-space — no world motion.
 export function drawFloaters(ctx, floaters) {
   if (!floaters || !floaters.length) return;
   const now = performance.now();
@@ -540,12 +540,12 @@ export function drawFloaters(ctx, floaters) {
   }
 }
 
-// Combo MILESTONE flash (J2) — a brief centred shout when the streak crosses
-// x5/x10/x15…  Sits just below the combo banner.
+// Combo MILESTONE flash (J2) — a brief BURNING shout when the streak crosses a
+// fire tier (SIZZLING → ON FIRE → INFERNO → FIRESTORM). The text is rendered as
+// living flame so it reads as "you're on fire". Sits below the combo banner.
 export function drawComboMilestone(ctx, label, timer) {
   if (timer <= 0 || !label) return;
-  const idx = Math.floor(performance.now() / 80) % 2 ? 5 : 9;   // gold ↔ orange
-  textOutlinedCentered(ctx, label, (H * 0.20) | 0, idx, 0, 1, 7);
+  textFlameCentered(ctx, label, (H * 0.20) | 0, performance.now(), 1);
 }
 
 // Distance / speed milestone banner (V3) — a small boxed centre banner that
