@@ -3,7 +3,7 @@
 // No more AI rivals or finish line. The player has 3 lives. Each crash with a
 // civilian costs one life. Once you reach top speed, traffic density compounds
 // by +5% every 60 seconds, so the game gets harder the longer you survive.
-import { W, H, PHYS, PLAYER_Y, SPAWN, RACE, SCORE } from "./config.js";
+import { W, H, PHYS, SPAWN, RACE, SCORE } from "./config.js";
 import { getCtx, clear, rect } from "./render.js";
 import { MAPS, MAP_LIST, DIFFICULTY_LIST } from "./maps.js";
 import { initInput, getInput, consumePress, consumeAnyPress } from "./input.js";
@@ -12,7 +12,7 @@ import {
   playFlourish,
   startEngine, setEngine, stopEngine, setEngineRampage,
   sfxAccelAccent, sfxBrake, sfxPickup, sfxCrash, sfxBump, sfxBarrelDrop, sfxCombo,
-  sfxShieldUp, sfxShieldHit, sfxShockwave, sfxComboMilestone, sfxRampageCharge, sfxNitrous,
+  sfxShieldUp, sfxShieldHit, sfxShockwave, sfxRampageCharge, sfxNitrous,
   sfxMenuMove, sfxMenuSelect, sfxFinish, sfxCountdownBeep,
   startHeliSound, stopHeliSound,
   setMusicEnabled, setSfxEnabled, isMusicEnabled, isSfxEnabled, applyMix,
@@ -33,7 +33,7 @@ import {
 import {
   drawHud, drawTitleScreen, drawMapSelect, drawDifficultySelect,
   drawGameOver, drawPaused, drawCountdown, drawTutorialOverlay, drawSteerHints, drawCombo, drawShieldMsg,
-  drawNearMiss, drawRampageMeter, drawFloaters, drawComboMilestone, drawMilestone,
+  drawRampageMeter,
 } from "./hud.js";
 import { registerServiceWorker, initInstallBanner, initInstallButton, setInstallButtonVisible } from "./pwa.js";
 import {
@@ -103,20 +103,11 @@ const g = {
   comboTimer: 0,        // seconds left before the combo lapses
   comboFlash: 0,        // brief screen-edge flash on each combo step
   comboBest: 0,         // best combo this run (for the game-over stats)
-  nearMissTimer: 0,     // discreet sub-combo "NEAR MISS" flash timer
   rampageMeter: 0,      // combo-tier near misses banked toward the next RAMPAGE
   rampageCooldown: 0,   // cars still to pass before the meter can build again
-  floaters: [],         // J1 rising score popups
-  comboMilestone: 0,    // J2 highest combo tier celebrated this streak
-  comboMilestoneLabel: "",
-  comboMilestoneTimer: 0,
-  rampageFlash: 0,      // J3 trigger flash timer
-  smashTotal: 0,        // S4 cars smashed this run
-  rampagesUsed: 0,      // S4 rampages triggered this run
-  milestoneLabel: "",   // V3 distance/speed milestone banner
-  milestoneTimer: 0,
-  nextDistMileM: RACE.milestoneEveryM,   // V3 next distance milestone (metres)
-  speedMilesHit: {},    // V3 which speed milestones have fired
+  rampageFlash: 0,      // brief edge flash when a rampage fires
+  smashTotal: 0,        // cars smashed this run (game-over stat)
+  rampagesUsed: 0,      // rampages triggered this run (game-over stat)
   shieldMsg: "",        // transient "SHIELD!" / "SAVED!" popup text
   shieldMsgTimer: 0,
   countdownTime: 0,
@@ -277,50 +268,21 @@ function newRaceSetup() {
   g.comboTimer = 0;
   g.comboFlash = 0;
   g.comboBest = 0;
-  g.nearMissTimer = 0;
   g.rampageMeter = 0;
   g.rampageCooldown = 0;
-  g.floaters = [];
-  g.comboMilestone = 0;
-  g.comboMilestoneLabel = "";
-  g.comboMilestoneTimer = 0;
   g.rampageFlash = 0;
   g.smashTotal = 0;
   g.rampagesUsed = 0;
-  g.milestoneLabel = "";
-  g.milestoneTimer = 0;
-  g.nextDistMileM = RACE.milestoneEveryM;
-  g.speedMilesHit = {};
   g.shieldMsg = "";
   g.shieldMsgTimer = 0;
 }
 
-// ── Juice / scoring helpers ───────────────────────────────────────────────────
-// J1: push a rising score popup near the player. Capped so a rampage can't flood it.
-function addFloater(text, idx) {
-  g.floaters.push({ text, idx, x: ((W / 2) + (Math.random() - 0.5) * 40) | 0, y: PLAYER_Y - 14, age: 0 });
-  if (g.floaters.length > 16) g.floaters.shift();
-}
+// ── Scoring helper ────────────────────────────────────────────────────────────
 // S1: 0 at the combo gate (comboKmh) → 1 at top speed, for the speed bonus.
 function speedScore01() {
   const kmh = g.player.speed / PHYS.maxSpeed * (PHYS.topSpeedKmh || 200);
   const top = PHYS.topSpeedKmh || 200;
   return Math.max(0, Math.min(1, (kmh - RACE.comboKmh) / Math.max(1, top - RACE.comboKmh)));
-}
-// J2: celebrate when the combo crosses a milestone tier (once per tier per streak).
-// Fire ladder — fewer, higher-stakes tiers; "ON FIRE" is earned, not handed out.
-const COMBO_TIERS = [[40, "FIRESTORM!"], [25, "INFERNO!"], [15, "ON FIRE!"], [8, "SIZZLING!"]];
-function checkComboMilestone() {
-  for (const [tier, label] of COMBO_TIERS) {
-    if (g.combo >= tier && g.comboMilestone < tier) {
-      g.comboMilestone = tier;
-      g.comboMilestoneLabel = label;
-      g.comboMilestoneTimer = 1.2;
-      g.comboFlash = 0.25;            // a longer edge pulse for the milestone
-      sfxComboMilestone();
-      break;
-    }
-  }
 }
 
 // Take a hit: lose a life (a real crash also breaks the combo streak).
@@ -330,7 +292,6 @@ function takeHit(_invulnSec) {
   sfxCrash();
   g.player.lives -= 1;
   g.combo = 0; g.comboTimer = 0;        // a real crash breaks the streak
-  g.comboMilestone = 0;                 // ...resets the milestone ladder
   g.rampageMeter = 0;                   // ...and dumps the banked rampage meter
   if (g.player.lives <= 0) { endRace("GAME OVER"); return true; }
   return false;
@@ -348,7 +309,6 @@ function registerSmash() {
   g.smashTotal += 1;
   // No per-smash popup — the COMBO xN banner already climbs fast during a rampage.
   sfxCombo(g.combo);
-  checkComboMilestone();
 }
 
 function beginCountdown() {
@@ -567,10 +527,9 @@ function updateRace(dt) {
       // S1: passes pay more the faster you're going (above the combo gate).
       const gain = SCORE.passBonus * Math.max(1, g.combo) * (1 + SCORE.speedBonusMax * speedScore01());
       g.scoreState.score += gain;
-      // S3: splitting a tight 2-car gap is a SANDWICH — flat bonus + popup.
+      // S3: splitting a tight 2-car gap is a SANDWICH — flat bonus + a chime.
       if (sandwich) {
         g.scoreState.score += SCORE.sandwichBonus;
-        addFloater("SANDWICH +" + SCORE.sandwichBonus, 17);
         sfxPickup();
       }
       // Each pass burns down the post-rampage cooldown; once it's spent, the
@@ -586,7 +545,6 @@ function updateRace(dt) {
       const kmh = g.player.speed / PHYS.maxSpeed * (PHYS.topSpeedKmh || 200);
       const t = tightness != null ? tightness : 0;
       const precision = 1 + SCORE.precisionMax * t;
-      const perfect = (1 - t) * 18 <= SCORE.precisionPx;   // gap ≤ precisionPx px
       if (kmh >= RACE.comboKmh) {
         g.combo += 1;
         g.comboBest = Math.max(g.comboBest, g.combo);
@@ -594,11 +552,7 @@ function updateRace(dt) {
         g.comboFlash = 0.18;
         const gain = Math.round(SCORE.nearMissBonus * g.combo * (1 + SCORE.speedBonusMax * speedScore01()) * precision);
         g.scoreState.score += gain;
-        // Only the rare PERFECT shave gets a popup now — ordinary combo shaves
-        // just feed the COMBO xN banner (keeps the screen uncluttered).
-        if (perfect) addFloater("PERFECT!", 1);
         sfxCombo(g.combo);
-        checkComboMilestone();
         // Risk → reward: an unbroken chain of `rampageNearMisses` shaves fires
         // NITROUS RAMPAGE. The meter only builds while armed — never during a
         // rampage, never during the post-rampage pass cooldown.
@@ -621,8 +575,6 @@ function updateRace(dt) {
       } else {
         const gain = Math.round(SCORE.nearMissBonus * precision);
         g.scoreState.score += gain;
-        g.nearMissTimer = 0.8;          // discreet flash, no combo
-        if (perfect) addFloater("PERFECT!", 1);
         sfxPickup();
       }
     },
@@ -654,31 +606,11 @@ function updateRace(dt) {
   // A lapsed chain also dumps the banked rampage meter (it rewards UNBROKEN runs).
   if (g.comboTimer > 0) {
     g.comboTimer -= dt;
-    if (g.comboTimer <= 0) { g.combo = 0; g.rampageMeter = 0; g.comboMilestone = 0; }
+    if (g.comboTimer <= 0) { g.combo = 0; g.rampageMeter = 0; }
   }
   if (g.comboFlash > 0) g.comboFlash = Math.max(0, g.comboFlash - dt);
-  if (g.nearMissTimer > 0) g.nearMissTimer = Math.max(0, g.nearMissTimer - dt);
   if (g.shieldMsgTimer > 0) g.shieldMsgTimer = Math.max(0, g.shieldMsgTimer - dt);
   if (g.rampageFlash > 0) g.rampageFlash = Math.max(0, g.rampageFlash - dt);
-  if (g.comboMilestoneTimer > 0) g.comboMilestoneTimer = Math.max(0, g.comboMilestoneTimer - dt);
-  if (g.milestoneTimer > 0) g.milestoneTimer = Math.max(0, g.milestoneTimer - dt);
-  // J1 floaters: age + cull.
-  if (g.floaters.length) { for (const f of g.floaters) f.age += dt; g.floaters = g.floaters.filter(f => f.age < 0.7); }
-  // V3 progression banners — a distance milestone every milestoneEveryM metres,
-  // plus one-shot speed "clubs". Gives the endless run a sense of getting somewhere.
-  if (g.player.z >= g.nextDistMileM) {
-    g.milestoneLabel = Math.round(g.nextDistMileM / 1000) + " KM";
-    g.milestoneTimer = 1.4;
-    g.nextDistMileM += RACE.milestoneEveryM;
-    sfxPickup();
-  }
-  for (const m of [150, 180, 200]) {
-    if (g.topSpeedKmh >= m && !g.speedMilesHit[m]) {
-      g.speedMilesHit[m] = true;
-      g.milestoneLabel = m + " KM/H";
-      g.milestoneTimer = 1.4;
-    }
-  }
   // Police helicopter kicks in once the player crosses 150 km/h — it drops
   // flaming barrels on the road ahead (collision handled below, costs a life).
   updateCops(g.cops, dt, g.player.z, g.player.x, g.player.speed, g.map, { onDrop: sfxBarrelDrop });
@@ -871,10 +803,6 @@ function render() {
       cooldown: g.rampageCooldown, cooldownMax: RACE.rampageCooldownPasses,
       active: g.player.rampage > 0,
     });
-    drawComboMilestone(ctx, g.comboMilestoneLabel, g.comboMilestoneTimer);
-    drawMilestone(ctx, g.milestoneLabel, g.milestoneTimer);
-    drawFloaters(ctx, g.floaters);
-    if (g.combo < 2) drawNearMiss(ctx, g.nearMissTimer, SCORE.nearMissBonus);
     if (g.shieldMsgTimer > 0) drawShieldMsg(ctx, g.shieldMsg);
     drawHud(ctx, {
       score: g.scoreState.score,

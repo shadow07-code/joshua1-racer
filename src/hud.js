@@ -3,7 +3,7 @@
 import { W, H, PHYS, RACE } from "./config.js";
 import {
   rect, text, textRight, textCentered, drawSprite, drawSpriteScaled,
-  disc, ditherRect, groundShadow, textOutlined, textOutlinedCentered, textFlameCentered,
+  disc, ditherRect, groundShadow, textOutlined, textOutlinedCentered,
 } from "./render.js";
 import {
   SPR_PLAYER, SPR_AI_BLUE, SPR_AI_GREEN, SPR_AI_ORANGE, SPR_PALM, SPR_TREE,
@@ -420,7 +420,6 @@ export function drawSteerZones(ctx, { leftLit = true, rightLit = true, pulse = t
     rect(ctx, x, top, w, 1, 9);                    // bright top edge
     if (arrows) {
       drawBigArrow(ctx, x + (w / 2 | 0), cyZone - 6, dir, aw, ah, arrowIdx, 0);
-      labelCentered(ctx, label, x + (w / 2 | 0), cyZone + 14, 1);
     }
   };
   if (leftLit) paint(0, midX, -1, "LEFT");
@@ -514,51 +513,6 @@ export function drawRampageMeter(ctx, { meter, max, cooldown, cooldownMax, activ
   }
 }
 
-// Discreet sub-combo near-miss flash — small unboxed text under the score strip.
-// Shown when a close shave happens below the combo speed gate: a quiet pat on
-// the back ("NEAR MISS +100") without the full combo banner treatment.
-export function drawNearMiss(ctx, timer, bonus) {
-  if (timer <= 0) return;
-  // Fade out by blinking faster as the timer runs down.
-  if (timer < 0.3 && Math.floor(performance.now() / 90) % 2 === 0) return;
-  textCentered(ctx, "+" + (bonus || 100), 14, 21, 1);
-}
-
-// Floating score popups (J1) — rare "PERFECT! / SANDWICH +N" callouts that drift
-// up ~8px and fade at the point of action (ordinary shaves just feed the COMBO
-// banner). Each floater is { text, idx, x, y, age }. Screen-space — no world motion.
-export function drawFloaters(ctx, floaters) {
-  if (!floaters || !floaters.length) return;
-  const now = performance.now();
-  for (const f of floaters) {
-    const k = f.age / 0.7;                                  // 0..1 lifetime
-    if (k >= 1) continue;
-    if (k > 0.6 && Math.floor(now / 60) % 2 === 0) continue; // blink-fade tail
-    const y = (f.y - k * 8) | 0;
-    const w = f.text.length * 4 - 1;
-    textOutlined(ctx, f.text, (f.x - w / 2) | 0, y, f.idx, 0);
-  }
-}
-
-// Combo MILESTONE flash (J2) — a brief BURNING shout when the streak crosses a
-// fire tier (SIZZLING → ON FIRE → INFERNO → FIRESTORM). The text is rendered as
-// living flame so it reads as "you're on fire". Sits below the combo banner.
-export function drawComboMilestone(ctx, label, timer) {
-  if (timer <= 0 || !label) return;
-  textFlameCentered(ctx, label, (H * 0.20) | 0, performance.now(), 1);
-}
-
-// Distance / speed milestone banner (V3) — a small boxed centre banner that
-// gives the endless run a sense of progress.
-export function drawMilestone(ctx, label, timer) {
-  if (timer <= 0 || !label) return;
-  const w = label.length * 4 - 1;
-  const x = ((W - w) / 2) | 0, y = (H * 0.30) | 0;
-  rect(ctx, x - 5, y - 3, w + 10, 13, 0);
-  rect(ctx, x - 5, y - 3, w + 10, 1, 5);
-  rect(ctx, x - 5, y + 9, w + 10, 1, 5);
-  textCentered(ctx, label, y, 1);
-}
 
 // Deterministic full-screen starfield for the game-over backdrop (separate from
 // the title's upper-sky stars — these scatter across the whole height).
