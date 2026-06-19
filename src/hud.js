@@ -606,15 +606,7 @@ export function drawShieldMsg(ctx, msg) {
 }
 
 export function drawPaused(ctx) {
-  const cy = (H / 2) | 0;
-  // Dim the frozen world to half brightness (fine 8-bit checker — static, calm)
-  // so the pause panel pops and the screen clearly reads as "not live".
+  // Dim the frozen world (fine 8-bit checker — static, calm). The HTML pause
+  // menu (PAUSED title + RESUME / RESTART / QUIT) sits on top of this.
   ditherRect(ctx, 0, 0, W, H, 0, 0, 1);
-  rect(ctx, 16, cy - 24, W - 32, 48, 0);
-  rect(ctx, 16, cy - 24, W - 32, 2, 5);
-  rect(ctx, 16, cy + 22, W - 32, 2, 5);
-  textOutlinedCentered(ctx, "PAUSED", cy - 14, 5, 0, 2, 7);
-  if (Math.floor(performance.now() / 450) % 2 === 0) {
-    textCentered(ctx, "TAP TO RESUME", cy + 8, 1, 1);
-  }
 }

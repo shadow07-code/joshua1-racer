@@ -26,6 +26,10 @@ export function initUI(callbacks) {
     goAgain: document.getElementById("go-again"),
     goBoard: document.getElementById("go-board"),
     goExit: document.getElementById("go-exit"),
+    pausePanel: document.getElementById("pause-menu"),
+    pauseResume: document.getElementById("pause-resume"),
+    pauseRestart: document.getElementById("pause-restart"),
+    pauseQuit: document.getElementById("pause-quit"),
   };
 
   // Title LEADERBOARD button.
@@ -59,6 +63,11 @@ export function initUI(callbacks) {
   if (el.goAgain) el.goAgain.addEventListener("click", (e) => { e.stopPropagation(); cb.onPlayAgain && cb.onPlayAgain(); });
   if (el.goBoard) el.goBoard.addEventListener("click", (e) => { e.stopPropagation(); cb.onGameOverLeaderboard && cb.onGameOverLeaderboard(); });
   if (el.goExit) el.goExit.addEventListener("click", (e) => { e.stopPropagation(); cb.onExit && cb.onExit(); });
+
+  // Pause menu.
+  if (el.pauseResume) el.pauseResume.addEventListener("click", (e) => { e.stopPropagation(); cb.onPauseResume && cb.onPauseResume(); });
+  if (el.pauseRestart) el.pauseRestart.addEventListener("click", (e) => { e.stopPropagation(); cb.onPauseRestart && cb.onPauseRestart(); });
+  if (el.pauseQuit) el.pauseQuit.addEventListener("click", (e) => { e.stopPropagation(); cb.onPauseQuit && cb.onPauseQuit(); });
 
   // Keep the title buttons aligned when the viewport changes.
   window.addEventListener("resize", () => {
@@ -102,6 +111,8 @@ export function showNameEntry(show) {
 }
 
 export function showGameOverActions(show) { toggle(el.goActions, show); }
+
+export function showPauseMenu(show) { toggle(el.pausePanel, show); }
 
 export function showLeaderboardPanel(show) { toggle(el.lbPanel, show); }
 

@@ -374,6 +374,8 @@
     }
     #gameover-actions.show { display: flex; }
     #gameover-actions .btn-go, #gameover-actions .btn-ghost { flex: none; }
+    /* Pause-menu buttons stack vertically at their natural height. */
+    #pause-menu .btn-go, #pause-menu .btn-ghost { flex: none; }
 
     /* ── Title-screen sound controls (above TAP TO START) ───────────── */
     /* Matches the existing #btn-install / #btn-leaderboard button style:
@@ -434,6 +436,7 @@
 </head>
 <body>
   <div id="toolbar">
+    <button id="btn-pause" title="Pause (P)" aria-label="Pause game">⏸</button>
     <button id="btn-music" title="Music on/off (M)" aria-label="Toggle music">♪</button>
     <button id="btn-sfx" title="Sound effects on/off" aria-label="Toggle sound effects">🔊</button>
   </div>
@@ -505,6 +508,16 @@
     <button id="go-again" class="btn-go">PLAY AGAIN</button>
     <button id="go-board" class="btn-ghost">LEADERBOARD</button>
     <button id="go-exit" class="btn-ghost">EXIT</button>
+  </div>
+
+  <!-- Pause menu -->
+  <div id="pause-menu" class="panel" role="dialog" aria-label="Paused">
+    <div class="panel-box">
+      <div class="panel-title">PAUSED</div>
+      <button id="pause-resume" class="btn-go">RESUME</button>
+      <button id="pause-restart" class="btn-ghost">RESTART</button>
+      <button id="pause-quit" class="btn-ghost">QUIT</button>
+    </div>
   </div>
 
   <script type="module" src="./src/main.js"></script>

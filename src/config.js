@@ -129,9 +129,11 @@ export const RACE = {
   oilSpacingMax: 440,
   // Distance milestone banner cadence (metres). Speed milestones are fixed.
   milestoneEveryM: 1000,
-  // Occasional RAMPAGE booster pickups — one spawned every [min..max] metres.
-  boosterSpacingMin: 800,
-  boosterSpacingMax: 1500,
+  // RAMPAGE booster pickups — VERY rare, and only after the player has reached
+  // 150 km/h (the unlock is gated in main.js). Once unlocked, one spawns every
+  // [min..max] metres of road — a long way apart so they're a treat, not a crutch.
+  boosterSpacingMin: 1800,
+  boosterSpacingMax: 3400,
 };
 
 // Spawn rates and traffic-row spacing.

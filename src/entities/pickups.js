@@ -13,17 +13,23 @@ function gap() {
 }
 
 export function makePickupSystem() {
-  // First booster a little way in, then every boosterSpacing metres.
-  return { list: [], nextZ: 600 + Math.random() * 400 };
+  // nextZ stays null until boosters UNLOCK (the player hits 150 km/h), so the
+  // first one is scheduled ahead of wherever the player is at that moment —
+  // no backlog spawns from the start of the run.
+  return { list: [], nextZ: null };
 }
 
-export function updatePickups(sys, playerZ, map, dt) {
-  const ahead = playerZ + VIEW_AHEAD + 40;
-  while (sys.nextZ < ahead) {
-    const halfRoad = map.roadHalfWidth;
-    const x = (Math.random() * 2 - 1) * (halfRoad * 0.7);   // kept off the very edges
-    sys.list.push({ z: sys.nextZ, x, alive: true, bob: Math.random() * Math.PI * 2 });
-    sys.nextZ += gap();
+// `allowSpawn` gates new boosters (true once the player has reached 150 km/h).
+export function updatePickups(sys, playerZ, map, dt, allowSpawn) {
+  if (allowSpawn) {
+    if (sys.nextZ == null) sys.nextZ = playerZ + gap();
+    const ahead = playerZ + VIEW_AHEAD + 40;
+    while (sys.nextZ < ahead) {
+      const halfRoad = map.roadHalfWidth;
+      const x = (Math.random() * 2 - 1) * (halfRoad * 0.7);   // kept off the very edges
+      sys.list.push({ z: sys.nextZ, x, alive: true, bob: Math.random() * Math.PI * 2 });
+      sys.nextZ += gap();
+    }
   }
   sys.list = sys.list.filter(p => p.alive && p.z > playerZ - 12);
   for (const p of sys.list) p.bob += dt * 5;

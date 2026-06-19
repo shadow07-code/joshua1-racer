@@ -39,7 +39,7 @@ import { registerServiceWorker, initInstallBanner, initInstallButton, setInstall
 import {
   initUI, setLeaderboardButtonVisible, setSoundControlsVisible,
   showNameEntry, showGameOverActions,
-  showLeaderboardPanel, renderLeaderboard,
+  showLeaderboardPanel, renderLeaderboard, showPauseMenu,
 } from "./ui.js";
 import {
   getPlayerName, setPlayerName, submitScore, fetchTop, flushPending, cachedTop,
@@ -121,6 +121,7 @@ const g = {
 // Toolbar buttons (top-right during gameplay) + title-screen sound controls.
 const btnMusic = document.getElementById("btn-music");
 const btnSfx = document.getElementById("btn-sfx");
+const btnPause = document.getElementById("btn-pause");
 const soundControls = document.getElementById("sound-controls");
 const SFX_KEY = "joshua1.sfx";
 const TRACK_KEY = "joshua1.musicTrack";     // "0" | "1" | "2"
@@ -176,6 +177,7 @@ refreshAudioButtons();
 refreshSoundControls();
 btnMusic.addEventListener("click", toggleMusic);
 btnSfx.addEventListener("click", toggleSfx);
+btnPause.addEventListener("click", () => pauseGame());
 
 // ── Title-screen sound controls (bottom of main menu) ────────────────────────
 soundControls.addEventListener("click", (e) => {
@@ -627,7 +629,8 @@ function updateRace(dt) {
   // Endless non-lethal oil slicks — spawn ahead, cull behind.
   updateOil(g.oils, g.player.z, g.map);
   // Occasional rampage booster pickups.
-  updatePickups(g.pickups, g.player.z, g.map, dt);
+  // Boosters only start appearing once the player has genuinely hit 150 km/h.
+  updatePickups(g.pickups, g.player.z, g.map, dt, g.topSpeedKmh >= 150);
 
   // Decay player's oil-slip timer.
   if (g.player.oilTimer > 0) g.player.oilTimer = Math.max(0, g.player.oilTimer - dt);
@@ -696,7 +699,8 @@ function updateRace(dt) {
 }
 
 function updatePaused() {
-  if (consumePress("p", "P", "Enter", " ", "Touch")) { ensureAudio(); resumeGame(); }
+  // Keyboard shortcuts; the on-screen pause menu (RESUME/RESTART/QUIT) handles taps.
+  if (consumePress("p", "P", "Enter", " ")) { ensureAudio(); resumeGame(); }
   if (consumePress("Escape")) { stopMusic(); stopAllLoopingSfx(); g.state = STATES.TITLE; }
 }
 
@@ -738,9 +742,13 @@ function syncOverlays() {
   const toolbar = document.getElementById("toolbar");
   toolbar.style.display = onTitle ? "none" : "";
   toolbar.classList.toggle("playing", playing);
-  document.getElementById("steer-controls").classList.toggle("show", playing);
+  // Steer pads during active play only (not while the pause menu is up).
+  document.getElementById("steer-controls").classList.toggle("show", g.state === STATES.RACE || g.state === STATES.COUNTDOWN);
+  // The obvious pause button shows only while actually racing.
+  document.getElementById("btn-pause").style.display = (g.state === STATES.RACE) ? "" : "none";
   showNameEntry(g.state === STATES.NAME_ENTRY);
   showGameOverActions(g.state === STATES.GAME_OVER);
+  showPauseMenu(g.state === STATES.PAUSED);
   showLeaderboardPanel(g.state === STATES.LEADERBOARD);
   if (g.state === STATES.LEADERBOARD) {
     renderLeaderboard({ entries: cachedTop() }, g.playerName);   // instant from cache
@@ -874,6 +882,9 @@ initUI({
   onPlayAgain: () => playAgain(),
   onGameOverLeaderboard: () => openLeaderboard(STATES.GAME_OVER),
   onExit: () => { g.state = STATES.TITLE; },
+  onPauseResume: () => { ensureAudio(); resumeGame(); },
+  onPauseRestart: () => { ensureAudio(); sfxMenuSelect(); beginCountdown(); },
+  onPauseQuit: () => { stopMusic(); stopAllLoopingSfx(); g.state = STATES.TITLE; },
 });
 // Retry any leaderboard submission that failed on a previous (offline) run.
 flushPending();
