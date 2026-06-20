@@ -48,13 +48,13 @@ export const H = computeH();
 
 export const PHYS = {
   startSpeed: 14,
-  // Internal max-speed; HUD displays km/h via topSpeedKmh / maxSpeed ratio.
-  // Lowered from 135 → 108 (and topSpeedKmh 250 → 200) so the actual road-scroll
-  // speed at the top is ~20% slower — the km/h ratio is preserved (200/108 ==
-  // 250/135), so the speedometer reads the same per unit; only the ceiling drops.
-  // This is the main lever against the high-speed "dizzy" feeling.
-  maxSpeed: 108,
-  cruiseSpeed: 108,
+  // Internal max-speed. The HUD always shows km/h as speed/maxSpeed * topSpeedKmh,
+  // so the top of the bar reads 200 regardless of this value — lowering it just
+  // slows the actual road-scroll (the main lever against the high-speed "dizzy"
+  // feeling). 135 → 108 → 81 (a further -25%). cruiseSpeed tracks it so traffic
+  // stays proportionally paced (relative speeds unchanged).
+  maxSpeed: 81,
+  cruiseSpeed: 81,
   // Nitrous overspeed during RAMPAGE — speed is allowed up to maxSpeed*boostFactor
   // while the player.boost timer is running, for a real "kick" out of the boost.
   boostFactor: 1.10,
@@ -91,6 +91,12 @@ export const RACE = {
   densityStepSeconds: 50,       // ramp bites a bit sooner
   densityStepIncrement: 0.10,   // traffic gets +10% denser each interval
   densityMax: 1.9,
+  // Two staged density bumps for escalation (the gap lane is still left open each
+  // row, so it stays maneuverable): at 150 km/h → +20%, and 30 s after the player
+  // organically reaches top speed → a further +20%.
+  density150Bump: 1.20,
+  densityTopBump: 1.20,
+  densityTopBumpDelay: 30,
   density2CarFrom: 1.12,        // above this density, some rows spawn a 2nd car
   // ~this fraction of (non-opening) rows flank the gap lane with a car on EACH
   // side, so the player can lane-split the gap for a SANDWICH (threading). The

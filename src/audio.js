@@ -436,21 +436,37 @@ let engineOsc2 = null, engineGainSub = null, engineOscSub = null;
 let engineFilt = null;
 let _engineRampage = false;
 
+// ── Engine styles ─────────────────────────────────────────────────────────────
+// Three selectable engine "voices" so different tastes are covered. Each defines
+// the oscillator types + how pitch / filter / gain track speed. Picked from the
+// title + pause sound controls; rebuilt live by setEngineStyle().
+//   0 SMOOTH — refined Ferrari (two gentle saws, low-Q filter, light sub).
+//   1 DEEP   — muscle-car V8 (saw + square, heavy sub, low dark filter).
+//   2 RACE   — bright high-rev sport (tight saws + saw sub, open bright filter).
+const ENGINE_STYLES = [
+  { osc1: "sawtooth", osc2: "sawtooth", sub: "square",   detune: 8,  baseHz: 38, pitch: 300, subMul: 0.5, filtBase: 320, filtRange: 1650, q: 1.0, subRatio: 0.55, gBase: 0.030, gRange: 0.055 },
+  { osc1: "sawtooth", osc2: "square",   sub: "square",   detune: 16, baseHz: 30, pitch: 210, subMul: 0.5, filtBase: 240, filtRange: 1050, q: 1.5, subRatio: 0.95, gBase: 0.034, gRange: 0.060 },
+  { osc1: "sawtooth", osc2: "sawtooth", sub: "sawtooth", detune: 5,  baseHz: 48, pitch: 440, subMul: 0.5, filtBase: 420, filtRange: 2500, q: 1.8, subRatio: 0.35, gBase: 0.028, gRange: 0.052 },
+];
+let _engineStyle = 0;
+export function getEngineStyle() { return _engineStyle; }
+export function setEngineStyle(n) {
+  _engineStyle = Math.max(0, Math.min(ENGINE_STYLES.length - 1, n | 0));
+  if (engineOsc) { stopEngine(); startEngine(); }   // rebuild live if the engine is running
+}
+
 export function startEngine() {
   if (!ctx || engineOsc) return;
-  // F1 engine: two detuned sawtooths (rasp) + sub-octave square (growl).
-  // The whole character is speed-tracked in setEngine(): at standstill the
-  // pitch sits at ~38 Hz behind a nearly-closed filter (a low RUMBLE), and
-  // both pitch and filter open progressively with speed so the high-RPM
-  // scream is reserved for actual top speed instead of arriving early.
-  engineOsc = ctx.createOscillator(); engineOsc.type = "sawtooth"; engineOsc.frequency.value = 38;
-  // Gentler detune (8c, was 12) → smoother "layered cylinders" shimmer, less beat roughness.
-  engineOsc2 = ctx.createOscillator(); engineOsc2.type = "sawtooth"; engineOsc2.frequency.value = 38; engineOsc2.detune.value = 8;
-  engineOscSub = ctx.createOscillator(); engineOscSub.type = "square"; engineOscSub.frequency.value = 19;
+  // Engine voice = the selected style. At standstill the pitch sits low behind a
+  // nearly-closed filter (a RUMBLE); pitch + filter open with speed in setEngine()
+  // so the high-RPM tone is reserved for top speed instead of arriving early.
+  const st = ENGINE_STYLES[_engineStyle];
+  engineOsc = ctx.createOscillator(); engineOsc.type = st.osc1; engineOsc.frequency.value = st.baseHz;
+  engineOsc2 = ctx.createOscillator(); engineOsc2.type = st.osc2; engineOsc2.frequency.value = st.baseHz; engineOsc2.detune.value = st.detune;
+  engineOscSub = ctx.createOscillator(); engineOscSub.type = st.sub; engineOscSub.frequency.value = st.baseHz * st.subMul;
   engineGain = ctx.createGain(); engineGain.gain.value = 0;
   engineGainSub = ctx.createGain(); engineGainSub.gain.value = 0;
-  // Lower Q (1.0, was 1.4) removes the nasal/peaky resonance for a sweeter tone.
-  engineFilt = ctx.createBiquadFilter(); engineFilt.type = "lowpass"; engineFilt.frequency.value = 320; engineFilt.Q.value = 1.0;
+  engineFilt = ctx.createBiquadFilter(); engineFilt.type = "lowpass"; engineFilt.frequency.value = st.filtBase; engineFilt.Q.value = st.q;
   engineOsc.connect(engineFilt); engineOsc2.connect(engineFilt);
   engineFilt.connect(engineGain); engineGain.connect(sfxGain);
   engineOscSub.connect(engineGainSub); engineGainSub.connect(sfxGain);
@@ -478,25 +494,23 @@ function engineBoost() {
 
 export function setEngine(speed01) {
   if (!engineOsc || !ctx) return;
+  const st = ENGINE_STYLES[_engineStyle];
   const s = Math.max(0, Math.min(1, speed01));
   const t = ctx.currentTime;
   // Power curve keeps the RPM low through the early/mid range so there's real
   // headroom left for the top end (a linear ramp sounded maxed-out too early).
   const curve = Math.pow(s, 1.7);
-  const f = 38 + 300 * curve;                       // 38 Hz rumble → 338 Hz wail
+  const f = st.baseHz + st.pitch * curve;
   engineOsc.frequency.setTargetAtTime(f, t, 0.06);
   engineOsc2.frequency.setTargetAtTime(f * 1.006, t, 0.06);
-  engineOscSub.frequency.setTargetAtTime(f * 0.5, t, 0.06);
-  // Filter opens with speed: muffled low rumble at rest → bright but SMOOTH top.
-  // Ceiling trimmed (1650, was 1900) so the high end sings rather than rasps;
-  // a Ferrari is bright but refined, not buzzy. (Rampage owns the filter — see below.)
+  engineOscSub.frequency.setTargetAtTime(f * st.subMul, t, 0.06);
+  // Filter opens with speed (rampage owns it while active — see setEngineRampage).
   if (!_engineRampage) {
-    engineFilt.frequency.setTargetAtTime(320 + 1650 * curve, t, 0.08);
+    engineFilt.frequency.setTargetAtTime(st.filtBase + st.filtRange * curve, t, 0.08);
   }
-  const vol = (0.030 + 0.055 * curve) * engineBoost();
+  const vol = (st.gBase + st.gRange * curve) * engineBoost();
   engineGain.gain.setTargetAtTime(vol, t, 0.06);
-  // Lighter sub-octave growl (0.55, was 0.70) sheds the heavy/oppressive low end.
-  engineGainSub.gain.setTargetAtTime(vol * 0.55, t, 0.06);
+  engineGainSub.gain.setTargetAtTime(vol * st.subRatio, t, 0.06);
 }
 export function setEngineRampage(on) {
   if (!engineFilt || !ctx || _engineRampage === on) return;
@@ -510,8 +524,9 @@ export function setEngineRampage(on) {
     engineGain.gain.setTargetAtTime(0.14 * engineBoost(), t, 0.06);
     engineGainSub.gain.setTargetAtTime(0.10 * engineBoost(), t, 0.06);
   } else {
-    // Hand the filter back to setEngine (it re-tracks speed on the next frame).
-    engineFilt.Q.setTargetAtTime(1.0, t, 0.15);
+    // Hand the filter back to setEngine (it re-tracks speed on the next frame),
+    // restoring the current style's resonance.
+    engineFilt.Q.setTargetAtTime(ENGINE_STYLES[_engineStyle].q, t, 0.15);
   }
 }
 

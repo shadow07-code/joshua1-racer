@@ -10,7 +10,7 @@ import { initInput, getInput, consumePress, consumeAnyPress } from "./input.js";
 import {
   initAudio, resumeAudio, suspendAudio, startMusic, stopMusic, setMusicIntensity, setMusicTempoFactor,
   playFlourish,
-  startEngine, setEngine, stopEngine, setEngineRampage,
+  startEngine, setEngine, stopEngine, setEngineRampage, getEngineStyle, setEngineStyle,
   sfxAccelAccent, sfxBrake, sfxPickup, sfxCrash, sfxBump, sfxBarrelDrop, sfxCombo,
   sfxShieldUp, sfxShieldHit, sfxShockwave, sfxRampageCharge, sfxNitrous,
   sfxMenuMove, sfxMenuSelect, sfxFinish, sfxCountdownBeep,
@@ -98,6 +98,9 @@ const g = {
   hitTopSpeed: false,
   densityMul: 1.0,
   densityTimer: 0,
+  density150: false,    // one-time +20% density once 150 km/h is crossed
+  densityTopDone: false,// one-time +20% density 30s after top speed is reached
+  topTime: 0,           // seconds since top speed reached (drives the 30s bump)
   topSpeedKmh: 0,
   combo: 0,             // near-miss combo multiplier
   comboTimer: 0,        // seconds left before the combo lapses
@@ -128,6 +131,7 @@ const soundControls = document.getElementById("sound-controls");
 const pauseSound = document.getElementById("pause-sound");
 const SFX_KEY = "joshua1.sfx";
 const TRACK_KEY = "joshua1.musicTrack";     // "0" | "1" | "2"
+const ENGINE_KEY = "joshua1.engineStyle";   // "0" | "1" | "2"
 
 function loadToggle(key) { try { const v = localStorage.getItem(key); return v === null ? true : v === "1"; } catch { return true; } }
 function saveToggle(key, on) { try { localStorage.setItem(key, on ? "1" : "0"); } catch {} }
@@ -136,6 +140,8 @@ function saveToggle(key, on) { try { localStorage.setItem(key, on ? "1" : "0"); 
 // track before — including OFF — keeps their saved choice.
 function loadTrack() { try { const v = localStorage.getItem(TRACK_KEY); return v === null ? 1 : parseInt(v) || 0; } catch { return 1; } }
 function saveTrack(n) { try { localStorage.setItem(TRACK_KEY, String(n)); } catch {} }
+function loadEngine() { try { const v = localStorage.getItem(ENGINE_KEY); return v === null ? 0 : parseInt(v) || 0; } catch { return 0; } }
+function saveEngine(n) { try { localStorage.setItem(ENGINE_KEY, String(n)); } catch {} }
 
 function refreshAudioButtons() {
   const track = getMusicTrack();
@@ -154,6 +160,9 @@ function refreshSoundControls() {
     });
     cont.querySelectorAll("[data-music]").forEach(btn => {
       btn.classList.toggle("active", parseInt(btn.dataset.music) === track);
+    });
+    cont.querySelectorAll("[data-engine]").forEach(btn => {
+      btn.classList.toggle("active", parseInt(btn.dataset.engine) === getEngineStyle());
     });
   }
 }
@@ -186,6 +195,7 @@ const _initTrack = loadTrack();
 setMusicTrack(_initTrack);
 setMusicEnabled(_initTrack > 0);
 setSfxEnabled(loadToggle(SFX_KEY));
+setEngineStyle(loadEngine());
 refreshAudioButtons();
 refreshSoundControls();
 btnMusic.addEventListener("click", toggleMusic);
@@ -214,6 +224,10 @@ function applySoundChoice(btn) {
     } else {
       setMusicEnabled(false); applyMix();
     }
+  }
+  if (btn.dataset.engine !== undefined) {
+    const style = parseInt(btn.dataset.engine);
+    setEngineStyle(style); saveEngine(style);   // rebuilds the engine live if it's running
   }
   refreshAudioButtons();
   refreshSoundControls();
@@ -282,6 +296,9 @@ function newRaceSetup() {
   g.hitTopSpeed = false;
   g.densityMul = 1.0;
   g.densityTimer = 0;
+  g.density150 = false;
+  g.densityTopDone = false;
+  g.topTime = 0;
   g.topSpeedKmh = 0;   // track highest speed reached (in km/h display units)
   g.combo = 0;
   g.comboTimer = 0;
@@ -521,13 +538,25 @@ function updateRace(dt) {
   if (currentKmh > g.topSpeedKmh) g.topSpeedKmh = currentKmh;
 
   // ── Density scaling ──
-  // Once the player first reaches top speed, start a 60s timer. Each interval,
-  // traffic density grows by +5%. We apply this by shrinking the row spacing.
+  // Staged escalation: a +20% bump once 150 km/h is crossed, a further +20% 30 s
+  // after the player organically reaches top speed, then a gentle continued ramp
+  // for the long endless game. Every row still leaves a gap lane open, so the
+  // road stays maneuverable/enjoyable at any density.
+  if (!g.density150 && currentKmh >= 150) {
+    g.densityMul = Math.min(RACE.densityMax, g.densityMul * RACE.density150Bump);
+    g.density150 = true;
+  }
   if (!g.hitTopSpeed && g.player.speed >= PHYS.maxSpeed * RACE.topSpeedThreshold) {
     g.hitTopSpeed = true;
     g.densityTimer = 0;
+    g.topTime = 0;
   }
   if (g.hitTopSpeed) {
+    g.topTime += dt;
+    if (!g.densityTopDone && g.topTime >= RACE.densityTopBumpDelay) {
+      g.densityMul = Math.min(RACE.densityMax, g.densityMul * RACE.densityTopBump);
+      g.densityTopDone = true;
+    }
     g.densityTimer += dt;
     while (g.densityTimer >= RACE.densityStepSeconds) {
       g.densityTimer -= RACE.densityStepSeconds;

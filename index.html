@@ -127,6 +127,7 @@
       top: calc(env(safe-area-inset-top) + 6px);
       right: calc(env(safe-area-inset-right) + 6px);
       display: flex;
+      flex-direction: column;     /* music stacks BELOW sfx, hugging the right edge */
       gap: 8px;
       z-index: 9;
     }
@@ -461,8 +462,8 @@
 </head>
 <body>
   <div id="toolbar">
-    <button id="btn-music" title="Music on/off (M)" aria-label="Toggle music">♪</button>
     <button id="btn-sfx" title="Sound effects on/off" aria-label="Toggle sound effects">🔊</button>
+    <button id="btn-music" title="Music on/off (M)" aria-label="Toggle music">♪</button>
   </div>
 
   <!-- Pause button — top-left, just below the score strip (clear of the centred
@@ -529,6 +530,12 @@
       <button class="snd-opt" data-music="1">1</button>
       <button class="snd-opt" data-music="2">2</button>
     </div>
+    <div class="snd-row">
+      <span class="snd-label">ENGINE</span>
+      <button class="snd-opt" data-engine="0">SOFT</button>
+      <button class="snd-opt" data-engine="1">DEEP</button>
+      <button class="snd-opt" data-engine="2">RACE</button>
+    </div>
   </div>
 
   <!-- Game-over action bar -->
@@ -556,6 +563,12 @@
           <button class="snd-opt" data-music="0">OFF</button>
           <button class="snd-opt" data-music="1">1</button>
           <button class="snd-opt" data-music="2">2</button>
+        </div>
+        <div class="snd-row">
+          <span class="snd-label">ENGINE</span>
+          <button class="snd-opt" data-engine="0">SOFT</button>
+          <button class="snd-opt" data-engine="1">DEEP</button>
+          <button class="snd-opt" data-engine="2">RACE</button>
         </div>
       </div>
     </div>
