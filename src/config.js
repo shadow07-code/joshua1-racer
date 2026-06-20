@@ -92,6 +92,13 @@ export const RACE = {
   densityStepIncrement: 0.10,   // traffic gets +10% denser each interval
   densityMax: 1.9,
   density2CarFrom: 1.12,        // above this density, some rows spawn a 2nd car
+  // ~this fraction of (non-opening) rows flank the gap lane with a car on EACH
+  // side, so the player can lane-split the gap for a SANDWICH (threading). The
+  // gap stays open, so every row is still solvable — it's just a tempting line.
+  threadRowChance: 0.30,
+  // Lateral px window for sandwich detection — wide enough that splitting a gap
+  // lane flanked by cars (≈2 lanes / 45px apart) registers as a sandwich.
+  sandwichDetectPx: 48,
   trafficSidewaysChance: 0.8,   // chance a car actually changes lane on its timer (was 0.6)
   topSpeedThreshold: 0.95,
   // Police helicopter chase: a chopper flies in once the player crosses this KMH
@@ -165,6 +172,9 @@ export const SCORE = {
   precisionMax: 1.5,
   precisionPx: 8,
   sandwichBonus: 200,
+  // Each banked SANDWICH adds this fraction to ongoing near-miss combo points
+  // (the "sandwich multiplier" that scales the combo score — x1, x2, x3…).
+  sandwichMult: 0.25,
 };
 
 export const MUSIC = {

@@ -488,6 +488,19 @@ export function drawCombo(ctx, combo, comboTimer, comboWindow) {
   rect(ctx, x - 4, y + 9, ((w + 8) * frac) | 0, 1, hot ? 9 : 17);
 }
 
+// SANDWICH combo — a TRANSIENT line just below the COMBO banner. Shows for ~1.6s
+// on each sandwich pass then blinks off; the count keeps climbing and only resets
+// when the main combo breaks. Emerald, to set it apart from the gold combo.
+export function drawSandwichCombo(ctx, count, timer) {
+  if (timer <= 0 || count <= 0) return;
+  if (timer < 0.4 && Math.floor(performance.now() / 90) % 2 === 0) return;   // blink off
+  const label = "SANDWICH COMBO x" + count;
+  const w = label.length * 4 - 1;
+  const x = ((W - w) / 2) | 0, y = 24;
+  rect(ctx, x - 3, y - 1, w + 6, 8, 0);     // dark plate
+  textCentered(ctx, label, y, 17);          // emerald
+}
+
 // NITRO RAMPAGE meter — a slim row of pips just under the combo banner.
 // Gold pips fill one per combo-tier near miss; a full row fires RAMPAGE.
 // After a rampage the row goes muted blue-gray and refills as the cooldown
@@ -499,7 +512,7 @@ export function drawRampageMeter(ctx, { meter, max, cooldown, cooldownMax, activ
   const cellW = 3, cellH = 2, gap = 1;
   const wTot = max * (cellW + gap) - gap;
   const x0 = ((W - wTot) / 2) | 0;
-  const y = 26;
+  const y = 34;   // sits below the COMBO banner + the transient SANDWICH line
   rect(ctx, x0 - 2, y - 2, wTot + 4, cellH + 4, 0);          // dark plate
   const cooling = cooldown > 0;
   const fillN = cooling ? Math.max(0, cooldownMax - cooldown) : meter;

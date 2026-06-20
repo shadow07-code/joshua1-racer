@@ -33,7 +33,7 @@ import {
 import {
   drawHud, drawTitleScreen, drawMapSelect, drawDifficultySelect,
   drawGameOver, drawPaused, drawCountdown, drawTutorialOverlay, drawSteerHints, drawCombo, drawShieldMsg,
-  drawRampageMeter,
+  drawRampageMeter, drawSandwichCombo,
 } from "./hud.js";
 import { registerServiceWorker, initInstallBanner, initInstallButton, setInstallButtonVisible } from "./pwa.js";
 import {
@@ -103,6 +103,8 @@ const g = {
   comboTimer: 0,        // seconds left before the combo lapses
   comboFlash: 0,        // brief screen-edge flash on each combo step
   comboBest: 0,         // best combo this run (for the game-over stats)
+  sandwichCombo: 0,     // banked sandwiches this combo run (combo-score multiplier)
+  sandwichComboTimer: 0,// transient "SANDWICH COMBO" banner timer
   rampageMeter: 0,      // combo-tier near misses banked toward the next RAMPAGE
   rampageCooldown: 0,   // cars still to pass before the meter can build again
   rampageFlash: 0,      // brief edge flash when a rampage fires
@@ -270,6 +272,8 @@ function newRaceSetup() {
   g.comboTimer = 0;
   g.comboFlash = 0;
   g.comboBest = 0;
+  g.sandwichCombo = 0;
+  g.sandwichComboTimer = 0;
   g.rampageMeter = 0;
   g.rampageCooldown = 0;
   g.rampageFlash = 0;
@@ -294,6 +298,7 @@ function takeHit(_invulnSec) {
   sfxCrash();
   g.player.lives -= 1;
   g.combo = 0; g.comboTimer = 0;        // a real crash breaks the streak
+  g.sandwichCombo = 0; g.sandwichComboTimer = 0;  // ...and the sandwich multiplier
   g.rampageMeter = 0;                   // ...and dumps the banked rampage meter
   if (g.player.lives <= 0) { endRace("GAME OVER"); return true; }
   return false;
@@ -529,8 +534,11 @@ function updateRace(dt) {
       // S1: passes pay more the faster you're going (above the combo gate).
       const gain = SCORE.passBonus * Math.max(1, g.combo) * (1 + SCORE.speedBonusMax * speedScore01());
       g.scoreState.score += gain;
-      // S3: splitting a tight 2-car gap is a SANDWICH — flat bonus + a chime.
+      // S3: splitting a tight 2-car gap is a SANDWICH — banks a multiplier that
+      // boosts ongoing combo near-misses, plus a flat bonus and a brief banner.
       if (sandwich) {
+        g.sandwichCombo += 1;
+        g.sandwichComboTimer = 1.6;     // transient — shows then blinks off
         g.scoreState.score += SCORE.sandwichBonus;
         sfxPickup();
       }
@@ -552,7 +560,7 @@ function updateRace(dt) {
         g.comboBest = Math.max(g.comboBest, g.combo);
         g.comboTimer = RACE.comboWindow;
         g.comboFlash = 0.18;
-        const gain = Math.round(SCORE.nearMissBonus * g.combo * (1 + SCORE.speedBonusMax * speedScore01()) * precision);
+        const gain = Math.round(SCORE.nearMissBonus * g.combo * (1 + SCORE.speedBonusMax * speedScore01()) * precision * (1 + g.sandwichCombo * SCORE.sandwichMult));
         g.scoreState.score += gain;
         sfxCombo(g.combo);
         // Risk → reward: an unbroken chain of `rampageNearMisses` shaves fires
@@ -608,11 +616,12 @@ function updateRace(dt) {
   // A lapsed chain also dumps the banked rampage meter (it rewards UNBROKEN runs).
   if (g.comboTimer > 0) {
     g.comboTimer -= dt;
-    if (g.comboTimer <= 0) { g.combo = 0; g.rampageMeter = 0; }
+    if (g.comboTimer <= 0) { g.combo = 0; g.rampageMeter = 0; g.sandwichCombo = 0; }
   }
   if (g.comboFlash > 0) g.comboFlash = Math.max(0, g.comboFlash - dt);
   if (g.shieldMsgTimer > 0) g.shieldMsgTimer = Math.max(0, g.shieldMsgTimer - dt);
   if (g.rampageFlash > 0) g.rampageFlash = Math.max(0, g.rampageFlash - dt);
+  if (g.sandwichComboTimer > 0) g.sandwichComboTimer = Math.max(0, g.sandwichComboTimer - dt);
   // Police helicopter kicks in once the player crosses 150 km/h — it drops
   // flaming barrels on the road ahead (collision handled below, costs a life).
   updateCops(g.cops, dt, g.player.z, g.player.x, g.player.speed, g.map, { onDrop: sfxBarrelDrop });
@@ -806,6 +815,7 @@ function render() {
       rect(ctx, W - 3, 9, 3, H - 34, c);
     }
     drawCombo(ctx, g.combo, g.comboTimer, RACE.comboWindow);
+    drawSandwichCombo(ctx, g.sandwichCombo, g.sandwichComboTimer);
     drawRampageMeter(ctx, {
       meter: g.rampageMeter, max: RACE.rampageNearMisses,
       cooldown: g.rampageCooldown, cooldownMax: RACE.rampageCooldownPasses,

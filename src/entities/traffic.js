@@ -56,37 +56,55 @@ function spawnRow(sys, map) {
   // Clamp into [0, LANES-1] — if clamped, the player still finds a gap, just on an edge.
   if (gap < 0) gap = 0;
   if (gap >= LANES) gap = LANES - 1;
+
+  const wide = sys.rowsSpawned < 4;
+  // THREAD ROW: flank the gap lane with a car on BOTH sides so driving the gap is
+  // a lane-split (a SANDWICH). Needs an interior gap so both flanks exist —
+  // nudging it inward stays within the ±1 gap-shift budget. Skipped during the
+  // gentle opening rows. The gap itself stays open, so the row is still solvable.
+  let threadRow = false;
+  if (!wide && Math.random() < RACE.threadRowChance) {
+    if (gap <= 0) gap = 1;
+    else if (gap >= LANES - 1) gap = LANES - 2;
+    threadRow = true;
+  }
   sys.lastGapLane = gap;
 
   // Optionally widen the gap to 2 adjacent lanes early in the race so it's gentle.
-  // (Player has time to learn before density rises.)
-  const wide = sys.rowsSpawned < 4;
-  const gap2 = wide
+  const gap2 = (wide && !threadRow)
     ? (gap + (Math.random() < 0.5 ? -1 : 1))
     : -99;
 
-  // How many non-gap lanes to fill — usually 2-3 cars per row (out of 4 candidates).
-  const candidateLanes = [];
-  for (let i = 0; i < LANES; i++) {
-    if (i === gap) continue;
-    if (i === gap2) continue;
-    candidateLanes.push(i);
-  }
-  // Shuffle.
-  for (let i = candidateLanes.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [candidateLanes[i], candidateLanes[j]] = [candidateLanes[j], candidateLanes[i]];
-  }
-  // Cars per row grows with the difficulty density: one car early, and as the
-  // ramp builds, a rising share of rows get a SECOND car (the guaranteed gap
-  // lane is still excluded, so every row stays threadable).
-  let carsInRow = 1;
+  // Decide which lanes get cars.
   const dm = sys.densityMul || 1;
-  if (!wide && dm > RACE.density2CarFrom) {
-    const p2 = Math.min(0.6, (dm - RACE.density2CarFrom) * 1.1);
-    if (Math.random() < p2) carsInRow = 2;
+  let lanesToFill;
+  if (threadRow) {
+    // Flank the gap (gap-1 and gap+1) so the player lane-splits the gap. At higher
+    // density add a third car two lanes off for extra squeeze.
+    lanesToFill = [gap - 1, gap + 1].filter(l => l >= 0 && l < LANES);
+    if (dm > RACE.density2CarFrom + 0.2) {
+      const far = gap >= 2 ? gap - 2 : gap + 2;
+      if (far >= 0 && far < LANES) lanesToFill.push(far);
+    }
+  } else {
+    // Usual fill: 1 car early, a rising share get a 2nd as density climbs (the
+    // guaranteed gap lane is excluded, so every row stays threadable).
+    const candidateLanes = [];
+    for (let i = 0; i < LANES; i++) {
+      if (i === gap || i === gap2) continue;
+      candidateLanes.push(i);
+    }
+    for (let i = candidateLanes.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [candidateLanes[i], candidateLanes[j]] = [candidateLanes[j], candidateLanes[i]];
+    }
+    let carsInRow = 1;
+    if (!wide && dm > RACE.density2CarFrom) {
+      const p2 = Math.min(0.6, (dm - RACE.density2CarFrom) * 1.1);
+      if (Math.random() < p2) carsInRow = 2;
+    }
+    lanesToFill = candidateLanes.slice(0, Math.min(carsInRow, candidateLanes.length));
   }
-  const lanesToFill = candidateLanes.slice(0, Math.min(carsInRow, candidateLanes.length));
 
   for (const lane of lanesToFill) {
     const skin = pickSkin();
@@ -98,7 +116,8 @@ function spawnRow(sys, map) {
     // A drifting car SIGNALS like a real driver: its amber turn indicator
     // blinks for a short lead-in (signalT) before the drift engages, and keeps
     // blinking the whole time it's tracking across the road.
-    const drift = Math.random() < 0.60 ? (Math.random() < 0.5 ? -1 : 1) : 0;
+    // Thread-row flank cars never drift — keeps the split gap open + readable.
+    const drift = threadRow ? 0 : (Math.random() < 0.60 ? (Math.random() < 0.5 ? -1 : 1) : 0);
     sys.list.push({
       skin,
       z: sys.nextRowZ + jitter,
@@ -219,7 +238,7 @@ export function updateTraffic(sys, dt, playerZ, map, cbs, clearAheadDist = 0) {
         for (const o of sys.list) {
           if (o === c || o.smashed || o.sandwichCounted) continue;
           if (Math.abs(o.z - c.z) > 12) continue;
-          if ((o.x - px) * (c.x - px) < 0 && Math.abs(o.x - c.x) < 30) {
+          if ((o.x - px) * (c.x - px) < 0 && Math.abs(o.x - c.x) < RACE.sandwichDetectPx) {
             sandwich = true; c.sandwichCounted = true; o.sandwichCounted = true; break;
           }
         }
