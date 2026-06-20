@@ -157,6 +157,29 @@
       border-width: 3px;
       border-radius: 7px;
     }
+    /* Pause button — fixed top-left, below the score strip. display is toggled
+       to inline-flex by main.js only during a race. */
+    #btn-pause {
+      position: fixed;
+      top: calc(env(safe-area-inset-top) + 30px);
+      left: calc(env(safe-area-inset-left) + 6px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      width: 52px;
+      height: 46px;
+      background: rgba(15, 56, 15, 0.78);
+      color: var(--dmg-lightest);
+      border: 3px solid var(--dmg-light);
+      border-radius: 7px;
+      font: inherit;
+      font-size: 24px;
+      line-height: 1;
+      cursor: pointer;
+      z-index: 9;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #btn-pause:active { background: rgba(139, 172, 15, 0.85); color: #0f380f; }
     /* On-screen steering pads — big, translucent, bottom corners. */
     #steer-controls { position: fixed; inset: 0; display: none; z-index: 8; pointer-events: none; }
     #steer-controls.show { display: block; }
@@ -376,6 +399,8 @@
     #gameover-actions .btn-go, #gameover-actions .btn-ghost { flex: none; }
     /* Pause-menu buttons stack vertically at their natural height. */
     #pause-menu .btn-go, #pause-menu .btn-ghost { flex: none; }
+    /* Sound controls inside the pause menu (reuses .snd-row / .snd-opt). */
+    #pause-sound { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
 
     /* ── Title-screen sound controls (above TAP TO START) ───────────── */
     /* Matches the existing #btn-install / #btn-leaderboard button style:
@@ -436,10 +461,13 @@
 </head>
 <body>
   <div id="toolbar">
-    <button id="btn-pause" title="Pause (P)" aria-label="Pause game">⏸</button>
     <button id="btn-music" title="Music on/off (M)" aria-label="Toggle music">♪</button>
     <button id="btn-sfx" title="Sound effects on/off" aria-label="Toggle sound effects">🔊</button>
   </div>
+
+  <!-- Pause button — top-left, just below the score strip (clear of the centred
+       combo / sandwich-combo text). Shown only during a race (wired in main.js). -->
+  <button id="btn-pause" title="Pause (P)" aria-label="Pause game">⏸</button>
 
   <!-- On-screen steering pads (shown during gameplay; wired by input.js) -->
   <div id="steer-controls" aria-hidden="true">
@@ -517,6 +545,19 @@
       <button id="pause-resume" class="btn-go">RESUME</button>
       <button id="pause-restart" class="btn-ghost">RESTART</button>
       <button id="pause-quit" class="btn-ghost">QUIT</button>
+      <div id="pause-sound">
+        <div class="snd-row">
+          <span class="snd-label">SOUND</span>
+          <button class="snd-opt" data-sfx="1">ON</button>
+          <button class="snd-opt" data-sfx="0">OFF</button>
+        </div>
+        <div class="snd-row">
+          <span class="snd-label">MUSIC</span>
+          <button class="snd-opt" data-music="0">OFF</button>
+          <button class="snd-opt" data-music="1">1</button>
+          <button class="snd-opt" data-music="2">2</button>
+        </div>
+      </div>
     </div>
   </div>
 

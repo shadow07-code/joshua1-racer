@@ -125,6 +125,7 @@ const btnMusic = document.getElementById("btn-music");
 const btnSfx = document.getElementById("btn-sfx");
 const btnPause = document.getElementById("btn-pause");
 const soundControls = document.getElementById("sound-controls");
+const pauseSound = document.getElementById("pause-sound");
 const SFX_KEY = "joshua1.sfx";
 const TRACK_KEY = "joshua1.musicTrack";     // "0" | "1" | "2"
 
@@ -146,22 +147,32 @@ function refreshAudioButtons() {
 function refreshSoundControls() {
   const track = getMusicTrack();
   const sfx = isSfxEnabled();
-  soundControls.querySelectorAll("[data-sfx]").forEach(btn => {
-    btn.classList.toggle("active", (btn.dataset.sfx === "1") === sfx);
-  });
-  soundControls.querySelectorAll("[data-music]").forEach(btn => {
-    btn.classList.toggle("active", parseInt(btn.dataset.music) === track);
-  });
+  for (const cont of [soundControls, pauseSound]) {
+    if (!cont) continue;
+    cont.querySelectorAll("[data-sfx]").forEach(btn => {
+      btn.classList.toggle("active", (btn.dataset.sfx === "1") === sfx);
+    });
+    cont.querySelectorAll("[data-music]").forEach(btn => {
+      btn.classList.toggle("active", parseInt(btn.dataset.music) === track);
+    });
+  }
 }
 
-// Toolbar: mute/unmute music during gameplay (keeps selected track).
+// Toolbar: turn music on/off mid-game — works regardless of how the run started.
+// If music was OFF (no track), turning it on selects the default track and starts
+// playback live; turning it off stops it. (The engine auto-boosts while music is off.)
 function toggleMusic() {
   ensureAudio();
-  if (getMusicTrack() === 0) return;       // no track selected — nothing to toggle
-  const on = !isMusicEnabled();
-  setMusicEnabled(on);
-  applyMix();
-  refreshAudioButtons();
+  const turningOn = getMusicTrack() === 0 || !isMusicEnabled();
+  if (turningOn) {
+    if (getMusicTrack() === 0) { setMusicTrack(1); saveTrack(1); }
+    setMusicEnabled(true); applyMix();
+    if (g.state === STATES.RACE) startMusic(g.map.music);
+  } else {
+    setMusicEnabled(false); applyMix();
+    stopMusic();
+  }
+  refreshAudioButtons(); refreshSoundControls();
 }
 function toggleSfx() {
   ensureAudio();
@@ -181,10 +192,10 @@ btnMusic.addEventListener("click", toggleMusic);
 btnSfx.addEventListener("click", toggleSfx);
 btnPause.addEventListener("click", () => pauseGame());
 
-// ── Title-screen sound controls (bottom of main menu) ────────────────────────
-soundControls.addEventListener("click", (e) => {
-  const btn = e.target.closest(".snd-opt");
-  if (!btn) return;
+// Shared handler for a .snd-opt tap — used by BOTH the title-screen controls and
+// the pause-menu controls, so the player can change SFX / music mid-game,
+// irrespective of how the run started.
+function applySoundChoice(btn) {
   ensureAudio();
   if (btn.dataset.sfx !== undefined) {
     const on = btn.dataset.sfx === "1";
@@ -195,17 +206,21 @@ soundControls.addEventListener("click", (e) => {
     setMusicTrack(track); saveTrack(track);
     stopMusic();
     if (track > 0) {
-      setMusicEnabled(true);
-      applyMix();
-      startMusic("city");               // live preview on the title screen
+      setMusicEnabled(true); applyMix();
+      // Live race → the map's track; title → a preview. (Paused: context is
+      // suspended, so resume restarts the chosen track.)
+      if (g.state === STATES.RACE) startMusic(g.map.music);
+      else if (g.state !== STATES.PAUSED) startMusic("city");
     } else {
-      setMusicEnabled(false);
-      applyMix();
+      setMusicEnabled(false); applyMix();
     }
   }
   refreshAudioButtons();
   refreshSoundControls();
-});
+}
+const onSndClick = (e) => { const btn = e.target.closest(".snd-opt"); if (btn) applySoundChoice(btn); };
+soundControls.addEventListener("click", onSndClick);
+if (pauseSound) pauseSound.addEventListener("click", onSndClick);
 
 function ensureAudio() { initAudio(); resumeAudio(); applyMix(); }
 function stopAllLoopingSfx() { stopEngine(); stopHeliSound(); g._heliSoundOn = false; setEngineRampage(false); }
@@ -689,17 +704,15 @@ function updateRace(dt) {
   const boost = checkPickup(g.pickups, playerBox(g.player));
   if (boost) {
     const wasActive = g.player.rampage > 0;
-    g.player.rampage = RACE.rampageDuration;
+    g.player.rampage = RACE.rampageDuration;   // (re)fill — RESETS the timer even mid-rampage
     g.player.boost = RACE.rampageDuration;
     g.rampageMeter = 0;
     g.rampageCooldown = 0;
+    g.rampageFlash = 0.12;                      // feedback on every grab (incl. a refresh)
+    g.shieldMsg = "RAMPAGE!"; g.shieldMsgTimer = 1.6;
     sfxNitrous();
-    if (!wasActive) {
-      g.rampagesUsed += 1;
-      g.rampageFlash = 0.12;
-      g.shieldMsg = "RAMPAGE!"; g.shieldMsgTimer = 1.6;
-      setEngineRampage(true);
-    }
+    setEngineRampage(true);                     // no-op if already rampaging
+    if (!wasActive) g.rampagesUsed += 1;        // only a fresh rampage counts toward the stat
   }
 
   tickScore(g.scoreState, g.player.z, 1);
@@ -753,8 +766,8 @@ function syncOverlays() {
   toolbar.classList.toggle("playing", playing);
   // Steer pads during active play only (not while the pause menu is up).
   document.getElementById("steer-controls").classList.toggle("show", g.state === STATES.RACE || g.state === STATES.COUNTDOWN);
-  // The obvious pause button shows only while actually racing.
-  document.getElementById("btn-pause").style.display = (g.state === STATES.RACE) ? "" : "none";
+  // The obvious pause button (top-left, below the score) shows only while racing.
+  document.getElementById("btn-pause").style.display = (g.state === STATES.RACE) ? "inline-flex" : "none";
   showNameEntry(g.state === STATES.NAME_ENTRY);
   showGameOverActions(g.state === STATES.GAME_OVER);
   showPauseMenu(g.state === STATES.PAUSED);

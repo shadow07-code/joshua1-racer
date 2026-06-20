@@ -467,6 +467,15 @@ export function stopEngine() {
   engineOsc = engineOsc2 = engineOscSub = null;
   engineGain = engineGainSub = engineFilt = null;
 }
+// Engine loudness multiplier: +20% in ALL situations, and +40% MORE when music
+// is off (the car fills the empty space). Only scales the engine gain — the
+// other SFX (through sfxGain) are unaffected. Recomputed live each frame, so
+// muting/unmuting music mid-game changes it on the next setEngine call.
+function engineBoost() {
+  const musicOff = !musicEnabled || _musicTrack === 0;
+  return musicOff ? 1.2 * 1.4 : 1.2;
+}
+
 export function setEngine(speed01) {
   if (!engineOsc || !ctx) return;
   const s = Math.max(0, Math.min(1, speed01));
@@ -484,7 +493,7 @@ export function setEngine(speed01) {
   if (!_engineRampage) {
     engineFilt.frequency.setTargetAtTime(320 + 1650 * curve, t, 0.08);
   }
-  const vol = 0.030 + 0.055 * curve;
+  const vol = (0.030 + 0.055 * curve) * engineBoost();
   engineGain.gain.setTargetAtTime(vol, t, 0.06);
   // Lighter sub-octave growl (0.55, was 0.70) sheds the heavy/oppressive low end.
   engineGainSub.gain.setTargetAtTime(vol * 0.55, t, 0.06);
@@ -498,8 +507,8 @@ export function setEngineRampage(on) {
     // (2.0, was 2.6) keep the rampage snarl exciting without the ear-splitting rasp.
     engineFilt.frequency.setTargetAtTime(2200, t, 0.08);
     engineFilt.Q.setTargetAtTime(2.0, t, 0.08);
-    engineGain.gain.setTargetAtTime(0.14, t, 0.06);
-    engineGainSub.gain.setTargetAtTime(0.10, t, 0.06);
+    engineGain.gain.setTargetAtTime(0.14 * engineBoost(), t, 0.06);
+    engineGainSub.gain.setTargetAtTime(0.10 * engineBoost(), t, 0.06);
   } else {
     // Hand the filter back to setEngine (it re-tracks speed on the next frame).
     engineFilt.Q.setTargetAtTime(1.0, t, 0.15);
