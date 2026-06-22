@@ -87,6 +87,37 @@ const SPR_F1_BASE = [
   [_,0,6,1,1,1,1,1,1,6,0,_],       // 17 rear wing — body-colour endplates
 ];
 
+// ─── DRIVER (title-screen mascot) — 6w × 11h, front view ──────────────────────
+// The J-car's driver: red helmet (6) with a yellow visor (5), white race suit (1)
+// with red sleeves, dark boots (0). Two poses — standing, and a right-arm
+// thumbs-up — drawn at the same scale as the hero car for the title animation.
+export const SPR_DRIVER_STAND = [
+  [_,_,6,6,_,_],   //  0 helmet crown
+  [_,6,6,6,6,_],   //  1 helmet
+  [_,6,5,5,6,_],   //  2 visor
+  [_,0,1,1,0,_],   //  3 collar
+  [6,1,1,1,1,6],   //  4 shoulders + sleeves
+  [6,1,8,1,1,6],   //  5 chest (highlight) + sleeves
+  [6,1,1,1,1,6],   //  6 torso + hands
+  [_,1,1,1,1,_],   //  7 hips
+  [_,1,0,1,_,_],   //  8 legs
+  [_,0,_,0,_,_],   //  9 boots
+  [_,0,_,0,_,_],   // 10 boots
+];
+export const SPR_DRIVER_THUMB = [
+  [_,_,6,6,_,1],   //  0 helmet crown + raised fist
+  [_,6,6,6,6,6],   //  1 helmet + raised arm
+  [_,6,5,5,6,_],   //  2 visor
+  [_,0,1,1,0,_],   //  3 collar
+  [6,1,1,1,1,_],   //  4 left sleeve + shoulders (right arm raised)
+  [_,1,8,1,1,_],   //  5 chest
+  [_,1,1,1,1,_],   //  6 torso
+  [_,1,1,1,1,_],   //  7 hips
+  [_,1,0,1,_,_],   //  8 legs
+  [_,0,_,0,_,_],   //  9 boots
+  [_,0,_,0,_,_],   // 10 boots
+];
+
 // Stamp a white "J" on the engine cover (player only — AI rivals stay plain).
 // Spans rows 11..14, cols 4..6: top bar, stem down the right, hook curling left.
 function stampJ(sprite) {

@@ -18,7 +18,7 @@ import {
   setMusicEnabled, setSfxEnabled, isMusicEnabled, isSfxEnabled, applyMix,
   getMusicTrack, setMusicTrack,
 } from "./audio.js";
-import { drawRoad, drawDistanceHaze, distToY } from "./road.js";
+import { drawRoad, drawDistanceHaze, drawTimeOfDayTint, distToY } from "./road.js";
 import { makePlayer, updatePlayer, drawPlayer, playerBox, applyCollisionLoss } from "./entities/player.js";
 import { makeTrafficSystem, updateTraffic, drawTraffic, checkTrafficHit, prepopulateTraffic, smashCar } from "./entities/traffic.js";
 import { makeOilSystem, updateOil, drawOilSpills, checkOilHit } from "./entities/oilspills.js";
@@ -33,7 +33,7 @@ import {
 import {
   drawHud, drawTitleScreen, drawMapSelect, drawDifficultySelect,
   drawGameOver, drawPaused, drawCountdown, drawTutorialOverlay, drawSteerHints, drawCombo, drawShieldMsg,
-  drawRampageMeter, drawSandwichCombo,
+  drawRampageMeter, drawSandwichCombo, drawShareCard, SHARE_CARD_W, SHARE_CARD_H,
 } from "./hud.js";
 import { registerServiceWorker, initInstallBanner, initInstallButton, setInstallButtonVisible } from "./pwa.js";
 import {
@@ -120,7 +120,17 @@ const g = {
   tut: null,            // first-run steering tutorial sub-state
   playerName: getPlayerName(),   // remembered name, pre-fills the entry panel
   lbReturnTo: STATES.TITLE,      // where the leaderboard BACK button returns to
+  world: { score: 0, name: "" }, // current global #1 (for the title YOU/WORLD chip)
 };
+
+// Pull the global #1 from the cached leaderboard (ZREVRANGE → entry 0 is the top
+// score). Cheap localStorage read; refreshed on load and whenever we hit the title.
+function refreshWorldHi() {
+  try {
+    const top = cachedTop();
+    if (top && top.length) g.world = { score: top[0].score || 0, name: top[0].name || "" };
+  } catch {}
+}
 
 // ── Audio toggles ─────────────────────────────────────────────────────────────
 // Toolbar buttons (top-right during gameplay) + title-screen sound controls.
@@ -425,6 +435,55 @@ function playAgain() {
   ensureAudio();
   sfxMenuSelect();
   beginCountdown();      // reuse the remembered name + current map/difficulty
+}
+
+// Render the run's stats to a crisp PNG and hand it to the OS share sheet (with a
+// download fallback on desktop / browsers without file sharing). Built off an
+// offscreen 160-wide card, scaled ×4 with nearest-neighbour so it stays pixel-sharp.
+async function shareScoreCard() {
+  ensureAudio();
+  sfxMenuSelect();
+  const data = {
+    name: g.playerName || "AAA",
+    score: Math.floor(g.scoreState.score),
+    isNew: g.isNewHi,
+    time: g.raceTime,
+    topSpeed: g.topSpeedKmh || 0,
+    passed: g.traffic ? g.traffic.passedCount : 0,
+    combo: g.comboBest || 0,
+    smashed: g.smashTotal || 0,
+    rampages: g.rampagesUsed || 0,
+    world: g.world,
+  };
+  const base = document.createElement("canvas");
+  base.width = SHARE_CARD_W; base.height = SHARE_CARD_H;
+  const bctx = base.getContext("2d", { alpha: false });
+  bctx.imageSmoothingEnabled = false;
+  drawShareCard(bctx, data);
+  const S = 4;
+  const out = document.createElement("canvas");
+  out.width = SHARE_CARD_W * S; out.height = SHARE_CARD_H * S;
+  const octx = out.getContext("2d", { alpha: false });
+  octx.imageSmoothingEnabled = false;
+  octx.drawImage(base, 0, 0, out.width, out.height);
+  const blob = await new Promise((res) => out.toBlob(res, "image/png"));
+  if (!blob) return;
+  const file = new File([blob], "joshua1-score.png", { type: "image/png" });
+  const text = `I scored ${data.score} in JOSHUA 1 RACING! Beat that: https://joshua1-racer.vercel.app`;
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: "JOSHUA 1 RACING", text });
+      return;
+    }
+  } catch (err) { if (err && err.name === "AbortError") return; }
+  // Fallback: download the PNG (desktop / no Web Share file support).
+  try {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "joshua1-score.png";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  } catch {}
 }
 
 // Build a minimal demo world (road + car + scenery, no traffic/scoring/cops) as
@@ -774,6 +833,9 @@ function drawWorld() {
   drawCops(ctx, g.cops, g.map, g.player.z, g.player.x);
   drawDistanceHaze(ctx);   // atmosphere over the far field — cars emerge from it
   drawPlayer(ctx, g.player, g.map);
+  // Day → dusk → night → dawn colour wash (static screen-space, no optic flow).
+  // Drawn LAST so the world is tinted but the HUD/banners (drawn after) stay clear.
+  drawTimeOfDayTint(ctx, g.raceTime);
 }
 
 // Toggle the HTML overlays once per state change, and kick off the leaderboard
@@ -783,6 +845,11 @@ function syncOverlays() {
   _lastUiState = g.state;
   const onTitle = g.state === STATES.TITLE;
   const onMenu = onTitle || g.state === STATES.NAME_ENTRY || g.state === STATES.LEADERBOARD;
+  // Returning to the title: refresh the WORLD #1 chip from cache, then fetch fresh.
+  if (onTitle) {
+    refreshWorldHi();
+    fetchTop().then(() => { if (g.state === STATES.TITLE) refreshWorldHi(); });
+  }
   setInstallButtonVisible(onTitle);
   setLeaderboardButtonVisible(onTitle);
   // Sound controls live on the title screen only (positioned above TAP TO START).
@@ -814,7 +881,7 @@ function render() {
   syncOverlays();
   // Title screen also backs the name-entry and leaderboard modals.
   if (g.state === STATES.TITLE || g.state === STATES.NAME_ENTRY || g.state === STATES.LEADERBOARD) {
-    drawTitleScreen(ctx, bestEverScore());
+    drawTitleScreen(ctx, bestEverScore(), g.world);
     return;
   }
   if (g.state === STATES.MAP_SELECT) { drawMapSelect(ctx, g.mapIdx); return; }
@@ -932,13 +999,17 @@ initUI({
   onOpenLeaderboard: () => { ensureAudio(); sfxMenuSelect(); openLeaderboard(STATES.TITLE); },
   onLeaderboardBack: () => { g.state = g.lbReturnTo || STATES.TITLE; },
   onPlayAgain: () => playAgain(),
+  onShareScore: () => shareScoreCard(),
   onGameOverLeaderboard: () => openLeaderboard(STATES.GAME_OVER),
   onExit: () => { g.state = STATES.TITLE; },
   onPauseResume: () => { ensureAudio(); resumeGame(); },
   onPauseRestart: () => { ensureAudio(); sfxMenuSelect(); beginCountdown(); },
   onPauseQuit: () => { stopMusic(); stopAllLoopingSfx(); g.state = STATES.TITLE; },
 });
-// Retry any leaderboard submission that failed on a previous (offline) run.
+// Retry any leaderboard submission that failed on a previous (offline) run, then
+// prime the WORLD #1 chip from cache and refresh it from the network.
 flushPending();
+refreshWorldHi();
+fetchTop().then(() => refreshWorldHi());
 
 requestAnimationFrame((t) => { lastT = t; requestAnimationFrame(frame); });

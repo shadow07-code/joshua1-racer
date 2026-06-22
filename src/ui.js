@@ -4,7 +4,7 @@
 // the overlays and reports user intent back through callbacks.
 
 import { sanitizeName, getPlayerName } from "./leaderboard.js";
-import { H } from "./config.js";
+import { W, H } from "./config.js";
 
 let el = {};            // cached elements
 let cb = {};            // callbacks supplied by main.js
@@ -13,6 +13,7 @@ export function initUI(callbacks) {
   cb = callbacks || {};
   el = {
     btnLeaderboard: document.getElementById("btn-leaderboard"),
+    btnInstall: document.getElementById("btn-install"),
     soundControls: document.getElementById("sound-controls"),
     namePanel: document.getElementById("name-entry"),
     nameInput: document.getElementById("name-input"),
@@ -24,6 +25,7 @@ export function initUI(callbacks) {
     lbBack: document.getElementById("lb-back"),
     goActions: document.getElementById("gameover-actions"),
     goAgain: document.getElementById("go-again"),
+    goShare: document.getElementById("go-share"),
     goBoard: document.getElementById("go-board"),
     goExit: document.getElementById("go-exit"),
     pausePanel: document.getElementById("pause-menu"),
@@ -61,6 +63,7 @@ export function initUI(callbacks) {
 
   // Game-over actions.
   if (el.goAgain) el.goAgain.addEventListener("click", (e) => { e.stopPropagation(); cb.onPlayAgain && cb.onPlayAgain(); });
+  if (el.goShare) el.goShare.addEventListener("click", (e) => { e.stopPropagation(); cb.onShareScore && cb.onShareScore(); });
   if (el.goBoard) el.goBoard.addEventListener("click", (e) => { e.stopPropagation(); cb.onGameOverLeaderboard && cb.onGameOverLeaderboard(); });
   if (el.goExit) el.goExit.addEventListener("click", (e) => { e.stopPropagation(); cb.onExit && cb.onExit(); });
 
@@ -80,15 +83,33 @@ export function initUI(callbacks) {
 
 function toggle(node, show) { if (node) node.classList.toggle("show", !!show); }
 
-// Place the title-screen buttons stacked above the "TAP TO START" banner
-// (banner top = H-118 in canvas units). From bottom to top:
-//   install  → leaderboard  → sound controls
-// All anchored relative to that same banner so they read as one vertical column.
+// Map a canvas-Y (0..H) to a screen-Y in px, honouring object-fit:contain
+// letterboxing, so the HTML pills line up with what the canvas actually draws.
+function titleMetrics() {
+  const cv = document.getElementById("game");
+  if (!cv) return { offY: 0, scale: (window.innerHeight || H) / H };
+  const r = cv.getBoundingClientRect();
+  const arC = W / H, arB = r.width / Math.max(1, r.height);
+  let drawH, offY;
+  if (arB > arC) { drawH = r.height; offY = r.top; }                     // bars left/right
+  else { drawH = r.width / arC; offY = r.top + (r.height - drawH) / 2; } // bars top/bottom
+  return { offY, scale: drawH / H };
+}
+
+// Stack the title control pills (sound → leaderboard → install) DOWNWARD from just
+// under the canvas YOU/WORLD chip (canvas y≈67), measuring each pill's real height
+// so they can never overlap the chip or each other on any screen size/aspect. The
+// canvas keeps that band clear (open sky), and the parked car/driver sit below.
 export function positionTitleUI() {
-  const scale = window.innerHeight / H;
-  const installBottom = (118 + 8) * scale;
-  if (el.btnLeaderboard) el.btnLeaderboard.style.bottom = (installBottom + 48) + "px";
-  if (el.soundControls)  el.soundControls.style.bottom  = (installBottom + 100) + "px";
+  const m = titleMetrics();
+  const gap = Math.max(6, Math.min(14, Math.round(4 * m.scale)));
+  let top = Math.round(m.offY + 67 * m.scale);
+  for (const node of [el.soundControls, el.btnLeaderboard, el.btnInstall]) {
+    if (!node || !node.classList.contains("show")) continue;
+    node.style.bottom = "auto";
+    node.style.top = top + "px";
+    top += (node.offsetHeight || 40) + gap;
+  }
 }
 
 export function setLeaderboardButtonVisible(show) {

@@ -8,6 +8,7 @@ import {
 import {
   SPR_PLAYER, SPR_AI_BLUE, SPR_AI_GREEN, SPR_AI_ORANGE, SPR_PALM, SPR_TREE,
   SPR_SEDAN_BLUE, SPR_SEDAN_RED, SPR_BUS_YELLOW,
+  SPR_DRIVER_STAND, SPR_DRIVER_THUMB,
   ICN_SPEED, ICN_FLAG, ICN_TROPHY, ICN_PASS,
 } from "./sprites.js";
 
@@ -90,7 +91,10 @@ export function drawHud(ctx, {
 }
 
 // ─── Title screen — layered synthwave sunset + receding road hero shot ─────────
-const TITLE_HORIZON = 104;
+// Horizon sits low so the upper sky is a tall, open band — the HTML control pills
+// (sound / leaderboard / install, positioned by ui.js) live in that band under the
+// YOU/WORLD chip, with the parked hero car + driver in the road strip below.
+const TITLE_HORIZON = H - 100;
 
 // Sunset gradient bands, top → horizon. [yStart, paletteIdx]
 const SKY_BANDS = [
@@ -197,27 +201,58 @@ function drawTitleRoad(ctx, t) {
 
 function drawHeroCar(ctx, t, topY) {
   const scale = 2;
-  const wob = Math.sin(t / 420) * 1.2;
-  const x = (80 - 12 + wob) | 0;          // sprite is 12w → centre at 80
-  const baseY = topY + 18 * scale;        // sprite is 18h
-  groundShadow(ctx, 80, baseY, 14);
+  const cx = 80;
+  const x = (cx - 12) | 0;                 // sprite is 12w → centre at 80, PARKED (no wobble)
+  const baseY = topY + 18 * scale;         // sprite is 18h
+  groundShadow(ctx, cx, baseY, 14);
   drawSpriteScaled(ctx, SPR_PLAYER, x, topY, scale);
-  // Flickering exhaust glow at the rear (bottom) of the car.
-  if ((Math.floor(t / 90) % 2) === 0) {
+  // Gentle idle exhaust shimmer at the rear (it's parked but running).
+  if ((Math.floor(t / 160) % 2) === 0) {
     disc(ctx, 76, baseY + 2, 2, 9);
-    disc(ctx, 84, baseY + 2, 2, 5);
+    disc(ctx, 84, baseY + 2, 1, 5);
   } else {
     disc(ctx, 76, baseY + 2, 1, 5);
     disc(ctx, 84, baseY + 2, 2, 9);
   }
+  return baseY;
 }
 
-export function drawTitleScreen(ctx, allTimeBest) {
+// The driver steps out of the parked J-car and gives a thumbs-up, on a ~6s loop:
+//   in-car → climbs out to the left → stands → thumbs-up (with a blinking spark)
+//   → climbs back in. Title-screen flourish only (no gameplay motion), so it's
+//   free of the high-speed dizziness rule.
+function drawTitleDriver(ctx, t, carCx, carBaseY) {
+  const L = 6000, p = t % L;
+  const scale = 2;
+  const standDrawX = carCx - 26;           // standing spot, left of the car
+  const tuckDrawX = carCx - 12;            // start/end: tucked at the car's flank
+  const feet = carBaseY + 2;               // driver feet just behind the car's base
+  const ease = (f) => f * f * (3 - 2 * f); // smoothstep
+
+  let spr, drawX, rise;                     // rise = how "stood up" (0 crouch → 1 full)
+  if (p < 700) return;                                          // still in the cockpit
+  else if (p < 1700) { const f = ease((p - 700) / 1000); spr = SPR_DRIVER_STAND; drawX = tuckDrawX + (standDrawX - tuckDrawX) * f; rise = f; }
+  else if (p < 2500) { spr = SPR_DRIVER_STAND; drawX = standDrawX; rise = 1; }
+  else if (p < 5000) { spr = SPR_DRIVER_THUMB; drawX = standDrawX; rise = 1; }
+  else { const f = ease((p - 5000) / 1000); spr = SPR_DRIVER_STAND; drawX = standDrawX + (tuckDrawX - standDrawX) * f; rise = 1 - f * 0.5; }
+
+  const h = spr.length * scale;
+  const topY = (feet - h * rise) | 0;       // crouch = lower; standing = full height
+  const dx = drawX | 0;
+  groundShadow(ctx, dx + 6, feet, 7);
+  drawSpriteScaled(ctx, spr, dx, topY, scale);
+  // Blink a little spark by the raised fist during the thumbs-up.
+  if (spr === SPR_DRIVER_THUMB && (Math.floor(t / 180) % 2 === 0)) {
+    const fx = dx + 5 * scale, fy = topY - 2;
+    rect(ctx, fx, fy, 1, 3, 1); rect(ctx, fx - 1, fy + 1, 3, 1, 1);
+  }
+}
+
+export function drawTitleScreen(ctx, allTimeBest, world) {
   const t = performance.now();
 
-  // Layout anchored to the bottom so the hero shot fills any screen height.
-  const heroTopY = H - 90;
-  const bannerY = heroTopY - 28;
+  // Hero shot anchored to the bottom so it fills any screen height.
+  const heroTopY = H - 94;
 
   // ── Scene ──
   drawTitleSky(ctx);
@@ -225,7 +260,8 @@ export function drawTitleScreen(ctx, allTimeBest) {
   drawSun(ctx, t);
   drawSkyline(ctx, t);
   drawTitleRoad(ctx, t);
-  drawHeroCar(ctx, t, heroTopY);
+  const carBaseY = drawHeroCar(ctx, t, heroTopY);
+  drawTitleDriver(ctx, t, 80, carBaseY);
 
   // ── Logo ──
   textOutlinedCentered(ctx, "JOSHUA 1", 12, 5, 0, 3, 7);   // yellow on black, dk-red shadow
@@ -246,19 +282,36 @@ export function drawTitleScreen(ctx, allTimeBest) {
     ctx.restore();
   }
 
-  // ── Best-score chip ──
-  const chipW = 96, chipX = (W - chipW) / 2 | 0, chipY = 48;
-  rect(ctx, chipX, chipY, chipW, 13, 0);
-  rect(ctx, chipX, chipY, chipW, 1, 5);
-  rect(ctx, chipX, chipY + 12, chipW, 1, 9);
-  drawSprite(ctx, ICN_TROPHY, chipX + 4, chipY + 3);
-  text(ctx, "BEST", chipX + 14, chipY + 4, 5, 1);
-  text(ctx, pad(allTimeBest, 6), chipX + 38, chipY + 4, 1, 1);
+  // ── Best-score chips — YOU (your record) vs WORLD (global #1) ──
+  // Two stacked rows so there's always a target on screen: your personal best
+  // AND the current global #1 (name + score, from the cached leaderboard).
+  const chipW = 122, chipX = ((W - chipW) / 2) | 0, chipY = 44, rowH = 10;
+  rect(ctx, chipX, chipY, chipW, rowH * 2 + 1, 0);         // dark plate
+  rect(ctx, chipX, chipY, chipW, 1, 5);                    // gold top edge
+  rect(ctx, chipX, chipY + rowH, chipW, 1, 4);             // mid divider
+  rect(ctx, chipX, chipY + rowH * 2, chipW, 1, 9);         // orange base
+  // Row 1 — YOU (personal best)
+  drawSprite(ctx, ICN_TROPHY, chipX + 4, chipY + 2);
+  text(ctx, "YOU", chipX + 14, chipY + 3, 5, 1);
+  textRight(ctx, pad(allTimeBest, 6), chipX + chipW - 4, chipY + 3, 1, 1);
+  // Row 2 — WORLD (global #1). Tiny globe glyph, then holder name + score.
+  const wy = chipY + rowH + 2;
+  disc(ctx, chipX + 7, wy + 3, 3, 16);                     // blue globe
+  rect(ctx, chipX + 4, wy + 3, 7, 1, 17);                  // green equator
+  rect(ctx, chipX + 7, wy, 1, 7, 17);                      // green meridian
+  text(ctx, "WORLD", chipX + 14, wy + 1, 5, 1);
+  if (world && world.score > 0) {
+    text(ctx, (world.name || "???").slice(0, 8), chipX + 36, wy + 1, 13, 1);
+    textRight(ctx, pad(world.score, 6), chipX + chipW - 4, wy + 1, 5, 1);
+  } else {
+    textRight(ctx, "------", chipX + chipW - 4, wy + 1, 4, 1);
+  }
 
-  // ── "TAP TO START" banner (floating above the hero car) ──
-  rect(ctx, 8, bannerY, W - 16, 18, 0);
-  rect(ctx, 8, bannerY, W - 16, 1, 1);
-  rect(ctx, 8, bannerY + 17, W - 16, 1, 0);
+  // ── "TAP TO START" — slim banner pinned just above the control hints ──
+  const bannerY = H - 46;
+  rect(ctx, 8, bannerY, W - 16, 16, 0);
+  rect(ctx, 8, bannerY, W - 16, 1, 5);
+  rect(ctx, 8, bannerY + 15, W - 16, 1, 9);
   const promptIdx = (Math.floor(t / 400) % 2 === 0) ? 5 : 1;
   textOutlinedCentered(ctx, "TAP TO START", bannerY + 4, promptIdx, 0, 2);
 
@@ -622,4 +675,67 @@ export function drawPaused(ctx) {
   // Dim the frozen world (fine 8-bit checker — static, calm). The HTML pause
   // menu (PAUSED title + RESUME / RESTART / QUIT) sits on top of this.
   ditherRect(ctx, 0, 0, W, H, 0, 0, 1);
+}
+
+// ─── Shareable score card ──────────────────────────────────────────────────────
+// A self-contained results image (NOT the live game-over screen). Drawn at a
+// fixed 160-wide canvas using the same pixel font/sprites, then scaled up to a
+// crisp PNG by the caller. Its own width/height so it never depends on the
+// device's screen aspect.
+export const SHARE_CARD_W = 160;
+export const SHARE_CARD_H = 200;
+
+export function drawShareCard(ctx, { name, score, isNew, time, topSpeed, passed, combo, smashed, rampages, world }) {
+  const Wc = SHARE_CARD_W, Hc = SHARE_CARD_H;
+  // Backdrop — black with a quiet starfield and a gold double frame.
+  rect(ctx, 0, 0, Wc, Hc, 0);
+  for (const st of GO_STARS) {
+    if (((st.x * 7 + st.y) % 5) < 2) continue;            // sparse, deterministic
+    rect(ctx, st.x % Wc, st.y % Hc, 1, 1, (st.x % 3 === 0) ? 23 : 4);
+  }
+  rect(ctx, 0, 0, Wc, 2, 5); rect(ctx, 0, Hc - 2, Wc, 2, 5);
+  rect(ctx, 0, 0, 2, Hc, 5); rect(ctx, Wc - 2, 0, 2, Hc, 5);
+  rect(ctx, 3, 3, Wc - 6, 1, 9); rect(ctx, 3, Hc - 4, Wc - 6, 1, 9);
+
+  // Corner cars for flair (player red left, rival blue right).
+  drawSprite(ctx, SPR_PLAYER, 8, 8);
+  drawSprite(ctx, SPR_AI_BLUE, Wc - 20, 8, true);
+
+  // Title.
+  textOutlinedCentered(ctx, "JOSHUA 1", 8, 5, 0, 2, 7);
+  textOutlinedCentered(ctx, "RACING", 26, 6, 0, 1, 7);
+
+  // Score hero.
+  textCentered(ctx, "FINAL SCORE", 42, 5);
+  textOutlinedCentered(ctx, pad(score, 6), 50, 1, 0, 2);
+  if (isNew) textCentered(ctx, "NEW HI SCORE!", 72, 17);
+
+  // Driver.
+  textCentered(ctx, "DRIVER  " + (name || "AAA").slice(0, 10), isNew ? 82 : 76, 13);
+
+  // Stat ledger — alternating shaded rows.
+  let y = 96, rowN = 0;
+  const row = (label, value, vi) => {
+    if (rowN % 2 === 0) rect(ctx, 6, y - 2, Wc - 12, 11, 23);
+    text(ctx, label, 10, y, 13);
+    textRight(ctx, value, Wc - 10, y, vi);
+    y += 12; rowN++;
+  };
+  row("TIME", mmss(time || 0), 1);
+  row("TOP SPEED", (topSpeed || 0) + " KMH", 9);
+  row("PASSED", pad(passed || 0, 3), 1);
+  row("SMASHED", pad(smashed || 0, 3), 9);
+  row("BEST COMBO", "X" + (combo || 0), 17);
+  row("RAMPAGES", "X" + (rampages || 0), 5);
+
+  // World-record challenge line.
+  if (world && world.score > 0) {
+    rect(ctx, 6, y, Wc - 12, 1, 4); y += 3;
+    text(ctx, "WORLD", 10, y, 5);
+    text(ctx, (world.name || "???").slice(0, 8), 44, y, 13);
+    textRight(ctx, pad(world.score, 6), Wc - 10, y, 5);
+  }
+
+  // Footer.
+  textCentered(ctx, "JOSHUA1-RACER.VERCEL.APP", Hc - 11, 5);
 }

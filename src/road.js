@@ -93,6 +93,51 @@ function hazeBand(ctx, y0, rows, idx, density) {
   }
 }
 
+// ── Time-of-day cycle ─────────────────────────────────────────────────────────
+// A slow colour wash over the WHOLE scene that cycles day → dusk → night → dawn
+// → day as the run goes on. It's a single flat translucent fill in screen space —
+// pure hue + brightness, with ZERO spatial motion — so it adds no optic flow and
+// fully respects the high-speed "no dizziness" rule (if anything, the darker
+// night phase calms the periphery further). Driven by race time so it pauses with
+// the game and is independent of speed.
+const TOD_CYCLE_SEC = 120;          // seconds for one full day→…→day loop
+// [cyclePos 0..1, r, g, b, alpha]
+const TOD_KEYS = [
+  [0.00,   0,   0,   0, 0.00],      // day — clear
+  [0.22, 255, 120,  24, 0.16],      // dusk — warm amber
+  [0.44,  16,  24,  92, 0.32],      // night — deep blue (peak)
+  [0.66,  16,  24,  92, 0.30],      // night — hold
+  [0.82, 150,  72, 132, 0.16],      // dawn — soft violet
+  [1.00,   0,   0,   0, 0.00],      // back to day
+];
+function todColor(seconds) {
+  let pos = (seconds % TOD_CYCLE_SEC) / TOD_CYCLE_SEC;
+  if (pos < 0) pos += 1;
+  let a = TOD_KEYS[0], b = TOD_KEYS[TOD_KEYS.length - 1];
+  for (let i = 0; i < TOD_KEYS.length - 1; i++) {
+    if (pos >= TOD_KEYS[i][0] && pos <= TOD_KEYS[i + 1][0]) { a = TOD_KEYS[i]; b = TOD_KEYS[i + 1]; break; }
+  }
+  const span = (b[0] - a[0]) || 1;
+  const f = (pos - a[0]) / span;
+  return {
+    r: a[1] + (b[1] - a[1]) * f,
+    g: a[2] + (b[2] - a[2]) * f,
+    bl: a[3] + (b[3] - a[3]) * f,
+    al: a[4] + (b[4] - a[4]) * f,
+  };
+}
+// Wash the play scene with the current time-of-day tint. Call LAST in drawWorld
+// (after the player) so the world is tinted but the HUD / combo banners — drawn
+// afterwards — stay full-brightness and readable. Uses a real translucent fill
+// (the one place we step outside the flat palette): a deliberate atmospheric
+// layer, still completely static.
+export function drawTimeOfDayTint(ctx, seconds) {
+  const c = todColor(seconds || 0);
+  if (c.al <= 0.003) return;            // day — nothing to draw
+  ctx.fillStyle = `rgba(${c.r | 0},${c.g | 0},${c.bl | 0},${c.al.toFixed(3)})`;
+  ctx.fillRect(0, 0, W, H);
+}
+
 export function project(map, playerZ, _x, entity) {
   const dist = entity.z - playerZ;
   if (dist > VIEW_AHEAD_METERS) return null;     // beyond the horizon
