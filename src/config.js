@@ -51,18 +51,20 @@ export const PHYS = {
   // Internal max-speed. The HUD always shows km/h as speed/maxSpeed * topSpeedKmh,
   // so the top of the bar reads 200 regardless of this value — lowering it just
   // slows the actual road-scroll (the main lever against the high-speed "dizzy"
-  // feeling). 135 → 108 → 81 (a further -25%). cruiseSpeed tracks it so traffic
-  // stays proportionally paced (relative speeds unchanged).
-  maxSpeed: 81,
-  cruiseSpeed: 81,
+  // feeling). 135 → 108 → 81 → 65 (a further -20%). cruiseSpeed tracks it so
+  // traffic stays proportionally paced (relative speeds unchanged).
+  maxSpeed: 65,
+  cruiseSpeed: 65,
   // Nitrous overspeed during RAMPAGE — speed is allowed up to maxSpeed*boostFactor
   // while the player.boost timer is running, for a real "kick" out of the boost.
   boostFactor: 1.10,
-  // Two-phase ramp:
-  //   0 → phase1 (≈100 km/h equivalent) over `rampPhase1Seconds` — punchy launch.
-  //   phase1 → maxSpeed over `rampPhase2Seconds` — slow grind to the top.
+  // Three-phase ramp with a KNEE at 150 km/h where the climb rate HALVES:
+  //   0 → 100 km/h over `rampPhase1Seconds` — punchy launch.
+  //   100 → 150 km/h over `rampPhase2Seconds` — moderate mid climb.
+  //   150 → 200 km/h at `rampUpperRateFactor`× the mid rate — a slow grind to top.
   rampPhase1Seconds: 4,
-  rampPhase2Seconds: 80,
+  rampPhase2Seconds: 40,
+  rampUpperRateFactor: 0.5,   // accel above 150 km/h = 50% of the 100→150 rate
   accel: 14,
   drag: 5,
   fenceBounce: 7,          // px the car springs back inward after hitting an edge
@@ -74,6 +76,7 @@ export const PHYS = {
   // Display: top speed shows as 200 KMH; 100 km/h marker used for ramp phase split.
   topSpeedKmh: 200,
   phase1Kmh: 100,
+  kneeKmh: 150,    // above this displayed km/h, acceleration halves (rampUpperRateFactor)
 };
 
 // Player car sits in the lower third (not jammed against the bottom edge) so

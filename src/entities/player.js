@@ -31,23 +31,28 @@ export function makePlayer() {
   };
 }
 
-// Two-phase target ramp:
+// Three-phase target ramp, with a KNEE at 150 km/h where acceleration halves:
 //   Phase 1: punchy linear climb to ~100 km/h equivalent in `rampPhase1Seconds`.
-//   Phase 2: slow smoothstep grind from there up to maxSpeed (200 km/h).
+//   Phase 2: moderate linear climb 100 → 150 km/h over `rampPhase2Seconds`.
+//   Phase 3: 150 → 200 km/h at `rampUpperRateFactor`× the phase-2 rate (so the
+//            last stretch to top speed is a deliberate slow grind).
 function rampTarget(raceTime) {
+  const kmhToSpeed = (kmh) => PHYS.maxSpeed * (kmh / PHYS.topSpeedKmh);
+  const phase1Top = kmhToSpeed(PHYS.phase1Kmh);   // 100 km/h
+  const kneeTop   = kmhToSpeed(PHYS.kneeKmh);     // 150 km/h
   const p1End = PHYS.rampPhase1Seconds;
-  const p2End = p1End + PHYS.rampPhase2Seconds;
-  // Internal m/s value corresponding to the phase-1 ceiling (100 km/h).
-  const phase1Top = PHYS.maxSpeed * (PHYS.phase1Kmh / PHYS.topSpeedKmh);
+  const p2End = p1End + PHYS.rampPhase2Seconds;                          // hits 150 km/h
+  const p3Dur = PHYS.rampPhase2Seconds / (PHYS.rampUpperRateFactor || 1);
+  const p3End = p2End + p3Dur;                                           // hits top speed
 
   if (raceTime <= p1End) {
-    const t = raceTime / p1End;
-    return PHYS.startSpeed + (phase1Top - PHYS.startSpeed) * t;
+    return PHYS.startSpeed + (phase1Top - PHYS.startSpeed) * (raceTime / p1End);
   }
-  if (raceTime >= p2End) return PHYS.maxSpeed;
-  const t = (raceTime - p1End) / (p2End - p1End);
-  const e = t * t * (3 - 2 * t);
-  return phase1Top + (PHYS.maxSpeed - phase1Top) * e;
+  if (raceTime <= p2End) {
+    return phase1Top + (kneeTop - phase1Top) * ((raceTime - p1End) / PHYS.rampPhase2Seconds);
+  }
+  if (raceTime >= p3End) return PHYS.maxSpeed;
+  return kneeTop + (PHYS.maxSpeed - kneeTop) * ((raceTime - p2End) / p3Dur);
 }
 
 export function updatePlayer(p, dt, input, map, callbacks) {

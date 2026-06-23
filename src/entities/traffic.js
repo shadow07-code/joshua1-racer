@@ -21,6 +21,8 @@ export function makeTrafficSystem(opts = {}) {
     list: [],
     nextRowZ: 80,
     lastGapLane: 2,              // start with center lane open
+    lastShift: 0,                // last gap-lane shift direction (drives slalom zig-zags)
+    phrase: null,                // current traffic PHRASE (set by the pattern director)
     rowGapZ: opts.rowGapZ || 34, // distance between rows in world meters
     densityMul: 1.0,             // current difficulty density (set by main.js)
     passedCount: 0,
@@ -37,74 +39,84 @@ function pickSkin() {
   return TRAFFIC_SKINS[Math.floor(Math.random() * TRAFFIC_SKINS.length)];
 }
 
-// Generate one row of cars at sys.nextRowZ, leaving a gap lane the player can use.
-function spawnRow(sys, map) {
-  // Decide the gap-lane shift from the previous row.
+// PATTERN DIRECTOR — instead of memoryless rows, traffic comes in short PHRASES
+// with a deliberate shape, so weaving has RHYTHM (build → drop → release, like a
+// good Mick Gordon track): SLALOM (zig-zag the gap — the core flowing carve),
+// SWEEP (the gap walks steadily across the road), GAUNTLET (tight back-to-back
+// sandwiches — the "drop"), BREATHER (open road — the release), and a rare TOUGH
+// ±2 juke. Every phrase shifts the gap ≤1 lane/row (tough aside), so the road
+// stays threadable with steering alone.
+function pickPhrase(sys) {
+  const dm = sys.densityMul || 1;
+  const last = sys.phrase ? sys.phrase.type : "breather";
+  // A gauntlet ("the drop") always resolves to air — a short breather right after.
+  if (last === "gauntlet") return { type: "breather", left: 1 + (Math.random() < 0.5 ? 1 : 0), dir: 1 };
+  const wG = Math.min(0.32, 0.08 + (dm - 1) * 0.5);   // gauntlets heat up with density
   const r = Math.random();
-  let shift;
-  if (r < 0.05) {
-    // Rare "tough row" — gap moves by 2 lanes, requiring a brake to reach.
-    shift = Math.random() < 0.5 ? -2 : 2;
-  } else if (r < 0.35) {
-    shift = -1;
-  } else if (r < 0.65) {
-    shift = 0;
-  } else {
-    shift = 1;
-  }
-  let gap = sys.lastGapLane + shift;
-  // Clamp into [0, LANES-1] — if clamped, the player still finds a gap, just on an edge.
-  if (gap < 0) gap = 0;
-  if (gap >= LANES) gap = LANES - 1;
+  if (r < 0.04)        return { type: "tough",    left: 1, dir: Math.random() < 0.5 ? -2 : 2 };
+  if (r < 0.04 + wG)   return { type: "gauntlet", left: 3 + (Math.random() * 3 | 0), dir: 1 };
+  if (r < 0.20 + wG)   return { type: "breather", left: 1 + (Math.random() < 0.4 ? 1 : 0), dir: 1 };
+  if (r < 0.46 + wG)   return { type: "sweep",    left: 3 + (Math.random() * 3 | 0), dir: Math.random() < 0.5 ? -1 : 1 };
+  return { type: "slalom", left: 4 + (Math.random() * 4 | 0), dir: 1 };
+}
 
+// Generate one row of cars at sys.nextRowZ, leaving a gap lane (plus a flowing
+// corridor) the player can thread, shaped by the current phrase.
+function spawnRow(sys, map) {
   const wide = sys.rowsSpawned < 4;
-  // THREAD ROW: flank the gap lane with a car on BOTH sides so driving the gap is
-  // a lane-split (a SANDWICH). Needs an interior gap so both flanks exist —
-  // nudging it inward stays within the ±1 gap-shift budget. Skipped during the
-  // gentle opening rows. The gap itself stays open, so the row is still solvable.
-  let threadRow = false;
-  if (!wide && Math.random() < RACE.threadRowChance) {
-    if (gap <= 0) gap = 1;
-    else if (gap >= LANES - 1) gap = LANES - 2;
-    threadRow = true;
-  }
+  let ph = sys.phrase;
+  if (wide) ph = { type: "breather", left: 1, dir: 1 };          // gentle opening
+  else if (!ph || ph.left <= 0) ph = pickPhrase(sys);
+
+  // Per-phrase gap-lane shift.
+  let shift, threadRow = false;
+  if (ph.type === "slalom")        shift = sys.lastShift > 0 ? -1 : 1;      // zig-zag
+  else if (ph.type === "sweep")    shift = ph.dir;                          // steady walk
+  else if (ph.type === "gauntlet") { shift = sys.lastShift > 0 ? -1 : 1; threadRow = true; }
+  else if (ph.type === "tough")    shift = ph.dir;                          // ±2 juke
+  else                             shift = 0;                               // breather: hold
+
+  let gap = sys.lastGapLane + shift;
+  if (gap < 0) gap = 1;                        // bounce off the left edge
+  else if (gap >= LANES) gap = LANES - 2;      // bounce off the right edge
+  if (threadRow) { if (gap <= 0) gap = 1; else if (gap >= LANES - 1) gap = LANES - 2; }
+  const effShift = gap - sys.lastGapLane;
+  if (ph.type === "sweep" && effShift === 0) ph.dir = -ph.dir;   // reverse a sweep at the wall
+  if (effShift !== 0) sys.lastShift = effShift > 0 ? 1 : -1;
   sys.lastGapLane = gap;
+  ph.left -= 1;
+  sys.phrase = ph;
 
-  // Optionally widen the gap to 2 adjacent lanes early in the race so it's gentle.
-  const gap2 = (wide && !threadRow)
-    ? (gap + (Math.random() < 0.5 ? -1 : 1))
-    : -99;
-
-  // Decide which lanes get cars.
+  // ── Which lanes get cars — the gap + a flowing corridor always stay open ──
   const dm = sys.densityMul || 1;
   let lanesToFill;
   if (threadRow) {
-    // Flank the gap (gap-1 and gap+1) so the player lane-splits the gap. At higher
-    // density add a third car two lanes off for extra squeeze.
+    // GAUNTLET: flank the gap on BOTH sides so threading it is a SANDWICH; a third
+    // car two lanes off squeezes harder as density climbs.
     lanesToFill = [gap - 1, gap + 1].filter(l => l >= 0 && l < LANES);
     if (dm > RACE.density2CarFrom + 0.2) {
       const far = gap >= 2 ? gap - 2 : gap + 2;
       if (far >= 0 && far < LANES) lanesToFill.push(far);
     }
+  } else if (ph.type === "breather") {
+    // Open road — one distant car so it reads as a real exhale, not an empty void.
+    const far = [];
+    for (let i = 0; i < LANES; i++) if (Math.abs(i - gap) >= 2) far.push(i);
+    lanesToFill = far.length ? [far[Math.floor(Math.random() * far.length)]] : [];
   } else {
-    // Usual fill: 1 car early, a rising share get a 2nd as density climbs (the
-    // guaranteed gap lane is excluded, so every row stays threadable).
-    const candidateLanes = [];
-    for (let i = 0; i < LANES; i++) {
-      if (i === gap || i === gap2) continue;
-      candidateLanes.push(i);
-    }
-    for (let i = candidateLanes.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [candidateLanes[i], candidateLanes[j]] = [candidateLanes[j], candidateLanes[i]];
-    }
-    let carsInRow = 1;
-    if (!wide && dm > RACE.density2CarFrom) {
-      const p2 = Math.min(0.6, (dm - RACE.density2CarFrom) * 1.1);
-      if (Math.random() < p2) carsInRow = 2;
-    }
-    lanesToFill = candidateLanes.slice(0, Math.min(carsInRow, candidateLanes.length));
+    // SLALOM / SWEEP / TOUGH: wall off every lane EXCEPT the gap and the lane the
+    // weave is flowing into, so the open corridor hugs and moves with the gap — the
+    // player has to carve the line, but the line is always open and readable.
+    const flowDir = sys.lastShift >= 0 ? 1 : -1;
+    const open = new Set([gap, gap + flowDir]);
+    if (dm < 1.4) open.add(gap - flowDir);     // an extra open lane while it's still warming up
+    lanesToFill = [];
+    for (let i = 0; i < LANES; i++) if (!open.has(i)) lanesToFill.push(i);
   }
+
+  // Wall cars hold their lane (clean, readable weave); only the lone breather car
+  // is likely to drift. Gauntlet flanks never drift (keeps the split gap open).
+  const driftChance = threadRow ? 0 : (ph.type === "breather" ? 0.6 : 0.22);
 
   for (const lane of lanesToFill) {
     const skin = pickSkin();
@@ -117,7 +129,7 @@ function spawnRow(sys, map) {
     // blinks for a short lead-in (signalT) before the drift engages, and keeps
     // blinking the whole time it's tracking across the road.
     // Thread-row flank cars never drift — keeps the split gap open + readable.
-    const drift = threadRow ? 0 : (Math.random() < 0.60 ? (Math.random() < 0.5 ? -1 : 1) : 0);
+    const drift = Math.random() < driftChance ? (Math.random() < 0.5 ? -1 : 1) : 0;
     sys.list.push({
       skin,
       z: sys.nextRowZ + jitter,
