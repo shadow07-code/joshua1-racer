@@ -707,6 +707,38 @@ export function sfxCrash() {
   src.start(t); src.stop(t + 0.45);
 }
 
+// Big EXPLOSION — when a chopper barrel detonates on the car. A punchy sub boom
+// (triangle dropping to a thud) + a bright filtered-noise blast that opens then
+// closes + a band-passed crackle tail. Louder + longer than a plain crash.
+export function sfxExplosion() {
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  const o = ctx.createOscillator(); o.type = "triangle";
+  o.frequency.setValueAtTime(170, t);
+  o.frequency.exponentialRampToValueAtTime(28, t + 0.45);
+  const og = ctx.createGain(); og.gain.value = 0;
+  og.gain.linearRampToValueAtTime(0.42, t + 0.01);
+  og.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
+  o.connect(og); og.connect(sfxGain);
+  o.start(t); o.stop(t + 0.58);
+  const src = ctx.createBufferSource(); src.buffer = getNoiseBuf();
+  const filt = ctx.createBiquadFilter(); filt.type = "lowpass";
+  filt.frequency.setValueAtTime(3200, t);
+  filt.frequency.exponentialRampToValueAtTime(280, t + 0.5);
+  const ng = ctx.createGain(); ng.gain.value = 0;
+  ng.gain.linearRampToValueAtTime(0.46, t + 0.01);
+  ng.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
+  src.connect(filt); filt.connect(ng); ng.connect(sfxGain);
+  src.start(t); src.stop(t + 0.6);
+  const src2 = ctx.createBufferSource(); src2.buffer = getNoiseBuf();
+  const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 1500; bp.Q.value = 0.7;
+  const ng2 = ctx.createGain(); ng2.gain.value = 0;
+  ng2.gain.linearRampToValueAtTime(0.18, t + 0.05);
+  ng2.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+  src2.connect(bp); bp.connect(ng2); ng2.connect(sfxGain);
+  src2.start(t + 0.03); src2.stop(t + 0.42);
+}
+
 export function sfxMenuMove() {
   if (!ctx) return;
   const t = ctx.currentTime;

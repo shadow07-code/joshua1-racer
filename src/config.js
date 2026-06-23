@@ -69,10 +69,14 @@ export const PHYS = {
   drag: 5,
   fenceBounce: 7,          // px the car springs back inward after hitting an edge
   fenceSpeedKeep: 0.88,    // speed retained on a fence bump (slight reduction)
-  steerSpeed: 120,
+  steerSpeed: 112,        // slightly gentler per input (was 120) for finer cuts
+  // Ease the EFFECTIVE steer in from rest so a light touch makes a small, smooth
+  // cut; releasing or flicking the other way snaps fast (×3.5) so a deliberate
+  // hard left/right and emergency reversals stay responsive. Higher = snappier.
+  steerEase: 16,
   steerSpeedFactor: 0.65,
-  carHalfWidth: 6,    // -20% with the smaller player sprite
-  carHalfHeight: 8,
+  carHalfWidth: 5,    // matches the smaller 10×15 player sprite (was 6)
+  carHalfHeight: 7,   // was 8
   // Display: top speed shows as 200 KMH; 100 km/h marker used for ramp phase split.
   topSpeedKmh: 200,
   phase1Kmh: 100,

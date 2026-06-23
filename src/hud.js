@@ -202,9 +202,9 @@ function drawTitleRoad(ctx, t) {
 function drawHeroCar(ctx, t, topY) {
   const scale = 2;
   const cx = 80;
-  const x = (cx - 12) | 0;                 // sprite is 12w → centre at 80, PARKED (no wobble)
-  const baseY = topY + 18 * scale;         // sprite is 18h
-  groundShadow(ctx, cx, baseY, 14);
+  const x = (cx - 10) | 0;                 // sprite is 10w → centre at 80, PARKED (no wobble)
+  const baseY = topY + 15 * scale;         // sprite is 15h
+  groundShadow(ctx, cx, baseY, 11);
   drawSpriteScaled(ctx, SPR_PLAYER, x, topY, scale);
   // Gentle idle exhaust shimmer at the rear (it's parked but running).
   if ((Math.floor(t / 160) % 2) === 0) {
@@ -662,6 +662,36 @@ export function drawGameOver(ctx, { name, score, hi, isNew, reason, passed, time
   statRow("BEST COMBO", "X" + (combo || 0),                   17);
   statRow("SMASHED",    pad(smashed != null ? smashed : 0, 3), 9);
   statRow("RAMPAGES",   "X" + (rampages || 0),                 5);
+}
+
+// Impact EXPLOSION — a brief expanding fireball + shrapnel sparks + a quick
+// flash, drawn at the car when a chopper barrel detonates on it. A discrete
+// one-shot (like the combo/rampage flashes), so it adds no continuous optic flow.
+// prog: 0 at detonation → 1 at the end.
+export function drawExplosion(ctx, prog, cx, cy) {
+  const r = (3 + prog * 22) | 0;
+  // Quick screen-space flash on the first frames — an impact pop, not blinding.
+  if (prog < 0.12) ditherRect(ctx, 0, 9, W, H - 31, 1, (Math.floor(performance.now() / 30) & 1), 2);
+  // Fireball — white-hot core fading out to orange as it expands.
+  if (prog < 0.9) {
+    disc(ctx, cx, cy, r, 9);                                 // orange
+    disc(ctx, cx, cy, (r * 0.68) | 0, 5);                    // yellow
+    if (prog < 0.45) disc(ctx, cx, cy, (r * 0.38) | 0, 1);   // white-hot core
+  }
+  // Smoke takes over near the end.
+  if (prog > 0.55) {
+    disc(ctx, cx, cy, (r * 0.75) | 0, 4);
+    disc(ctx, cx - 4, cy - 3, (r * 0.45) | 0, 3);
+    disc(ctx, cx + 4, cy + 2, (r * 0.45) | 0, 3);
+  }
+  // Shrapnel sparks flung outward in 8 directions.
+  if (prog < 0.85) {
+    const spread = 4 + prog * 26;
+    for (let i = 0; i < 8; i++) {
+      const a = i / 8 * Math.PI * 2 + 0.4;
+      rect(ctx, (cx + Math.cos(a) * spread) | 0, (cy + Math.sin(a) * spread) | 0, 2, 2, (i & 1) ? 5 : 9);
+    }
+  }
 }
 
 // Big transient popup (SHIELD! / SAVED!) centred over the action — blinks.

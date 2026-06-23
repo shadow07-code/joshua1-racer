@@ -351,11 +351,12 @@ export function drawTraffic(ctx, sys, map, playerZ, playerX) {
 }
 
 // Player-vs-traffic collision is EVASION-FRIENDLY: every vehicle's collidable
-// size is 8% smaller than its sprite (HIT_SCALE), and the box factors are snug
+// size is 15% smaller than its sprite (HIT_SCALE — sprites stay native-res crisp;
+// fractional sprite scaling is the known art-muddying regression), box factors snug
 // — especially longitudinally (0.34, was 0.42), so a car closing on a vehicle's
 // rear bumper has visibly more room to swerve out before the hit registers.
 // Clipping a corner reads as a great dodge, not a cheap death.
-const HIT_SCALE = 0.92;
+const HIT_SCALE = 0.85;
 export function checkTrafficHit(sys, box) {
   for (const c of sys.list) {
     if (c.smashed) continue;                 // already knocked off the road

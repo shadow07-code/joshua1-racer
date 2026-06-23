@@ -129,14 +129,39 @@ function stampJ(sprite) {
   return out;
 }
 
-// PLAYER — red F1 with "J" on the engine cover, plus 1px steering-lean variants:
-// the nose (rows 0-3) tips toward the turn while the rear wing counters the
-// other way, so the car reads as yawing into the corner the moment you steer.
-const F1_NOSE_ROWS = [0, 1, 2, 3];
-const F1_TAIL_ROWS = [17];
-export const SPR_PLAYER   = stampJ(SPR_F1_BASE);
-export const SPR_PLAYER_L = stampJ(leanSprite(SPR_F1_BASE, F1_NOSE_ROWS, -1, F1_TAIL_ROWS));
-export const SPR_PLAYER_R = stampJ(leanSprite(SPR_F1_BASE, F1_NOSE_ROWS, +1, F1_TAIL_ROWS));
+// ─── PLAYER: OPEN FERRARI CONVERTIBLE (Spider) — 10w × 15h, top-down ──────────
+// Drawn at a smaller NATIVE pixel grid (≈15% smaller than the old 12×18) so it
+// stays crisp — never fractionally scaled (that muddies the art). A sleek red
+// drop-top: pointed nose with inset headlights, a power-domed hood with a badge,
+// a raked windscreen, an OPEN cockpit you see into (dark seats + the driver's
+// head & shoulders and the roll-hoops), muscular haunches over fat wheels, a
+// louvred engine cover, round quad taillights and twin exhaust tips. Consistent
+// top-left lighting (lit flank 8 / shaded flank 7); body tones 6/7/8 recolour.
+//   6 body | 7 shadow | 8 highlight | 0 outline/tyres/hoops | 4 wheel/louvre/exhaust
+//   13 windscreen | 5 headlight/badge | 9 taillight | 23 cockpit | 14 driver | 1 suit
+const SPR_FERRARI_BASE = [
+  [_,_,_,0,0,0,0,_,_,_],     //  0 nose tip
+  [_,_,0,6,8,8,6,0,_,_],     //  1 nose
+  [_,0,5,8,6,6,7,5,0,_],     //  2 headlights + hood
+  [0,4,0,8,6,6,7,0,4,0],     //  3 front wheels + hood
+  [_,0,8,6,5,5,6,7,0,_],     //  4 hood badge
+  [_,0,8,13,13,13,13,7,0,_], //  5 windscreen
+  [_,0,8,4,23,23,4,7,0,_],   //  6 open cockpit rim (dark interior)
+  [_,0,8,4,14,14,4,7,0,_],   //  7 driver's head
+  [_,0,8,1,14,14,1,7,0,_],   //  8 driver's shoulders / seats
+  [_,0,8,4,0,0,4,7,0,_],     //  9 roll-hoops behind the seats
+  [0,4,0,8,6,6,8,0,4,0],     // 10 rear haunches + rear wheels
+  [_,0,8,4,4,4,4,7,0,_],     // 11 louvred engine cover
+  [_,0,8,6,4,4,6,7,0,_],     // 12 louvred engine cover
+  [_,0,9,9,6,6,9,9,0,_],     // 13 round quad taillights
+  [_,_,0,4,0,0,4,0,_,_],     // 14 rear bumper + exhaust
+];
+
+// No steering-lean variants — the car stays straight (the 1px yaw read as
+// unnatural). Kept as aliases so any stray importer still resolves.
+export const SPR_PLAYER   = SPR_FERRARI_BASE;
+export const SPR_PLAYER_L = SPR_FERRARI_BASE;
+export const SPR_PLAYER_R = SPR_FERRARI_BASE;
 
 // AI rivals — all the SAME blue F1 (player is the only red car).
 export const SPR_AI_BLUE   = recolorBody(SPR_F1_BASE, 7, 6, 8, 4, 16, 13);

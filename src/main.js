@@ -3,7 +3,7 @@
 // No more AI rivals or finish line. The player has 3 lives. Each crash with a
 // civilian costs one life. Once you reach top speed, traffic density compounds
 // by +5% every 60 seconds, so the game gets harder the longer you survive.
-import { W, H, PHYS, SPAWN, RACE, SCORE } from "./config.js";
+import { W, H, PHYS, SPAWN, RACE, SCORE, PLAYER_Y } from "./config.js";
 import { getCtx, clear, rect } from "./render.js";
 import { MAPS, MAP_LIST, DIFFICULTY_LIST } from "./maps.js";
 import { initInput, getInput, consumePress, consumeAnyPress } from "./input.js";
@@ -11,7 +11,7 @@ import {
   initAudio, resumeAudio, suspendAudio, startMusic, stopMusic, setMusicIntensity, setMusicTempoFactor,
   playFlourish,
   startEngine, setEngine, stopEngine, setEngineRampage, getEngineStyle, setEngineStyle,
-  sfxAccelAccent, sfxBrake, sfxPickup, sfxCrash, sfxBump, sfxBarrelDrop, sfxCombo,
+  sfxAccelAccent, sfxBrake, sfxPickup, sfxCrash, sfxExplosion, sfxBump, sfxBarrelDrop, sfxCombo,
   sfxShieldUp, sfxShieldHit, sfxShockwave, sfxRampageCharge, sfxNitrous,
   sfxMenuMove, sfxMenuSelect, sfxFinish, sfxCountdownBeep,
   startHeliSound, stopHeliSound,
@@ -34,6 +34,7 @@ import {
   drawHud, drawTitleScreen, drawMapSelect, drawDifficultySelect,
   drawGameOver, drawPaused, drawCountdown, drawTutorialOverlay, drawSteerHints, drawCombo, drawShieldMsg,
   drawRampageMeter, drawSandwichCombo, drawShareCard, SHARE_CARD_W, SHARE_CARD_H,
+  drawExplosion,
 } from "./hud.js";
 import { registerServiceWorker, initInstallBanner, initInstallButton, setInstallButtonVisible } from "./pwa.js";
 import {
@@ -115,6 +116,7 @@ const g = {
   rampagesUsed: 0,      // rampages triggered this run (game-over stat)
   shieldMsg: "",        // transient "SHIELD!" / "SAVED!" popup text
   shieldMsgTimer: 0,
+  explosion: 0,         // seconds left on the barrel-impact explosion FX
   countdownTime: 0,
   countdownLastBeep: -1,
   tut: null,            // first-run steering tutorial sub-state
@@ -323,7 +325,11 @@ function newRaceSetup() {
   g.rampagesUsed = 0;
   g.shieldMsg = "";
   g.shieldMsgTimer = 0;
+  g.explosion = 0;
 }
+
+// Duration (seconds) of the barrel-impact explosion FX.
+const EXPLOSION_DUR = 0.55;
 
 // ── Scoring helper ────────────────────────────────────────────────────────────
 // S1: 0 at the combo gate (comboKmh) → 1 at top speed, for the speed bonus.
@@ -725,6 +731,7 @@ function updateRace(dt) {
   if (g.shieldMsgTimer > 0) g.shieldMsgTimer = Math.max(0, g.shieldMsgTimer - dt);
   if (g.rampageFlash > 0) g.rampageFlash = Math.max(0, g.rampageFlash - dt);
   if (g.sandwichComboTimer > 0) g.sandwichComboTimer = Math.max(0, g.sandwichComboTimer - dt);
+  if (g.explosion > 0) g.explosion = Math.max(0, g.explosion - dt);
   // Police helicopter kicks in once the player crosses 150 km/h — it drops
   // flaming barrels on the road ahead (collision handled below, costs a life).
   updateCops(g.cops, dt, g.player.z, g.player.x, g.player.speed, g.map, { onDrop: sfxBarrelDrop });
@@ -773,6 +780,8 @@ function updateRace(dt) {
       const bar = checkBarrelHit(g.cops, playerBox(g.player));
       if (bar) {
         bar.hit = true;
+        g.explosion = EXPLOSION_DUR;   // fireball at the car
+        sfxExplosion();                // (before takeHit so it sounds even on a fatal hit)
         applyCollisionLoss(g.player, 0.5, 1.2);
         if (takeHit(1.2)) return;
       }
@@ -907,6 +916,10 @@ function render() {
   }
   if (g.state === STATES.RACE || g.state === STATES.PAUSED) {
     drawWorld();
+    // Barrel-impact explosion — a fireball over the car (drawn above the world).
+    if (g.explosion > 0) {
+      drawExplosion(ctx, 1 - g.explosion / EXPLOSION_DUR, (W / 2 + g.map.biasX + g.player.x) | 0, PLAYER_Y);
+    }
     // Combo-step juice: a brief 2px gold frame around the play area (between
     // the HUD strips). One static flash per shave — small, quick, not dizzy.
     if (g.comboFlash > 0) {

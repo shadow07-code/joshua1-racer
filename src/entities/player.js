@@ -1,6 +1,6 @@
 // Player car — auto-accelerate with a start-of-race speed ramp, brake, steer, slip.
 import { PHYS, PLAYER_Y, W } from "../config.js";
-import { SPR_PLAYER, SPR_PLAYER_L, SPR_PLAYER_R } from "../sprites.js";
+import { SPR_PLAYER } from "../sprites.js";
 import { drawSpriteNN, groundShadow, ring, disc, rect } from "../render.js";
 import { roadCenterX } from "../road.js";
 
@@ -26,7 +26,8 @@ export function makePlayer() {
     lives: 3,        // endless survival — 3 hits and you're out
     rampage: 0,      // seconds of NITROUS RAMPAGE remaining (smash through traffic)
     rampageClear: 0, // seconds of cleared-road grace after a rampage ends
-    steerVis: 0,     // effective steer this frame (drives the lean sprite)
+    steerVis: 0,     // raw steer this frame (drives the lean sprite)
+    steerEased: 0,   // eased effective steer (gentle from rest, snappy on release/reverse)
     _wasBraking: false,
   };
 }
@@ -89,10 +90,18 @@ export function updatePlayer(p, dt, input, map, callbacks) {
     steer = -steer;
     p.slip = Math.max(0, p.slip - dt);
   }
-  p.steerVis = steer;   // remember effective direction for the lean sprite
+  p.steerVis = steer;   // raw direction drives the lean sprite (instant, crisp)
+  // Ease the EFFECTIVE steer in from rest so a light touch makes a small, smooth
+  // cut — but snap fast when releasing or flicking the other way so a deliberate
+  // hard left/right (and emergency reversals) stay responsive. The top steer rate
+  // itself is unchanged; only the from-rest onset is gentled.
+  const reversing = steer !== 0 && p.steerEased !== 0 && Math.sign(steer) !== Math.sign(p.steerEased);
+  const releasing = Math.abs(steer) < Math.abs(p.steerEased);
+  const easeRate = (reversing || releasing) ? PHYS.steerEase * 3.5 : PHYS.steerEase;
+  p.steerEased += (steer - p.steerEased) * Math.min(1, dt * easeRate);
   const speedFrac = p.speed / PHYS.maxSpeed;
   const steerScale = 1 - (1 - PHYS.steerSpeedFactor) * speedFrac;
-  p.x += steer * PHYS.steerSpeed * steerScale * dt;
+  p.x += p.steerEased * PHYS.steerSpeed * steerScale * dt;
 
   // Rubber-fence boundaries — the car can't leave the asphalt. Driving into an
   // edge pins it there and shaves a little speed (a one-time bump), then a rubber
@@ -147,23 +156,22 @@ export function drawPlayer(ctx, p, map) {
   // Slight wobble when slipping on oil or in legacy slip state.
   const slipping = p.oilTimer > 0 || p.slip > 0;
   const wobble = slipping ? Math.sin(performance.now() / 28) * 1 : 0;
-  // Drawn size of the 16×24 sprite at PLAYER_SCALE (centre-anchored on the car).
-  const halfW = 12 * PLAYER_SCALE / 2;   // 6 — smaller player sprite (12×18)
-  const halfH = 18 * PLAYER_SCALE / 2;   // 9
+  // Drawn size of the 10×15 sprite at PLAYER_SCALE (centre-anchored on the car).
+  const halfW = 10 * PLAYER_SCALE / 2;   // 5 — smaller player sprite (10×15)
+  const halfH = 15 * PLAYER_SCALE / 2;   // 7.5
   const cxp = (cx + p.x) | 0;
   // RAMPAGE nitrous flames blasting from the twin exhausts (behind the car).
   if (p.rampage > 0) drawNitroFlames(ctx, cxp, (PLAYER_Y + halfH) | 0);
-  // Grounding shadow under the car, then the F1 sprite — leaned into the turn
-  // while steering (input-driven feedback only; the car sits still otherwise).
-  const spr = p.steerVis > 0.3 ? SPR_PLAYER_R : p.steerVis < -0.3 ? SPR_PLAYER_L : SPR_PLAYER;
-  groundShadow(ctx, (cx + p.x) | 0, PLAYER_Y + halfH - 3, 6);
-  drawSpriteNN(ctx, spr, cx + p.x - halfW + wobble, PLAYER_Y - halfH, PLAYER_SCALE);
+  // Grounding shadow under the car, then the Ferrari sprite — always straight
+  // (no steering lean).
+  groundShadow(ctx, (cx + p.x) | 0, PLAYER_Y + halfH - 3, 5);
+  drawSpriteNN(ctx, SPR_PLAYER, cx + p.x - halfW + wobble, PLAYER_Y - halfH, PLAYER_SCALE);
   // RAMPAGE aura — a pulsing fiery ring around the car while nitrous is active.
   if (p.rampage > 0) {
     const cyp = (PLAYER_Y) | 0;
     const blink = Math.floor(performance.now() / 70) % 2 === 0;
-    ring(ctx, cxp, cyp, 12, blink ? 5 : 9);    // yellow / orange
-    ring(ctx, cxp, cyp, 13, blink ? 9 : 5);
+    ring(ctx, cxp, cyp, 10, blink ? 5 : 9);    // yellow / orange
+    ring(ctx, cxp, cyp, 11, blink ? 9 : 5);
   }
 }
 
