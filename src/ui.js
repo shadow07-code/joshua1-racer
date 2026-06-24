@@ -13,6 +13,7 @@ export function initUI(callbacks) {
   cb = callbacks || {};
   el = {
     btnLeaderboard: document.getElementById("btn-leaderboard"),
+    btnName: document.getElementById("btn-name"),
     btnInstall: document.getElementById("btn-install"),
     soundControls: document.getElementById("sound-controls"),
     namePanel: document.getElementById("name-entry"),
@@ -39,6 +40,14 @@ export function initUI(callbacks) {
     el.btnLeaderboard.addEventListener("click", (e) => {
       e.stopPropagation();
       cb.onOpenLeaderboard && cb.onOpenLeaderboard();
+    });
+  }
+
+  // Title CHANGE NAME button — opens the rename dialog (never on Play).
+  if (el.btnName) {
+    el.btnName.addEventListener("click", (e) => {
+      e.stopPropagation();
+      cb.onOpenNameEdit && cb.onOpenNameEdit();
     });
   }
 
@@ -75,6 +84,7 @@ export function initUI(callbacks) {
   // Keep the title buttons aligned when the viewport changes.
   window.addEventListener("resize", () => {
     if ((el.btnLeaderboard && el.btnLeaderboard.classList.contains("show")) ||
+        (el.btnName        && el.btnName.classList.contains("show")) ||
         (el.soundControls  && el.soundControls.classList.contains("show"))) {
       positionTitleUI();
     }
@@ -104,7 +114,9 @@ export function positionTitleUI() {
   const m = titleMetrics();
   const gap = Math.max(6, Math.min(14, Math.round(4 * m.scale)));
   let top = Math.round(m.offY + 67 * m.scale);
-  for (const node of [el.soundControls, el.btnLeaderboard, el.btnInstall]) {
+  // Install (the big glowing CTA) leads, then the utility pills, then the sound
+  // controls block. Hidden/removed nodes are skipped, so the stack stays tight.
+  for (const node of [el.btnInstall, el.btnLeaderboard, el.btnName, el.soundControls]) {
     if (!node || !node.classList.contains("show")) continue;
     node.style.bottom = "auto";
     node.style.top = top + "px";
@@ -114,6 +126,11 @@ export function positionTitleUI() {
 
 export function setLeaderboardButtonVisible(show) {
   toggle(el.btnLeaderboard, show);
+  if (show) positionTitleUI();
+}
+
+export function setNameButtonVisible(show) {
+  toggle(el.btnName, show);
   if (show) positionTitleUI();
 }
 

@@ -4,6 +4,9 @@
 
 const API = "/api/leaderboard";
 const NAME_KEY = "joshua1.playerName";
+// Default handle for a brand-new player — shown at the top of the title screen
+// and used for high scores until the player changes it via the CHANGE NAME button.
+const DEFAULT_NAME = "PLAYER1";
 const CACHE_KEY = "joshua1.lb.cache";
 const PENDING_KEY = "joshua1.lb.pending";
 const TIMEOUT_MS = 6000;
@@ -20,11 +23,12 @@ export function sanitizeName(raw) {
 }
 
 export function getPlayerName() {
-  try { return sanitizeName(localStorage.getItem(NAME_KEY) || ""); } catch { return ""; }
+  try { return sanitizeName(localStorage.getItem(NAME_KEY) || "") || DEFAULT_NAME; }
+  catch { return DEFAULT_NAME; }
 }
 
 export function setPlayerName(name) {
-  const clean = sanitizeName(name) || "AAA";
+  const clean = sanitizeName(name) || DEFAULT_NAME;
   try { localStorage.setItem(NAME_KEY, clean); } catch {}
   return clean;
 }

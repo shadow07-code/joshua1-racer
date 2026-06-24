@@ -232,19 +232,30 @@
       white-space: nowrap;
       cursor: pointer;
       z-index: 9;
-      box-shadow: 0 4px 0 rgba(0, 0, 0, 0.5);
+      animation: installGlow 1.7s ease-in-out infinite;
       -webkit-tap-highlight-color: transparent;
     }
     #btn-install.show { display: inline-flex; }
     #btn-install:active {
       background: var(--dmg-lightest); color: #0f380f;
       transform: translateX(-50%) translateY(3px);
-      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.5) !important;
+      animation: none;
+    }
+    /* Pulsing green halo so the install CTA is impossible to miss (title screen
+       only — no gameplay motion, so the high-speed comfort rule is untouched).
+       The first layer keeps the chunky 3D drop; the second is the breathing glow. */
+    @keyframes installGlow {
+      0%, 100% { box-shadow: 0 4px 0 rgba(0,0,0,0.5), 0 0 5px 1px rgba(155,188,15,0.45); }
+      50%      { box-shadow: 0 4px 0 rgba(0,0,0,0.5), 0 0 17px 6px rgba(155,188,15,0.95); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #btn-install, #splash-install { animation: none; box-shadow: 0 4px 0 rgba(0,0,0,0.5), 0 0 10px 3px rgba(155,188,15,0.7); }
     }
 
-    /* Title LEADERBOARD button — stacked just above the install button.
-       Vertical position is set by ui.js per canvas scale. */
-    #btn-leaderboard {
+    /* Title LEADERBOARD + CHANGE NAME buttons — stacked pills in the title
+       control band. Vertical position is set by ui.js per canvas scale. */
+    #btn-leaderboard, #btn-name {
       position: fixed;
       left: 50%;
       transform: translateX(-50%);
@@ -267,8 +278,8 @@
       z-index: 9;
       -webkit-tap-highlight-color: transparent;
     }
-    #btn-leaderboard.show { display: inline-flex; }
-    #btn-leaderboard:active {
+    #btn-leaderboard.show, #btn-name.show { display: inline-flex; }
+    #btn-leaderboard:active, #btn-name:active {
       background: rgba(139, 172, 15, 0.9); color: #0f380f;
       transform: translateX(-50%) translateY(2px);
       box-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
@@ -277,7 +288,7 @@
     /* Chunky arcade-cabinet shadow under every raised control — a single,
        static treatment that makes the whole UI read as physical buttons.
        (#btn-install sets its own, chunkier shadow above.) */
-    #btn-leaderboard, .snd-row,
+    #btn-leaderboard, #btn-name, .snd-row,
     #gameover-actions .btn-go, #gameover-actions .btn-ghost {
       box-shadow: 0 3px 0 rgba(0, 0, 0, 0.5);
     }
@@ -463,6 +474,95 @@
       color: var(--dmg-darkest);
     }
     .snd-opt:active { background: var(--dmg-lightest); color: var(--dmg-darkest); }
+
+    /* ── First-load INSTALL SPLASH ──────────────────────────────────────
+       A full-screen gate shown once on a first browser visit (never when the
+       game is launched as the installed app). It's TRANSLUCENT so the live
+       title behind it — the JOSHUA 1 logo, the parked car, the step-out driver
+       — shows through, top and bottom. The card carries a heavy glowing INSTALL
+       CTA plus a small "play in browser" escape hatch. */
+    #install-splash {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      /* Darker behind the card, clearer at the very top (logo) and bottom (car). */
+      background: linear-gradient(to bottom,
+        rgba(8, 28, 8, 0.32) 0%, rgba(8, 28, 8, 0.86) 34%,
+        rgba(8, 28, 8, 0.86) 66%, rgba(8, 28, 8, 0.32) 100%);
+      -webkit-tap-highlight-color: transparent;
+    }
+    #install-splash.show { display: flex; }
+    .splash-card {
+      width: 100%;
+      max-width: 300px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+      background: rgba(15, 56, 15, 0.94);
+      border: 3px solid var(--dmg-light);
+      border-radius: 12px;
+      padding: 22px 18px;
+      box-shadow: 0 6px 0 rgba(0, 0, 0, 0.5);
+    }
+    .splash-title {
+      font-size: 18px;
+      font-weight: bold;
+      letter-spacing: 2px;
+      color: var(--dmg-lightest);
+      text-align: center;
+    }
+    .splash-sub {
+      font-size: 12px;
+      letter-spacing: 1px;
+      line-height: 1.45;
+      color: var(--dmg-light);
+      text-align: center;
+    }
+    /* The huge primary install CTA — glows (reuses the installGlow keyframes). */
+    #splash-install {
+      width: 100%;
+      background: var(--dmg-light);
+      color: var(--dmg-darkest);
+      border: 3px solid var(--dmg-lightest);
+      border-radius: 10px;
+      padding: 18px 20px;
+      margin-top: 2px;
+      font: inherit;
+      font-size: 21px;
+      font-weight: bold;
+      letter-spacing: 2px;
+      white-space: nowrap;
+      cursor: pointer;
+      animation: installGlow 1.7s ease-in-out infinite;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #splash-install:active {
+      background: var(--dmg-lightest);
+      transform: translateY(3px);
+      box-shadow: 0 2px 0 rgba(0, 0, 0, 0.5) !important;
+      animation: none;
+    }
+    /* Small, deliberately understated "not recommended" escape hatch. */
+    #splash-browser {
+      background: none;
+      border: none;
+      color: var(--dmg-light);
+      font: inherit;
+      font-size: 12px;
+      letter-spacing: 0.5px;
+      text-decoration: underline;
+      opacity: 0.85;
+      cursor: pointer;
+      padding: 4px 6px;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #splash-browser:active { color: var(--dmg-lightest); opacity: 1; }
   </style>
 </head>
 <body>
@@ -483,6 +583,7 @@
 
   <button id="btn-install" aria-label="Install game for offline play">📲 INSTALL APP</button>
   <button id="btn-leaderboard" aria-label="View the leaderboard">🏆 LEADERBOARD</button>
+  <button id="btn-name" aria-label="Change your player name">✎ CHANGE NAME</button>
 
   <div id="stage">
     <canvas id="game" width="160" height="240"></canvas>
@@ -497,15 +598,27 @@
     <button id="install-no" class="ghost">×</button>
   </div>
 
-  <!-- Pre-race name entry -->
-  <div id="name-entry" class="panel" role="dialog" aria-label="Enter your name">
+  <!-- First-load install splash (translucent over the live title; shown once on a
+       browser visit, never in the installed app). -->
+  <div id="install-splash" role="dialog" aria-label="Install Joshua 1 Racing">
+    <div class="splash-card">
+      <div class="splash-title">🏁 JOSHUA 1 RACING</div>
+      <div class="splash-sub">Install the app for the full-screen, offline arcade ride — no browser bars, launches from your home screen.</div>
+      <button id="splash-install">📲 INSTALL APP</button>
+      <button id="splash-browser">play in browser instead (not recommended)</button>
+    </div>
+  </div>
+
+  <!-- Change-name dialog (opened from the title CHANGE NAME button; the name is
+       remembered and used for all high scores until changed again). -->
+  <div id="name-entry" class="panel" role="dialog" aria-label="Change your name">
     <div class="panel-box">
-      <div class="panel-title">ENTER NAME</div>
+      <div class="panel-title">CHANGE NAME</div>
       <input id="name-input" type="text" maxlength="12" autocomplete="off"
-             autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="AAA" />
+             autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="PLAYER1" />
       <div class="panel-row">
-        <button id="name-back" class="btn-ghost">BACK</button>
-        <button id="name-start" class="btn-go">START</button>
+        <button id="name-back" class="btn-ghost">CANCEL</button>
+        <button id="name-start" class="btn-go">SAVE</button>
       </div>
     </div>
   </div>

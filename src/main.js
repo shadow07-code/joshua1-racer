@@ -36,9 +36,9 @@ import {
   drawRampageMeter, drawSandwichCombo, drawShareCard, SHARE_CARD_W, SHARE_CARD_H,
   drawExplosion,
 } from "./hud.js";
-import { registerServiceWorker, initInstallBanner, initInstallButton, setInstallButtonVisible } from "./pwa.js";
+import { registerServiceWorker, initInstallBanner, initInstallButton, initInstallSplash, setInstallButtonVisible } from "./pwa.js";
 import {
-  initUI, setLeaderboardButtonVisible, setSoundControlsVisible,
+  initUI, setLeaderboardButtonVisible, setSoundControlsVisible, setNameButtonVisible,
   showNameEntry, showGameOverActions,
   showLeaderboardPanel, renderLeaderboard, showPauseMenu,
 } from "./ui.js";
@@ -52,6 +52,7 @@ initInput(canvas);
 registerServiceWorker();
 initInstallBanner();
 initInstallButton();
+initInstallSplash();
 let _lastUiState = null;   // tracks state changes to sync HTML overlays once per transition
 
 const STATES = {
@@ -402,22 +403,41 @@ function endRace(reason) {
 
 // ─── Updates ──────────────────────────────────────────────────────────────────
 function updateTitle() {
+  // While the first-load install splash is up it overlays the canvas (so taps
+  // are already blocked) — swallow any stray keypress too, so the game can't
+  // start behind it on desktop.
+  const splash = document.getElementById("install-splash");
+  if (splash && splash.classList.contains("show")) { consumeAnyPress(); return; }
   if (consumeAnyPress()) {
     ensureAudio();
     sfxMenuSelect();
-    // Ask for the player's name before each race (pre-filled with the last one).
-    g.state = STATES.NAME_ENTRY;
+    // Tapping the title goes STRAIGHT into the game — no name prompt. The handle
+    // defaults to PLAYER1 and is only changed via the CHANGE NAME button.
+    beginPlay();
   }
 }
 
-// Name confirmed in the HTML panel — store it and continue into the race.
-// First-timers still get the interactive steering tutorial first.
+// Start a run with the remembered name. First-timers get the interactive
+// steering tutorial first; everyone else drops into the countdown.
+function beginPlay() {
+  if (hasSeenTutorial()) beginCountdown();
+  else enterTutorial();
+}
+
+// Open the change-name dialog from the title (its own button — never on Play).
+function openNameEntry() {
+  ensureAudio();
+  sfxMenuSelect();
+  g.state = STATES.NAME_ENTRY;
+}
+
+// Name confirmed in the CHANGE NAME dialog — store it (used for all future high
+// scores + the title chip) and return to the title. Does NOT start a race.
 function confirmName(name) {
   g.playerName = setPlayerName(name);
   ensureAudio();
   sfxMenuSelect();
-  if (hasSeenTutorial()) beginCountdown();
-  else enterTutorial();
+  g.state = STATES.TITLE;
 }
 
 // Keyboard fallbacks for the name-entry panel (Enter/Esc are also handled by the
@@ -861,6 +881,7 @@ function syncOverlays() {
   }
   setInstallButtonVisible(onTitle);
   setLeaderboardButtonVisible(onTitle);
+  setNameButtonVisible(onTitle);
   // Sound controls live on the title screen only (positioned above TAP TO START).
   setSoundControlsVisible(onTitle);
   refreshSoundControls();
@@ -890,7 +911,7 @@ function render() {
   syncOverlays();
   // Title screen also backs the name-entry and leaderboard modals.
   if (g.state === STATES.TITLE || g.state === STATES.NAME_ENTRY || g.state === STATES.LEADERBOARD) {
-    drawTitleScreen(ctx, bestEverScore(), g.world);
+    drawTitleScreen(ctx, bestEverScore(), g.world, g.playerName);
     return;
   }
   if (g.state === STATES.MAP_SELECT) { drawMapSelect(ctx, g.mapIdx); return; }
@@ -1009,6 +1030,7 @@ function update(dt) {
 initUI({
   onNameConfirm: (name) => confirmName(name),
   onNameBack: () => { g.state = STATES.TITLE; },
+  onOpenNameEdit: () => openNameEntry(),
   onOpenLeaderboard: () => { ensureAudio(); sfxMenuSelect(); openLeaderboard(STATES.TITLE); },
   onLeaderboardBack: () => { g.state = g.lbReturnTo || STATES.TITLE; },
   onPlayAgain: () => playAgain(),

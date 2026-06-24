@@ -248,7 +248,7 @@ function drawTitleDriver(ctx, t, carCx, carBaseY) {
   }
 }
 
-export function drawTitleScreen(ctx, allTimeBest, world) {
+export function drawTitleScreen(ctx, allTimeBest, world, playerName) {
   const t = performance.now();
 
   // Hero shot anchored to the bottom so it fills any screen height.
@@ -282,17 +282,17 @@ export function drawTitleScreen(ctx, allTimeBest, world) {
     ctx.restore();
   }
 
-  // ── Best-score chips — YOU (your record) vs WORLD (global #1) ──
-  // Two stacked rows so there's always a target on screen: your personal best
-  // AND the current global #1 (name + score, from the cached leaderboard).
+  // ── Best-score chips — YOUR NAME + personal record vs WORLD (global #1) ──
+  // Two stacked rows so there's always a target on screen: your handle + personal
+  // best AND the current global #1 (name + score, from the cached leaderboard).
   const chipW = 122, chipX = ((W - chipW) / 2) | 0, chipY = 44, rowH = 10;
   rect(ctx, chipX, chipY, chipW, rowH * 2 + 1, 0);         // dark plate
   rect(ctx, chipX, chipY, chipW, 1, 5);                    // gold top edge
   rect(ctx, chipX, chipY + rowH, chipW, 1, 4);             // mid divider
   rect(ctx, chipX, chipY + rowH * 2, chipW, 1, 9);         // orange base
-  // Row 1 — YOU (personal best)
+  // Row 1 — YOUR handle (top of screen) + personal best
   drawSprite(ctx, ICN_TROPHY, chipX + 4, chipY + 2);
-  text(ctx, "YOU", chipX + 14, chipY + 3, 5, 1);
+  text(ctx, (playerName || "PLAYER1").slice(0, 11), chipX + 14, chipY + 3, 5, 1);
   textRight(ctx, pad(allTimeBest, 6), chipX + chipW - 4, chipY + 3, 1, 1);
   // Row 2 — WORLD (global #1). Tiny globe glyph, then holder name + score.
   const wy = chipY + rowH + 2;

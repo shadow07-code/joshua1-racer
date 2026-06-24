@@ -8,10 +8,13 @@ import { H } from "./config.js";
 
 const IOS_DISMISS_KEY = "joshua1.iosBannerDismissed";
 const INSTALLED_KEY = "joshua1.installed";
+const SPLASH_SEEN_KEY = "joshua1.installSplashSeen";
 
 let stashedPrompt = null;          // captured beforeinstallprompt event
 let _banner, _yes, _no, _msg;      // instruction banner elements
 let _installBtn = null;            // permanent home-screen button
+let _splash, _splashInstall, _splashBrowser;   // first-load install splash
+let _installedThisSession = false; // user installed during this session
 
 export function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
@@ -45,29 +48,39 @@ function isStandalone() {
   return window.matchMedia("(display-mode: standalone)").matches ||
          window.navigator.standalone === true;
 }
-function isInstalled() {
-  try { return isStandalone() || localStorage.getItem(INSTALLED_KEY) === "1"; }
-  catch { return isStandalone(); }
+// Offer install whenever we're NOT already running as the installed (standalone)
+// app, and the user hasn't installed during this session. We deliberately DON'T
+// permanently suppress via the sticky INSTALLED_KEY flag — that flag previously
+// kept the CTA hidden forever even when the app wasn't actually installed, which
+// is the "install button never shows" bug we're fixing.
+function shouldOfferInstall() {
+  return !isStandalone() && !_installedThisSession;
 }
 
 function showBanner(ios) {
   if (!_banner) return;
   if (_msg) _msg.textContent = ios
     ? "TAP  SHARE  ⬆  THEN  ‘ADD TO HOME SCREEN’"
-    : "📲  ADD TO HOME SCREEN — PLAY OFFLINE";
-  if (_yes) _yes.textContent = ios ? "GOT IT" : "INSTALL";
+    : "OPEN BROWSER MENU ⋮ → ‘INSTALL APP’ / ‘ADD TO HOME SCREEN’";
+  if (_yes) _yes.textContent = ios ? "GOT IT" : "GOT IT";
   _banner.classList.add("show");
 }
 function hideBanner() { if (_banner) _banner.classList.remove("show"); }
 
-// Fire the native prompt if we have it; otherwise show manual instructions.
+// Fire the native prompt if we have it; otherwise show manual instructions. Either
+// way the first-load splash (if up) gets dismissed so the title is reachable.
 async function doInstall() {
   if (stashedPrompt) {
     stashedPrompt.prompt();
     try { await stashedPrompt.userChoice; } catch {}
     stashedPrompt = null;
     hideBanner();
+    dismissSplash();
   } else {
+    // No native prompt available (iOS, or Android before the engagement heuristic
+    // fires) — surface manual instructions. Drop the splash first so the banner,
+    // which sits below it, is actually visible over the title.
+    dismissSplash();
     showBanner(isIos());
   }
 }
@@ -88,12 +101,14 @@ export function initInstallBanner() {
     stashedPrompt = e;
   });
 
-  // Once installed, remember it and drop both the button and the banner.
+  // Once installed, drop the button, the banner, and the splash for this session.
   window.addEventListener("appinstalled", () => {
+    _installedThisSession = true;
     try { localStorage.setItem(INSTALLED_KEY, "1"); } catch {}
     stashedPrompt = null;
     hideBanner();
     removeInstallButton();
+    hideSplash();
   });
 
   if (_yes) _yes.addEventListener("click", () => {
@@ -103,11 +118,32 @@ export function initInstallBanner() {
   if (_no) _no.addEventListener("click", () => hideBanner());
 }
 
+// First-load install splash — a full-screen gate shown once on a browser visit,
+// translucent over the live title. Wired here; shown only when we should offer
+// install AND it hasn't been seen/dismissed before.
+export function initInstallSplash() {
+  _splash = document.getElementById("install-splash");
+  _splashInstall = document.getElementById("splash-install");
+  _splashBrowser = document.getElementById("splash-browser");
+  if (!_splash) return;
+  if (_splashInstall) _splashInstall.addEventListener("click", (e) => { e.stopPropagation(); doInstall(); });
+  if (_splashBrowser) _splashBrowser.addEventListener("click", (e) => { e.stopPropagation(); dismissSplash(); });
+  let seen = false;
+  try { seen = localStorage.getItem(SPLASH_SEEN_KEY) === "1"; } catch {}
+  if (shouldOfferInstall() && !seen) _splash.classList.add("show");
+}
+// "Play in browser" / post-prompt: remember the choice and reveal the title.
+function dismissSplash() {
+  try { localStorage.setItem(SPLASH_SEEN_KEY, "1"); } catch {}
+  hideSplash();
+}
+function hideSplash() { if (_splash) _splash.classList.remove("show"); }
+
 // Permanent install button on the home screen.
 export function initInstallButton() {
   _installBtn = document.getElementById("btn-install");
   if (!_installBtn) return;
-  if (isInstalled()) { removeInstallButton(); return; }
+  if (!shouldOfferInstall()) { removeInstallButton(); return; }
   _installBtn.addEventListener("click", (e) => { e.stopPropagation(); doInstall(); });
   // Re-anchor on viewport changes (rotation, browser chrome) so it stays aligned
   // with the canvas-space "TAP TO START" banner.
