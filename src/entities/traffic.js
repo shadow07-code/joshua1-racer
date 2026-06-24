@@ -129,7 +129,14 @@ function spawnRow(sys, map) {
     // blinks for a short lead-in (signalT) before the drift engages, and keeps
     // blinking the whole time it's tracking across the road.
     // Thread-row flank cars never drift — keeps the split gap open + readable.
-    const drift = Math.random() < driftChance ? (Math.random() < 0.5 ? -1 : 1) : 0;
+    let drift = Math.random() < driftChance ? (Math.random() < 0.5 ? -1 : 1) : 0;
+    // Keep the threadable GAP wide enough to drive through: a car sitting right
+    // beside the open gap lane must never drift INTO it (that would pinch the
+    // line). If its random drift points at the gap, zero it — it just holds its
+    // lane, so the gap stays a full lane wide for the (now slightly bigger) car.
+    if (drift && Math.abs(lane - gap) === 1 && drift === (gap > lane ? 1 : -1)) {
+      drift = 0;
+    }
     sys.list.push({
       skin,
       z: sys.nextRowZ + jitter,

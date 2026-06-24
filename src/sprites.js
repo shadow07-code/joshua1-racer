@@ -205,6 +205,7 @@ export const SPR_SEDAN_RED    = recolorBody(SEDAN_BASE, 7, 6, 8, 7, 6, 8);   // 
 export const SPR_SEDAN_BLACK  = recolorBody(SEDAN_BASE, 7, 6, 8, 0, 4, 3);   // charcoal (not flat black)
 export const SPR_SEDAN_WHITE  = recolorBody(SEDAN_BASE, 7, 6, 8, 2, 1, 1);   // white
 export const SPR_SEDAN_ORANGE = recolorBody(SEDAN_BASE, 7, 6, 8, 22, 9, 5);  // orange
+export const SPR_SEDAN_GREEN  = recolorBody(SEDAN_BASE, 7, 6, 8, 11, 17, 10); // forest green (replaces the red traffic car — the player is the ONLY red car)
 
 // TAXI — yellow sedan with a rooftop sign block and a black-and-cream checker
 // band across the trunk (the side the player actually sees while passing).
@@ -381,7 +382,6 @@ export const SPR_BARREL = [
 
 // Legacy aliases (so any stale HUD/import keeps building). SPR_SEDAN_BLUE/RED
 // are now real colours defined with the sedan above, so they're not re-aliased.
-export const SPR_SEDAN_GREEN  = SPR_SEDAN_SILVER;
 export const SPR_SEDAN_PURPLE = SPR_SEDAN_BLUE;
 export const SPR_TAXI         = SPR_SEDAN_ORANGE;
 export const SPR_BUS_GREEN    = SPR_BUS_BLACK;
@@ -410,7 +410,7 @@ export const TRAFFIC_SKINS = [
   // Sedans (5 colours + taxi) — small + nippy
   mkSkin(SPR_SEDAN_SILVER, 9, 14, 0.30, 10),
   mkSkin(SPR_SEDAN_BLUE,   9, 14, 0.30, 10),
-  mkSkin(SPR_SEDAN_RED,    9, 14, 0.32, 10),
+  mkSkin(SPR_SEDAN_GREEN,  9, 14, 0.31, 10),   // was RED — only the player is red now
   mkSkin(SPR_SEDAN_BLACK,  9, 14, 0.28, 10),
   mkSkin(SPR_SEDAN_WHITE,  9, 14, 0.30, 10),
   mkSkin(SPR_TAXI_CAB,     9, 14, 0.32, 10),

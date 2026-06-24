@@ -4,9 +4,12 @@ import { SPR_PLAYER } from "../sprites.js";
 import { drawSpriteNN, groundShadow, ring, disc, rect } from "../render.js";
 import { roadCenterX } from "../road.js";
 
-// Player car drawn at native 1× so the pixels stay crisp (the old 0.8 downscale
-// is what made it look blurry).
-const PLAYER_SCALE = 1.0;
+// Player car scale. Nudged to 1.05 (+5%) per request so the Ferrari reads a
+// touch larger on screen. This is a small UPSCALE via nearest-neighbour
+// (smoothing off in drawSpriteNN) — it stays sharp (no blur); the only cost is
+// one duplicated pixel row/column. NOTE: the old muddy regression was a 0.8
+// DOWNSCALE (which dropped pixels) — this is the opposite and keeps the art crisp.
+const PLAYER_SCALE = 1.05;
 
 export function makePlayer() {
   return {
@@ -157,8 +160,8 @@ export function drawPlayer(ctx, p, map) {
   const slipping = p.oilTimer > 0 || p.slip > 0;
   const wobble = slipping ? Math.sin(performance.now() / 28) * 1 : 0;
   // Drawn size of the 10×15 sprite at PLAYER_SCALE (centre-anchored on the car).
-  const halfW = 10 * PLAYER_SCALE / 2;   // 5 — smaller player sprite (10×15)
-  const halfH = 15 * PLAYER_SCALE / 2;   // 7.5
+  const halfW = 10 * PLAYER_SCALE / 2;   // 5.25 at 1.05× (sprite blits ~11px wide)
+  const halfH = 15 * PLAYER_SCALE / 2;   // 7.875 at 1.05× (~16px tall)
   const cxp = (cx + p.x) | 0;
   // RAMPAGE nitrous flames blasting from the twin exhausts (behind the car).
   if (p.rampage > 0) drawNitroFlames(ctx, cxp, (PLAYER_Y + halfH) | 0);
