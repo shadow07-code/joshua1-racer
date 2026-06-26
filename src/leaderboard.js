@@ -3,12 +3,14 @@
 // player's remembered name.
 
 const API = "/api/leaderboard";
-const NAME_KEY = "joshua1.playerName";
+const NAME_KEY = "joshua1.playerName";   // NOT versioned — the player keeps their name
 // Default handle for a brand-new player — shown at the top of the title screen
 // and used for high scores until the player changes it via the CHANGE NAME button.
 const DEFAULT_NAME = "PLAYER1";
-const CACHE_KEY = "joshua1.lb.cache";
-const PENDING_KEY = "joshua1.lb.pending";
+// `.v2` namespace = a clean slate for the rebuilt scoring (drops the cached
+// inflated board + any stale pending submit from the old runaway-combo system).
+const CACHE_KEY = "joshua1.lb.cache.v2";
+const PENDING_KEY = "joshua1.lb.pending.v2";
 const TIMEOUT_MS = 6000;
 const NAME_MAX = 12;
 

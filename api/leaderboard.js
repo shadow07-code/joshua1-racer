@@ -12,8 +12,11 @@
 //   UPSTASH_REDIS_REST_URL  / UPSTASH_REDIS_REST_TOKEN     (Upstash integration)
 //   KV_REST_API_URL         / KV_REST_API_TOKEN            (Vercel KV alias)
 
-const LB_KEY = "joshua1:lb:v1";
-const META_KEY = "joshua1:lb:meta:v1";
+// v2 = a clean board for the rebuilt (non-inflated) scoring. The old v1 sorted
+// set (with the runaway-combo scores, e.g. ANTONY 4.7M) is simply abandoned —
+// no destructive delete needed; new honest scores compete on a fresh key.
+const LB_KEY = "joshua1:lb:v2";
+const META_KEY = "joshua1:lb:meta:v2";
 const TOP_N = 20;
 
 // Validation bounds — lenient; only blocks absurd/forged values, not tight policing.

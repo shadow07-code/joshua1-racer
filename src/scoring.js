@@ -13,7 +13,10 @@ export function makeScoreState() {
 }
 
 function hiKey(map, difficulty) {
-  return `joshua1.hiscore.${map}.${difficulty}`;
+  // `.v2` namespace = a clean slate for the rebuilt (non-inflated) scoring. The
+  // old joshua1.hiscore.* bests (from the runaway-combo system, e.g. 45M) are
+  // abandoned, not read — so the personal-best chip starts fresh on the new scale.
+  return `joshua1.hiscore.v2.${map}.${difficulty}`;
 }
 
 export function loadHiScore(map, difficulty) {

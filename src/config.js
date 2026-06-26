@@ -166,28 +166,35 @@ export const SPAWN = {
   aiInitial: 0,
 };
 
+// Scoring — rebuilt so the score scales SANELY instead of exploding. The old
+// system multiplied an UNCAPPED combo onto every near-miss/pass/smash (and those
+// events kept raising it), a feedback loop that reached tens of millions. Now the
+// combo multiplier is CAPPED, frequent events (passes) are flat, and distance +
+// survival form a steady backbone — a strong run lands ~80–250k, not millions.
 export const SCORE = {
-  distanceWeight: 1.0,
-  passBonus: 25,           // per traffic car passed
-  nearMissBonus: 100,
-  smashBonus: 150,         // per traffic car smashed during a rampage (× combo)
+  // ── Steady backbone ──
+  distanceWeight: 1.0,     // points per metre travelled (the run's spine)
+  survivalSecondBonus: 8,  // per second alive
+  passBonus: 8,            // FLAT per car passed — no multiplier (passes are filler)
   cityBonus: 1.0,
   jungleBonus: 1.25,
   mediumBonus: 1.0,
   hardBonus: 1.5,
-  survivalSecondBonus: 10, // per second alive
-  // Skill-depth multipliers (combo-tier near misses + passes):
-  //   speedBonusMax — extra fraction at top speed (0 at comboKmh → this at top).
-  //   precisionMax  — extra fraction for a pixel-perfect shave (tightness 0→1).
-  //   precisionPx   — gap (px) at/under which a shave counts as PERFECT.
-  //   sandwichBonus — flat bonus for splitting a tight 2-car gap (a "sandwich").
-  speedBonusMax: 1.0,
-  precisionMax: 1.5,
+  // ── Skill beats (scaled by the CAPPED combo multiplier) ──
+  // The combo streak still counts up, but the SCORING multiplier is bounded:
+  //   mult = min(comboMultMax, 1 + floor(streak / comboPerStep))   → ×1 … ×8
+  // so a long unbroken chain can't run the score away.
+  comboMultMax: 8,
+  comboPerStep: 3,         // +1 to the multiplier every 3 chained beats
+  nearMissBonus: 60,       // combo-tier near-miss base   (× mult × precision)
+  nearMissLowBonus: 40,    // flat near-miss below comboKmh (no multiplier)
+  smashBonus: 120,         // per rampage smash           (× mult)
+  // Precision (tightness) bonus on a combo near-miss: 1 → 1 + precisionMax.
+  precisionMax: 0.5,
   precisionPx: 8,
-  sandwichBonus: 200,
-  // Each banked SANDWICH adds this fraction to ongoing near-miss combo points
-  // (the "sandwich multiplier" that scales the combo score — x1, x2, x3…).
-  sandwichMult: 0.25,
+  // Splitting a tight 2-car gap (a "sandwich"): a flat bonus that ALSO advances
+  // the combo streak (no separate uncapped multiplier any more).
+  sandwichBonus: 150,
 };
 
 export const MUSIC = {

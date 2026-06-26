@@ -104,7 +104,7 @@ const g = {
   densityTopDone: false,// one-time +20% density 30s after top speed is reached
   topTime: 0,           // seconds since top speed reached (drives the 30s bump)
   topSpeedKmh: 0,
-  combo: 0,             // near-miss combo multiplier
+  combo: 0,             // near-miss STREAK count (drives the capped combo multiplier)
   comboTimer: 0,        // seconds left before the combo lapses
   comboFlash: 0,        // brief screen-edge flash on each combo step
   comboBest: 0,         // best combo this run (for the game-over stats)
@@ -333,11 +333,11 @@ function newRaceSetup() {
 const EXPLOSION_DUR = 0.55;
 
 // ── Scoring helper ────────────────────────────────────────────────────────────
-// S1: 0 at the combo gate (comboKmh) → 1 at top speed, for the speed bonus.
-function speedScore01() {
-  const kmh = g.player.speed / PHYS.maxSpeed * (PHYS.topSpeedKmh || 200);
-  const top = PHYS.topSpeedKmh || 200;
-  return Math.max(0, Math.min(1, (kmh - RACE.comboKmh) / Math.max(1, top - RACE.comboKmh)));
+// Capped combo multiplier from the current streak: ×1 (streak 0–2) up to
+// ×comboMultMax (×8). The streak (g.combo) can climb forever, but the SCORING
+// multiplier can't — that ceiling is what keeps the score from exploding.
+function comboMult() {
+  return Math.min(SCORE.comboMultMax, 1 + Math.floor(g.combo / SCORE.comboPerStep));
 }
 
 // Take a hit: lose a life (a real crash also breaks the combo streak).
@@ -353,17 +353,18 @@ function takeHit(_invulnSec) {
   return false;
 }
 
-// A traffic car smashed during a rampage — knocked off the road and added to the
-// combo tally (with an escalating score bonus and the rising combo SFX).
+// A traffic car smashed during a rampage — knocked off the road, advances the
+// combo streak, and scores its base × the CAPPED combo multiplier (so a long
+// rampage rewards well without running away).
 function registerSmash() {
   g.combo += 1;
   g.comboBest = Math.max(g.comboBest, g.combo);
   g.comboTimer = RACE.comboWindow;
   g.comboFlash = 0.18;
-  const gain = SCORE.smashBonus * g.combo;
+  const gain = SCORE.smashBonus * comboMult();
   g.scoreState.score += gain;
   g.smashTotal += 1;
-  // No per-smash popup — the COMBO xN banner already climbs fast during a rampage.
+  // No per-smash popup — the COMBO banner already climbs fast during a rampage.
   sfxCombo(g.combo);
 }
 
@@ -660,15 +661,17 @@ function updateRace(dt) {
   updateTraffic(g.traffic, dt, g.player.z, g.map, {
     playerX: g.player.x,
     onPassed: (sandwich) => {
-      // S1: passes pay more the faster you're going (above the combo gate).
-      const gain = SCORE.passBonus * Math.max(1, g.combo) * (1 + SCORE.speedBonusMax * speedScore01());
-      g.scoreState.score += gain;
-      // S3: splitting a tight 2-car gap is a SANDWICH — banks a multiplier that
-      // boosts ongoing combo near-misses, plus a flat bonus and a brief banner.
+      // Passes are the steady filler — a small FLAT bonus, no multiplier.
+      g.scoreState.score += SCORE.passBonus;
+      // Splitting a tight 2-car gap is a SANDWICH: a flat bonus that ALSO advances
+      // the combo streak (feeding the capped multiplier) and keeps the chain alive.
       if (sandwich) {
         g.sandwichCombo += 1;
-        g.sandwichComboTimer = 1.6;     // transient — shows then blinks off
+        g.sandwichComboTimer = 1.6;     // transient banner — shows then blinks off
         g.scoreState.score += SCORE.sandwichBonus;
+        g.combo += 1;
+        g.comboBest = Math.max(g.comboBest, g.combo);
+        g.comboTimer = RACE.comboWindow;
         sfxPickup();
       }
       // Each pass burns down the post-rampage cooldown; once it's spent, the
@@ -680,16 +683,16 @@ function updateRace(dt) {
       // bonus with a discreet "NEAR MISS" flash — but no multiplier. At
       // comboKmh+ we enter NEAR MISS COMBO territory: shaves chain into a
       // multiplier AND (when armed) fill the rampage meter.
-      // S1 speed bonus + S2 precision bonus (closer shave = bigger).
+      // Precision (tightness) bonus — a closer shave is worth a bit more.
       const kmh = g.player.speed / PHYS.maxSpeed * (PHYS.topSpeedKmh || 200);
       const t = tightness != null ? tightness : 0;
-      const precision = 1 + SCORE.precisionMax * t;
+      const precision = 1 + SCORE.precisionMax * t;     // 1 → 1.5 (pixel-perfect)
       if (kmh >= RACE.comboKmh) {
         g.combo += 1;
         g.comboBest = Math.max(g.comboBest, g.combo);
         g.comboTimer = RACE.comboWindow;
         g.comboFlash = 0.18;
-        const gain = Math.round(SCORE.nearMissBonus * g.combo * (1 + SCORE.speedBonusMax * speedScore01()) * precision * (1 + g.sandwichCombo * SCORE.sandwichMult));
+        const gain = Math.round(SCORE.nearMissBonus * comboMult() * precision);
         g.scoreState.score += gain;
         sfxCombo(g.combo);
         // Risk → reward: an unbroken chain of `rampageNearMisses` shaves fires
@@ -712,7 +715,7 @@ function updateRace(dt) {
           }
         }
       } else {
-        const gain = Math.round(SCORE.nearMissBonus * precision);
+        const gain = Math.round(SCORE.nearMissLowBonus * precision);
         g.scoreState.score += gain;
         sfxPickup();
       }
@@ -957,7 +960,7 @@ function render() {
       rect(ctx, 0, 9, 3, H - 34, c);
       rect(ctx, W - 3, 9, 3, H - 34, c);
     }
-    drawCombo(ctx, g.combo, g.comboTimer, RACE.comboWindow);
+    drawCombo(ctx, comboMult(), g.comboTimer, RACE.comboWindow);
     drawSandwichCombo(ctx, g.sandwichCombo, g.sandwichComboTimer);
     drawRampageMeter(ctx, {
       meter: g.rampageMeter, max: RACE.rampageNearMisses,
