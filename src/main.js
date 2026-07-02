@@ -12,6 +12,7 @@ import {
   playFlourish,
   startEngine, setEngine, stopEngine, setEngineRampage, getEngineStyle, setEngineStyle,
   sfxAccelAccent, sfxBrake, sfxPickup, sfxCrash, sfxExplosion, sfxBump, sfxBarrelDrop, sfxCombo,
+  sfxWhoosh, sfxPerfect,
   sfxShieldUp, sfxShieldHit, sfxShockwave, sfxRampageCharge, sfxNitrous,
   sfxMenuMove, sfxMenuSelect, sfxFinish, sfxCountdownBeep,
   startHeliSound, stopHeliSound,
@@ -34,7 +35,7 @@ import {
   drawHud, drawTitleScreen, drawMapSelect, drawDifficultySelect,
   drawGameOver, drawPaused, drawCountdown, drawTutorialOverlay, drawSteerHints, drawCombo, drawShieldMsg,
   drawRampageMeter, drawSandwichCombo, drawShareCard, SHARE_CARD_W, SHARE_CARD_H,
-  drawExplosion,
+  drawExplosion, drawPerfect,
 } from "./hud.js";
 import { registerServiceWorker, initInstallBanner, initInstallButton, initInstallSplash, setInstallButtonVisible } from "./pwa.js";
 import {
@@ -118,6 +119,8 @@ const g = {
   shieldMsg: "",        // transient "SHIELD!" / "SAVED!" popup text
   shieldMsgTimer: 0,
   explosion: 0,         // seconds left on the barrel-impact explosion FX
+  hitStop: 0,           // seconds of gameplay FREEZE left (micro impact-pause on a tight shave)
+  perfectTimer: 0,      // seconds left on the "PERFECT!" micro-pop over the car
   countdownTime: 0,
   countdownLastBeep: -1,
   tut: null,            // first-run steering tutorial sub-state
@@ -327,6 +330,8 @@ function newRaceSetup() {
   g.shieldMsg = "";
   g.shieldMsgTimer = 0;
   g.explosion = 0;
+  g.hitStop = 0;
+  g.perfectTimer = 0;
 }
 
 // Duration (seconds) of the barrel-impact explosion FX.
@@ -687,6 +692,18 @@ function updateRace(dt) {
       const kmh = g.player.speed / PHYS.maxSpeed * (PHYS.topSpeedKmh || 200);
       const t = tightness != null ? tightness : 0;
       const precision = 1 + SCORE.precisionMax * t;     // 1 → 1.5 (pixel-perfect)
+      // ── Game-feel juice (freeze + audio only, per the no-shake/no-zoom rule) ──
+      // A TIGHT shave gets a 60ms hit-stop (a micro freeze actually REDUCES
+      // motion) + an air-rush whoosh that brightens with tightness; a
+      // pixel-close one also pops "PERFECT!" over the car with a crystal ting.
+      if (t >= 0.45) {
+        sfxWhoosh(t);
+        g.hitStop = Math.max(g.hitStop, 0.06);
+      }
+      if (t >= 0.6) {
+        g.perfectTimer = 0.5;
+        sfxPerfect();
+      }
       if (kmh >= RACE.comboKmh) {
         g.combo += 1;
         g.comboBest = Math.max(g.comboBest, g.combo);
@@ -755,6 +772,10 @@ function updateRace(dt) {
   if (g.rampageFlash > 0) g.rampageFlash = Math.max(0, g.rampageFlash - dt);
   if (g.sandwichComboTimer > 0) g.sandwichComboTimer = Math.max(0, g.sandwichComboTimer - dt);
   if (g.explosion > 0) g.explosion = Math.max(0, g.explosion - dt);
+  if (g.perfectTimer > 0) g.perfectTimer = Math.max(0, g.perfectTimer - dt);
+  // The car visibly "powers up" with the capped combo multiplier — drawPlayer
+  // reads this for the underglow/trail (attached to the car, zero optic flow).
+  g.player.comboGlow = comboMult();
   // Police helicopter kicks in once the player crosses 150 km/h — it drops
   // flaming barrels on the road ahead (collision handled below, costs a life).
   updateCops(g.cops, dt, g.player.z, g.player.x, g.player.speed, g.map, { onDrop: sfxBarrelDrop });
@@ -967,6 +988,7 @@ function render() {
       cooldown: g.rampageCooldown, cooldownMax: RACE.rampageCooldownPasses,
       active: g.player.rampage > 0,
     });
+    if (g.perfectTimer > 0) drawPerfect(ctx, g.perfectTimer, (W / 2 + g.map.biasX + g.player.x) | 0);
     if (g.shieldMsgTimer > 0) drawShieldMsg(ctx, g.shieldMsg);
     drawHud(ctx, {
       score: g.scoreState.score,
@@ -1010,6 +1032,16 @@ function frame(now) {
   let dt = (now - lastT) / 1000;
   if (dt > 0.25) dt = 0.25;
   lastT = now;
+  // HIT-STOP: a deliberate micro freeze (~60ms) on a razor-tight shave. The
+  // world holds perfectly still for a beat — an impact pause that sells the
+  // closeness with LESS motion, not more (still renders, so banners/pops show).
+  if (g.hitStop > 0) {
+    g.hitStop = Math.max(0, g.hitStop - dt);
+    acc = 0;
+    render();
+    requestAnimationFrame(frame);
+    return;
+  }
   acc += dt;
   while (acc >= FIXED_DT) { update(FIXED_DT); acc -= FIXED_DT; }
   render();

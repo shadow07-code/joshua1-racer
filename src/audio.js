@@ -646,6 +646,40 @@ export function sfxCombo(level) {
   o2.start(t); o2.stop(t + 0.12);
 }
 
+// Near-miss WHOOSH — a short band-passed air rush that sweeps up then falls
+// away, like traffic ripping past an open cockpit. `tight` 0..1 (1 = the
+// closest shave) makes it brighter and louder, so the risk is audible.
+export function sfxWhoosh(tight = 0.5) {
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  const k = Math.max(0, Math.min(1, tight));
+  const src = ctx.createBufferSource(); src.buffer = getNoiseBuf();
+  const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.Q.value = 1.2;
+  bp.frequency.setValueAtTime(600 + 900 * k, t);
+  bp.frequency.exponentialRampToValueAtTime(2400 + 1600 * k, t + 0.05);
+  bp.frequency.exponentialRampToValueAtTime(420, t + 0.17);
+  const g = ctx.createGain(); g.gain.value = 0;
+  g.gain.linearRampToValueAtTime(0.14 + 0.12 * k, t + 0.015);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.19);
+  src.connect(bp); bp.connect(g); g.connect(sfxGain);
+  src.start(t); src.stop(t + 0.21);
+}
+
+// PERFECT shave — a tiny two-note crystal "ting" layered over the whoosh when a
+// pass is pixel-close. Short and high so it cuts through without clutter.
+export function sfxPerfect() {
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  [[1568, 0], [2093, 0.05]].forEach(([f, off]) => {
+    const o = ctx.createOscillator(); o.type = "sine"; o.frequency.value = f;
+    const g = ctx.createGain(); g.gain.value = 0;
+    g.gain.linearRampToValueAtTime(0.14, t + off + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.001, t + off + 0.12);
+    o.connect(g); g.connect(sfxGain);
+    o.start(t + off); o.stop(t + off + 0.14);
+  });
+}
+
 // Rampage CHARGE — a short rising blip whose pitch climbs with `step` (0..3) so
 // the last few near-misses before a rampage audibly "spin up" the nitrous.
 export function sfxRampageCharge(step = 0) {

@@ -1,6 +1,6 @@
 // HUD — top score strip + bottom icon panel.
 // Endless survival: shows TIME elapsed + LIVES instead of LAP + POS.
-import { W, H, PHYS, RACE } from "./config.js";
+import { W, H, PHYS, RACE, PLAYER_Y } from "./config.js";
 import {
   rect, text, textRight, textCentered, drawSprite, drawSpriteScaled,
   disc, ditherRect, groundShadow, textOutlined, textOutlinedCentered,
@@ -692,6 +692,21 @@ export function drawExplosion(ctx, prog, cx, cy) {
       rect(ctx, (cx + Math.cos(a) * spread) | 0, (cy + Math.sin(a) * spread) | 0, 2, 2, (i & 1) ? 5 : 9);
     }
   }
+}
+
+// "PERFECT!" micro-pop — a small blinking word just above the car on a
+// pixel-close shave. Rises 3px over its half-second life (a tiny, bounded
+// screen-space drift — not a floater stream) then vanishes. cx = the car's
+// screen x, so the pop hugs the moment it rewards.
+export function drawPerfect(ctx, timer, cx) {
+  if (timer <= 0) return;
+  const f = 1 - Math.max(0, Math.min(1, timer / 0.5));       // 0 → 1 over its life
+  const label = "PERFECT!";
+  const w = label.length * 4 - 1;
+  const x = Math.max(2, Math.min(W - w - 2, (cx - w / 2) | 0));
+  const y = (PLAYER_Y - 16 - f * 3) | 0;
+  const blink = Math.floor(performance.now() / 70) % 2 === 0;
+  textOutlined(ctx, label, x, y, blink ? 1 : 5, 0, 1);
 }
 
 // Big transient popup (SHIELD! / SAVED!) centred over the action — blinks.
