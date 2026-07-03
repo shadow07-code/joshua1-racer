@@ -435,6 +435,9 @@ export function playFlourish() {
 let engineOsc2 = null, engineGainSub = null, engineOscSub = null;
 let engineFilt = null;
 let _engineRampage = false;
+// Last-life "strain" — a detune wobble LFO patched onto the engine oscillators so
+// the motor sounds like it's labouring / about to give out on the final life.
+let _engineStrain = false, engineStrainLfo = null, engineStrainGain = null;
 
 // ── Engine styles ─────────────────────────────────────────────────────────────
 // Three selectable engine "voices" so different tastes are covered. Each defines
@@ -472,9 +475,15 @@ export function startEngine() {
   engineOscSub.connect(engineGainSub); engineGainSub.connect(sfxGain);
   engineOsc.start(); engineOsc2.start(); engineOscSub.start();
   _engineRampage = false;
+  // Fresh engine = no strain yet; the LFO refs are gone with the old oscillators,
+  // so clear the flag and let the per-frame assert re-apply it if still needed.
+  _engineStrain = false; engineStrainLfo = null; engineStrainGain = null;
 }
 export function stopEngine() {
   if (!engineOsc) return;
+  if (engineStrainLfo) { try { engineStrainLfo.stop(); } catch {} try { engineStrainLfo.disconnect(); } catch {} }
+  if (engineStrainGain) { try { engineStrainGain.disconnect(); } catch {} }
+  engineStrainLfo = engineStrainGain = null; _engineStrain = false;
   try { engineOsc.stop(); } catch {}
   try { engineOsc2.stop(); } catch {}
   try { engineOscSub.stop(); } catch {}
@@ -482,6 +491,29 @@ export function stopEngine() {
   engineGain.disconnect(); engineGainSub.disconnect(); engineFilt.disconnect();
   engineOsc = engineOsc2 = engineOscSub = null;
   engineGain = engineGainSub = engineFilt = null;
+}
+// Toggle the last-life engine strain. Idempotent (guarded), so it's safe to
+// assert every frame from the game loop — it only builds/tears down the LFO on
+// an actual change. The wobble modulates the oscillators' detune (± a few dozen
+// cents) for an uneven, straining tone.
+export function setEngineStrain(on) {
+  on = !!on;
+  if (!ctx || !engineOsc || _engineStrain === on) return;
+  _engineStrain = on;
+  if (on) {
+    engineStrainLfo = ctx.createOscillator(); engineStrainLfo.type = "sine"; engineStrainLfo.frequency.value = 6.5;
+    engineStrainGain = ctx.createGain(); engineStrainGain.gain.value = 55;   // ±55 cents
+    engineStrainLfo.connect(engineStrainGain);
+    engineStrainGain.connect(engineOsc.detune);
+    engineStrainGain.connect(engineOsc2.detune);
+    engineStrainLfo.start();
+  } else {
+    if (engineStrainLfo) { try { engineStrainLfo.stop(); } catch {} try { engineStrainLfo.disconnect(); } catch {} engineStrainLfo = null; }
+    if (engineStrainGain) { try { engineStrainGain.disconnect(); } catch {} engineStrainGain = null; }
+    // Restore the style's base detune (engineOsc2 carries the offset; engineOsc is 0).
+    if (engineOsc) engineOsc.detune.value = 0;
+    if (engineOsc2) engineOsc2.detune.value = ENGINE_STYLES[_engineStyle].detune;
+  }
 }
 // Engine loudness multiplier: +20% in ALL situations, and +40% MORE when music
 // is off (the car fills the empty space). Only scales the engine gain — the
@@ -663,6 +695,26 @@ export function sfxWhoosh(tight = 0.5) {
   g.gain.exponentialRampToValueAtTime(0.001, t + 0.19);
   src.connect(bp); bp.connect(g); g.connect(sfxGain);
   src.start(t); src.stop(t + 0.21);
+}
+
+// HEARTBEAT — a low "lub-dub" for the last-life tension state. Two soft sine
+// thumps (the second lower + quieter), each dropping in pitch like a real beat.
+// Paced from the game loop (~1s apart), it makes the final life feel urgent.
+export function sfxHeartbeat() {
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  const thump = (at, f, gain) => {
+    const o = ctx.createOscillator(); o.type = "sine";
+    o.frequency.setValueAtTime(f, at);
+    o.frequency.exponentialRampToValueAtTime(f * 0.55, at + 0.13);
+    const g = ctx.createGain(); g.gain.value = 0;
+    g.gain.linearRampToValueAtTime(gain, at + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.001, at + 0.16);
+    o.connect(g); g.connect(sfxGain);
+    o.start(at); o.stop(at + 0.18);
+  };
+  thump(t, 92, 0.30);            // lub
+  thump(t + 0.19, 68, 0.20);     // dub — lower + softer
 }
 
 // PERFECT shave — a tiny two-note crystal "ting" layered over the whoosh when a

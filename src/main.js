@@ -10,9 +10,9 @@ import { initInput, getInput, consumePress, consumeAnyPress } from "./input.js";
 import {
   initAudio, resumeAudio, suspendAudio, startMusic, stopMusic, setMusicIntensity, setMusicTempoFactor,
   playFlourish,
-  startEngine, setEngine, stopEngine, setEngineRampage, getEngineStyle, setEngineStyle,
+  startEngine, setEngine, stopEngine, setEngineRampage, setEngineStrain, getEngineStyle, setEngineStyle,
   sfxAccelAccent, sfxBrake, sfxPickup, sfxCrash, sfxExplosion, sfxBump, sfxBarrelDrop, sfxCombo,
-  sfxWhoosh, sfxPerfect,
+  sfxWhoosh, sfxPerfect, sfxHeartbeat,
   sfxShieldUp, sfxShieldHit, sfxShockwave, sfxRampageCharge, sfxNitrous,
   sfxMenuMove, sfxMenuSelect, sfxFinish, sfxCountdownBeep,
   startHeliSound, stopHeliSound,
@@ -35,7 +35,7 @@ import {
   drawHud, drawTitleScreen, drawMapSelect, drawDifficultySelect,
   drawGameOver, drawPaused, drawCountdown, drawTutorialOverlay, drawSteerHints, drawCombo, drawShieldMsg,
   drawRampageMeter, drawSandwichCombo, drawShareCard, SHARE_CARD_W, SHARE_CARD_H,
-  drawExplosion, drawPerfect,
+  drawExplosion, drawPerfect, drawLastLifePulse,
 } from "./hud.js";
 import { registerServiceWorker, initInstallBanner, initInstallButton, initInstallSplash, setInstallButtonVisible } from "./pwa.js";
 import {
@@ -123,6 +123,8 @@ const g = {
   explosion: 0,         // seconds left on the barrel-impact explosion FX
   hitStop: 0,           // seconds of gameplay FREEZE left (micro impact-pause on a tight shave)
   perfectTimer: 0,      // seconds left on the "PERFECT!" micro-pop over the car
+  heartTimer: 0,        // countdown to the next heartbeat thump (last-life tension)
+  goTime: 0,            // seconds on the game-over screen (guards the tap-to-retry)
   countdownTime: 0,
   countdownLastBeep: -1,
   tut: null,            // first-run steering tutorial sub-state
@@ -334,6 +336,7 @@ function newRaceSetup() {
   g.explosion = 0;
   g.hitStop = 0;
   g.perfectTimer = 0;
+  g.heartTimer = 0;
 }
 
 // Duration (seconds) of the barrel-impact explosion FX.
@@ -401,6 +404,7 @@ function endRace(reason) {
   g.isNewHi = finalizeScore(g.scoreState);
   g.bestDelta = (g.isNewHi && prevHi > 0) ? Math.max(0, Math.floor(g.scoreState.score) - prevHi) : 0;
   g.rankInfo = null;   // "RANKING…" until the submit returns the standing
+  g.goTime = 0;        // guards the tap-to-retry so the fatal touch can't insta-restart
   if (g.isNewHi) playFlourish();
   // Submit to the global board; the response carries this run's rank + total so
   // the game-over screen can show a percentile ("TOP 14%  RANK 14/98").
@@ -478,6 +482,11 @@ function playAgain() {
   ensureAudio();
   sfxMenuSelect();
   beginCountdown();      // reuse the remembered name + current map/difficulty
+  // INSTANT RETRY: skip most of the 3-2-1 so a fresh run starts in ~0.8s (a brief
+  // "1" → "GO!"). Keeps the "one more go" loop tight. Title-start + pause-restart
+  // keep the full countdown; only the game-over retry is fast-forwarded.
+  g.countdownTime = Math.max(0, RACE.countdownSeconds - 0.2);
+  g.countdownLastBeep = Math.floor(g.countdownTime);   // suppress the earlier beeps
 }
 
 // Render the run's stats to a crisp PNG and hand it to the OS share sheet (with a
@@ -787,6 +796,19 @@ function updateRace(dt) {
   // The car visibly "powers up" with the capped combo multiplier — drawPlayer
   // reads this for the underglow/trail (attached to the car, zero optic flow).
   g.player.comboGlow = comboMult();
+
+  // ── LAST-LIFE TENSION ── On the final life the engine strains (a detune wobble)
+  // and a heartbeat thumps ~once a second, so the near-death moment feels urgent.
+  // setEngineStrain is idempotent, so asserting it every frame is cheap and also
+  // re-applies after a pause/resume rebuilds the engine.
+  const lastLife = g.player.lives === 1;
+  setEngineStrain(lastLife);
+  if (lastLife) {
+    g.heartTimer -= dt;
+    if (g.heartTimer <= 0) { sfxHeartbeat(); g.heartTimer = 1.05; }
+  } else {
+    g.heartTimer = 0;
+  }
   // Police helicopter kicks in once the player crosses 150 km/h — it drops
   // flaming barrels on the road ahead (collision handled below, costs a life).
   updateCops(g.cops, dt, g.player.z, g.player.x, g.player.speed, g.map, { onDrop: sfxBarrelDrop });
@@ -878,12 +900,15 @@ function updatePaused() {
   if (consumePress("Escape")) { stopMusic(); stopAllLoopingSfx(); g.state = STATES.TITLE; }
 }
 
-function updateGameOver() {
-  // Taps are handled by the HTML action bar; these are desktop keyboard shortcuts.
+function updateGameOver(dt) {
+  g.goTime += dt;
+  // Keyboard shortcuts + the HTML action bar both route through playAgain (quick).
   if (consumePress("Enter", " ")) { playAgain(); return; }
   if (consumePress("l", "L")) { openLeaderboard(STATES.GAME_OVER); return; }
   if (consumePress("Escape")) { g.state = STATES.TITLE; return; }
-  consumePress("Touch");   // swallow stray canvas taps so they don't leak
+  // One-tap INSTANT RETRY — a tap anywhere on the canvas restarts, after a short
+  // guard so the fatal moment's own touch can't immediately retry.
+  if (consumePress("Touch") && g.goTime > 0.9) { playAgain(); return; }
 }
 
 // ─── Render ──────────────────────────────────────────────────────────────────
@@ -976,6 +1001,8 @@ function render() {
     if (g.explosion > 0) {
       drawExplosion(ctx, 1 - g.explosion / EXPLOSION_DUR, (W / 2 + g.map.biasX + g.player.x) | 0, PLAYER_Y);
     }
+    // Last-life danger frame — a red edge pulse (RACE only, not while paused).
+    if (g.state === STATES.RACE && g.player.lives === 1) drawLastLifePulse(ctx);
     // Combo-step juice: a brief 2px gold frame around the play area (between
     // the HUD strips). One static flash per shave — small, quick, not dizzy.
     if (g.comboFlash > 0) {
@@ -1071,7 +1098,7 @@ function update(dt) {
     case STATES.COUNTDOWN: updateCountdown(dt); break;
     case STATES.RACE: updateRace(dt); break;
     case STATES.PAUSED: updatePaused(); break;
-    case STATES.GAME_OVER: updateGameOver(); break;
+    case STATES.GAME_OVER: updateGameOver(dt); break;
   }
 }
 // Wire the HTML overlays (name entry, leaderboard, game-over actions) to game state.

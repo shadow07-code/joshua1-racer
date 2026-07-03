@@ -690,6 +690,11 @@ export function drawGameOver(ctx, { name, score, hi, isNew, bestDelta, rankInfo,
   statRow("BEST COMBO", "X" + (combo || 0),                    17);
   statRow("SMASHED",    pad(smashed != null ? smashed : 0, 3), 9);
   statRow("RAMPAGES",   "X" + (rampages || 0),                 5);
+
+  // One-tap retry prompt — a blinking hint just under the ledger (the whole
+  // canvas is tappable to restart; the HTML PLAY AGAIN button does the same).
+  const hintY = statsTop + panelH + 4;
+  if (hintY < H - 26) textOutlinedCentered(ctx, "TAP TO RETRY", hintY, flash ? 5 : 1, 0, 1);
 }
 
 // Impact EXPLOSION — a brief expanding fireball + shrapnel sparks + a quick
@@ -735,6 +740,22 @@ export function drawPerfect(ctx, timer, cx) {
   const y = (PLAYER_Y - 16 - f * 3) | 0;
   const blink = Math.floor(performance.now() / 70) % 2 === 0;
   textOutlined(ctx, label, x, y, blink ? 1 : 5, 0, 1);
+}
+
+// LAST-LIFE PULSE — a red frame hugging the play area that breathes in and out
+// (~1s, matching the heartbeat cadence): thicker + brighter at the peak, thin +
+// dark between. It's a screen-space colour/thickness pulse at the edges only —
+// no spatial motion, no optic flow — so it heightens the danger without breaking
+// the high-speed comfort rule (same family as the combo/rampage edge flashes).
+export function drawLastLifePulse(ctx) {
+  const p = Math.sin(performance.now() / 168) * 0.5 + 0.5;   // 0..1, ~1.05s period
+  const th = 1 + Math.round(p * 2);                           // 1..3 px
+  const idx = p > 0.55 ? 6 : 7;                               // bright red at peak, dark red between
+  const top = 9, bot = H - 24, h = bot - top;
+  rect(ctx, 0, top, W, th, idx);
+  rect(ctx, 0, bot - th, W, th, idx);
+  rect(ctx, 0, top, th, h, idx);
+  rect(ctx, W - th, top, th, h, idx);
 }
 
 // Big transient popup (SHIELD! / SAVED!) centred over the action — blinks.
