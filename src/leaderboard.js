@@ -94,7 +94,10 @@ export async function submitScore(run) {
     if (ok && Array.isArray(json.entries)) {
       writeCache(json.entries);
       clearPending();
-      return { entries: json.entries, offline: false };
+      return {
+        entries: json.entries, offline: false,
+        rank: json.rank || null, total: json.total || null,
+      };
     }
     stashPending(payload);
     return { entries: readCache(), offline: true };

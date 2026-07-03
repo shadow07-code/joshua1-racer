@@ -156,8 +156,17 @@ module.exports = async function handler(req, res) {
         ["HSET", META_KEY, name, meta],
       ]);
 
+      // The player's standing after this submit, for the game-over verdict:
+      // ZREVRANK is 0-based best-first (→ +1 for a human rank); ZCARD is the
+      // total number of ranked players.
+      const [revrank, total] = await pipeline(cfg, [
+        ["ZREVRANK", LB_KEY, name],
+        ["ZCARD", LB_KEY],
+      ]);
+      const rank = revrank == null ? null : toInt(revrank) + 1;
+
       const entries = await readTop(cfg);
-      res.status(200).json({ ok: true, entries });
+      res.status(200).json({ ok: true, entries, rank, total: toInt(total) });
       return;
     }
 

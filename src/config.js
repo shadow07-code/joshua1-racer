@@ -197,6 +197,17 @@ export const SCORE = {
   sandwichBonus: 150,
 };
 
+// Game-over LETTER GRADE by final score — the instant "did I do well?" verdict
+// that triggers the retry reflex. Tuned to the rebuilt scoring (a strong ~2-min
+// run ≈ 100k): S is aspirational, C is the encouraging floor (never "fail").
+// [minScore, letter, qualifier, paletteIdx]
+export const GRADES = [
+  [130000, "S", "LEGENDARY!", 5],    // gold
+  [70000,  "A", "GREAT RUN",  17],   // emerald
+  [30000,  "B", "SOLID",      13],   // light blue
+  [0,      "C", "KEEP GOING", 2],    // light gray
+];
+
 export const MUSIC = {
   cityBPM: 150,
   jungleBPM: 132,

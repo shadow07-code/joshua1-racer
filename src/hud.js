@@ -1,6 +1,6 @@
 // HUD — top score strip + bottom icon panel.
 // Endless survival: shows TIME elapsed + LIVES instead of LAP + POS.
-import { W, H, PHYS, RACE, PLAYER_Y } from "./config.js";
+import { W, H, PHYS, RACE, PLAYER_Y, GRADES } from "./config.js";
 import {
   rect, text, textRight, textCentered, drawSprite, drawSpriteScaled,
   disc, ditherRect, groundShadow, textOutlined, textOutlinedCentered,
@@ -590,8 +590,16 @@ const GO_STARS = (() => {
   return out;
 })();
 
-export function drawGameOver(ctx, { name, score, hi, isNew, reason, passed, time, topSpeed, combo, smashed, rampages }) {
+// The final-score letter grade — the instant verdict. Returns the matching
+// [minScore, letter, qualifier, paletteIdx] entry from config.GRADES.
+export function gradeFor(score) {
+  for (const g of GRADES) if (score >= g[0]) return g;
+  return GRADES[GRADES.length - 1];
+}
+
+export function drawGameOver(ctx, { name, score, hi, isNew, bestDelta, rankInfo, reason, passed, time, topSpeed, combo, smashed, rampages }) {
   const t = performance.now();
+  const flash = Math.floor(t / 300) % 2 === 0;
   // Dark backdrop with a quiet twinkling starfield — ties the screen to the
   // title's night-sky look instead of dead flat black.
   rect(ctx, 0, 0, W, H, 0);
@@ -601,14 +609,17 @@ export function drawGameOver(ctx, { name, score, hi, isNew, reason, passed, time
     rect(ctx, st.x, st.y, 1, 1, tw === 2 ? 4 : 23);
   }
 
-  // The three action buttons live in an HTML bar pinned to the viewport bottom,
-  // so the canvas only draws the banner + stats. Centre them within the upper
-  // ~62% of the screen so they never sit behind that bar.
+  const gr = gradeFor(score);        // [min, letter, qualifier, idx]
+
+  // The action buttons live in an HTML bar pinned to the viewport bottom, so the
+  // canvas draws the banner + verdict + a trimmed ledger, centred in the upper
+  // ~66% so they never sit behind that bar.
   const rowH = 12;
-  const panelH = rowH * 9 + 10;     // 9 stat rows + padding
-  const newHiH = isNew ? 14 : 0;
-  const totalH = 26 + 8 + newHiH + panelH;
-  const avail = H * 0.62;
+  const N = 7;                       // trimmed ledger (score/best now live in the verdict)
+  const panelH = rowH * N + 10;
+  const heroH = 22;
+  const totalH = 26 + 2 + heroH + 10 + 10 + panelH;
+  const avail = H * 0.66;
   const baseY = Math.max(4, ((avail - totalH) / 2) | 0);
 
   // ── Top banner — "GAME OVER" with premium trim ──
@@ -620,30 +631,50 @@ export function drawGameOver(ctx, { name, score, hi, isNew, reason, passed, time
   rect(ctx, 0, bannerY + 23, W, 1, 5);
   textOutlinedCentered(ctx, reason, bannerY + 6, 1, 0, 2, 7);
 
-  // ── New high-score flash (just below banner) ──
-  let cursor = bannerY + 34;
-  if (isNew) {
-    const flash = Math.floor(t / 300) % 2 === 0;
-    textCentered(ctx, "NEW HI SCORE!", cursor, flash ? 5 : 9, 1);
-    cursor += 14;
-  }
+  // ── GRADE HERO — the big letter + the final score, the verdict at a glance ──
+  let cursor = bannerY + 28;
+  const heroY = cursor;
+  rect(ctx, 6, heroY, W - 12, heroH, 23);          // dark plate
+  rect(ctx, 6, heroY, W - 12, 1, gr[3]);           // top/bottom accent in the grade colour
+  rect(ctx, 6, heroY + heroH - 1, W - 12, 1, gr[3]);
+  textOutlined(ctx, gr[1], 12, heroY + 3, gr[3], 0, 3);          // grade letter, scale 3
+  textRight(ctx, pad(score, 6), W - 10, heroY + 7, 1, 2);        // final score, scale 2
+  cursor += heroH + 1;
 
-  // ── Stats panel — 7 rows of data ──
+  // ── Verdict line — qualifier (left) + best delta (right) ──
+  text(ctx, gr[2], 12, cursor, gr[3], 1);
+  if (isNew && bestDelta > 0) {
+    textRight(ctx, "NEW BEST +" + bestDelta, W - 10, cursor, flash ? 5 : 9, 1);
+  } else if (isNew) {
+    textRight(ctx, "FIRST SCORE!", W - 10, cursor, flash ? 5 : 9, 1);
+  } else {
+    textRight(ctx, "BEST " + pad(hi, 6), W - 10, cursor, 5, 1);
+  }
+  cursor += 10;
+
+  // ── Rank / percentile line — how this run stacks up on the live board ──
+  if (rankInfo && rankInfo.rank && rankInfo.total) {
+    const line = rankInfo.total >= 20
+      ? "TOP " + Math.max(1, Math.ceil(rankInfo.rank / rankInfo.total * 100)) + "%   RANK " + rankInfo.rank + "/" + rankInfo.total
+      : "RANK " + rankInfo.rank + " OF " + rankInfo.total;
+    textCentered(ctx, line, cursor, 13, 1);
+  } else if (rankInfo && rankInfo.offline) {
+    textCentered(ctx, "OFFLINE", cursor, 4, 1);
+  } else {
+    textCentered(ctx, "RANKING...", cursor, 4, 1);      // pending submit
+  }
+  cursor += 10;
+
+  // ── Trimmed ledger ──
   const statsTop = cursor;
   rect(ctx, 6, statsTop, W - 12, panelH, 4);
   rect(ctx, 6, statsTop, W - 12, 1, 1);
   rect(ctx, 6, statsTop + panelH - 1, W - 12, 1, 0);
-  // "RESULTS" header bar — its own darker strip with gold text.
   rect(ctx, 7, statsTop + 1, W - 14, 10, 23);
   textCentered(ctx, "RESULTS", statsTop + 4, 5, 1);
 
-  const col1 = 12;                  // label column left edge
-  const col2 = W - 12;             // value column right edge
-  let y = statsTop + 14;
-  let rowN = 0;
-
-  // Row helpers — label left, value right-aligned, alternate rows shaded for
-  // an easy-to-scan ledger look.
+  const col1 = 12, col2 = W - 12;
+  let y = statsTop + 14, rowN = 0;
   const statRow = (label, value, valIdx) => {
     if (rowN % 2 === 1) rect(ctx, 7, y - 2, W - 14, rowH - 1, 23);
     text(ctx, label, col1, y, 13);
@@ -652,14 +683,11 @@ export function drawGameOver(ctx, { name, score, hi, isNew, reason, passed, time
     rowN++;
   };
 
-  statRow("NAME",      (name || "AAA").slice(0, 10),         5);
-  statRow("SCORE",     pad(score, 6),                        1);
-  statRow("HI SCORE",  pad(hi, 6),                           5);
-  statRow("TIME",      mmss(time || 0),                      1);
-  statRow("PASSED",    pad(passed != null ? passed : 0, 3),  1);
-  statRow("TOP SPEED", (topSpeed || 0) + " KMH",             9);
-
-  statRow("BEST COMBO", "X" + (combo || 0),                   17);
+  statRow("NAME",       (name || "AAA").slice(0, 10),          5);
+  statRow("TIME",       mmss(time || 0),                       1);
+  statRow("PASSED",     pad(passed != null ? passed : 0, 3),   1);
+  statRow("TOP SPEED",  (topSpeed || 0) + " KMH",              9);
+  statRow("BEST COMBO", "X" + (combo || 0),                    17);
   statRow("SMASHED",    pad(smashed != null ? smashed : 0, 3), 9);
   statRow("RAMPAGES",   "X" + (rampages || 0),                 5);
 }
@@ -750,10 +778,12 @@ export function drawShareCard(ctx, { name, score, isNew, time, topSpeed, passed,
   textOutlinedCentered(ctx, "JOSHUA 1", 8, 5, 0, 2, 7);
   textOutlinedCentered(ctx, "RACING", 26, 6, 0, 1, 7);
 
-  // Score hero.
+  // Score hero + letter grade badge.
+  const gr = gradeFor(score);
   textCentered(ctx, "FINAL SCORE", 42, 5);
   textOutlinedCentered(ctx, pad(score, 6), 50, 1, 0, 2);
-  if (isNew) textCentered(ctx, "NEW HI SCORE!", 72, 17);
+  textCentered(ctx, "GRADE " + gr[1] + "  " + gr[2], isNew ? 64 : 66, gr[3]);
+  if (isNew) textCentered(ctx, "NEW HI SCORE!", 74, 17);
 
   // Driver.
   textCentered(ctx, "DRIVER  " + (name || "AAA").slice(0, 10), isNew ? 82 : 76, 13);

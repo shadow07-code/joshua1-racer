@@ -95,6 +95,8 @@ const g = {
   pickups: null,
   scoreState: makeScoreState(),
   isNewHi: false,
+  bestDelta: 0,          // points over the previous personal best (for "NEW BEST +X")
+  rankInfo: null,        // { rank, total } from the leaderboard submit, or { offline:true }; null = pending
   endReason: "GAME OVER",
   // Endless mode tracking.
   raceTime: 0,
@@ -393,17 +395,26 @@ function endRace(reason) {
   stopMusic();
   stopAllLoopingSfx();
   g.endReason = reason;
+  // Capture the previous personal best BEFORE finalize overwrites it, so the
+  // game-over screen can show how much this run beat it by ("NEW BEST +X").
+  const prevHi = Math.floor(g.scoreState.hi || 0);
   g.isNewHi = finalizeScore(g.scoreState);
+  g.bestDelta = (g.isNewHi && prevHi > 0) ? Math.max(0, Math.floor(g.scoreState.score) - prevHi) : 0;
+  g.rankInfo = null;   // "RANKING…" until the submit returns the standing
   if (g.isNewHi) playFlourish();
-  // Submit to the global board (fire-and-forget; refreshes the local cache so the
-  // leaderboard panel shows this run immediately).
+  // Submit to the global board; the response carries this run's rank + total so
+  // the game-over screen can show a percentile ("TOP 14%  RANK 14/98").
   submitScore({
     name: g.playerName || "AAA",
     score: Math.floor(g.scoreState.score),
     time: Math.floor(g.raceTime),
     passed: g.traffic ? g.traffic.passedCount : 0,
     topSpeed: g.topSpeedKmh || 0,
-  });
+  }).then((res) => {
+    if (g.state !== STATES.GAME_OVER) return;
+    if (res && res.rank && res.total) g.rankInfo = { rank: res.rank, total: res.total };
+    else g.rankInfo = { offline: true };
+  }).catch(() => { g.rankInfo = { offline: true }; });
   g.state = STATES.GAME_OVER;
 }
 
@@ -1013,6 +1024,8 @@ function render() {
       score: g.scoreState.score,
       hi: g.scoreState.hi,
       isNew: g.isNewHi,
+      bestDelta: g.bestDelta || 0,
+      rankInfo: g.rankInfo,
       reason: g.endReason,
       passed: g.traffic ? g.traffic.passedCount : 0,
       time: g.raceTime,
