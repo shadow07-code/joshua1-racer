@@ -8,7 +8,7 @@ import {
 import {
   SPR_PLAYER, SPR_AI_BLUE, SPR_AI_GREEN, SPR_AI_ORANGE, SPR_PALM, SPR_TREE,
   SPR_SEDAN_BLUE, SPR_SEDAN_RED, SPR_BUS_YELLOW,
-  SPR_DRIVER_STAND, SPR_DRIVER_THUMB,
+  SPR_DRIVER_STAND, SPR_DRIVER_THUMB, SPR_COIN,
   ICN_SPEED, ICN_FLAG, ICN_TROPHY, ICN_PASS,
 } from "./sprites.js";
 
@@ -36,16 +36,19 @@ function pad(num, len) {
 }
 
 export function drawHud(ctx, {
-  score, speed, passed, mapKind, time, lives, densityMul,
+  score, speed, passed, mapKind, time, lives, densityMul, coins,
 }) {
   // Top thin score strip
   rect(ctx, 0, 0, W, 9, 0);
   rect(ctx, 0, 8, W, 1, 4);
   text(ctx, "SCORE " + pad(score, 6), 4, 2, 5);
-  // Density indicator on the right when traffic is intensified.
+  // Coin counter on the right — a small gold coin + running count.
+  drawSprite(ctx, SPR_COIN, W - 32, 1);
+  text(ctx, pad(coins || 0, 3), W - 23, 2, 5);
+  // Density indicator, tucked just left of the coins when traffic is intensified.
   if (densityMul && densityMul > 1.001) {
     const pct = Math.round((densityMul - 1) * 100);
-    textRight(ctx, "+" + pct + "%", W - 4, 2, 9);
+    textRight(ctx, "+" + pct + "%", W - 36, 2, 9);
   }
 
   // Bottom panel
@@ -597,7 +600,7 @@ export function gradeFor(score) {
   return GRADES[GRADES.length - 1];
 }
 
-export function drawGameOver(ctx, { name, score, hi, isNew, bestDelta, rankInfo, reason, passed, time, topSpeed, combo, smashed, rampages }) {
+export function drawGameOver(ctx, { name, score, hi, isNew, bestDelta, rankInfo, reason, passed, time, topSpeed, combo, smashed, rampages, coins }) {
   const t = performance.now();
   const flash = Math.floor(t / 300) % 2 === 0;
   // Dark backdrop with a quiet twinkling starfield — ties the screen to the
@@ -615,7 +618,7 @@ export function drawGameOver(ctx, { name, score, hi, isNew, bestDelta, rankInfo,
   // canvas draws the banner + verdict + a trimmed ledger, centred in the upper
   // ~66% so they never sit behind that bar.
   const rowH = 12;
-  const N = 7;                       // trimmed ledger (score/best now live in the verdict)
+  const N = 8;                       // ledger rows (score/best live in the verdict)
   const panelH = rowH * N + 10;
   const heroH = 22;
   const totalH = 26 + 2 + heroH + 10 + 10 + panelH;
@@ -686,6 +689,7 @@ export function drawGameOver(ctx, { name, score, hi, isNew, bestDelta, rankInfo,
   statRow("NAME",       (name || "AAA").slice(0, 10),          5);
   statRow("TIME",       mmss(time || 0),                       1);
   statRow("PASSED",     pad(passed != null ? passed : 0, 3),   1);
+  statRow("COINS",      pad(coins != null ? coins : 0, 3),     5);
   statRow("TOP SPEED",  (topSpeed || 0) + " KMH",              9);
   statRow("BEST COMBO", "X" + (combo || 0),                    17);
   statRow("SMASHED",    pad(smashed != null ? smashed : 0, 3), 9);
@@ -779,7 +783,7 @@ export function drawPaused(ctx) {
 export const SHARE_CARD_W = 160;
 export const SHARE_CARD_H = 200;
 
-export function drawShareCard(ctx, { name, score, isNew, time, topSpeed, passed, combo, smashed, rampages, world }) {
+export function drawShareCard(ctx, { name, score, isNew, time, topSpeed, passed, combo, smashed, rampages, coins, world }) {
   const Wc = SHARE_CARD_W, Hc = SHARE_CARD_H;
   // Backdrop — black with a quiet starfield and a gold double frame.
   rect(ctx, 0, 0, Wc, Hc, 0);
@@ -820,6 +824,7 @@ export function drawShareCard(ctx, { name, score, isNew, time, topSpeed, passed,
   row("TIME", mmss(time || 0), 1);
   row("TOP SPEED", (topSpeed || 0) + " KMH", 9);
   row("PASSED", pad(passed || 0, 3), 1);
+  row("COINS", pad(coins || 0, 3), 5);
   row("SMASHED", pad(smashed || 0, 3), 9);
   row("BEST COMBO", "X" + (combo || 0), 17);
   row("RAMPAGES", "X" + (rampages || 0), 5);

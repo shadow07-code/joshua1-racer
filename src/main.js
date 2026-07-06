@@ -12,7 +12,7 @@ import {
   playFlourish,
   startEngine, setEngine, stopEngine, setEngineRampage, setEngineStrain, getEngineStyle, setEngineStyle,
   sfxAccelAccent, sfxBrake, sfxPickup, sfxCrash, sfxExplosion, sfxBump, sfxBarrelDrop, sfxCombo,
-  sfxWhoosh, sfxPerfect, sfxHeartbeat,
+  sfxWhoosh, sfxPerfect, sfxHeartbeat, sfxCoin,
   sfxShieldUp, sfxShieldHit, sfxShockwave, sfxRampageCharge, sfxNitrous,
   sfxMenuMove, sfxMenuSelect, sfxFinish, sfxCountdownBeep,
   startHeliSound, stopHeliSound,
@@ -21,7 +21,7 @@ import {
 } from "./audio.js";
 import { drawRoad, drawDistanceHaze, drawTimeOfDayTint, distToY } from "./road.js";
 import { makePlayer, updatePlayer, drawPlayer, playerBox, applyCollisionLoss } from "./entities/player.js";
-import { makeTrafficSystem, updateTraffic, drawTraffic, checkTrafficHit, prepopulateTraffic, smashCar } from "./entities/traffic.js";
+import { makeTrafficSystem, updateTraffic, drawTraffic, drawCoins, checkCoinGrab, checkTrafficHit, prepopulateTraffic, smashCar } from "./entities/traffic.js";
 import { makeOilSystem, updateOil, drawOilSpills, checkOilHit } from "./entities/oilspills.js";
 import { makePickupSystem, updatePickups, drawPickups, checkPickup } from "./entities/pickups.js";
 import { makeCopsSystem, updateCops, drawCops, checkBarrelHit } from "./entities/cops.js";
@@ -118,6 +118,7 @@ const g = {
   rampageFlash: 0,      // brief edge flash when a rampage fires
   smashTotal: 0,        // cars smashed this run (game-over stat)
   rampagesUsed: 0,      // rampages triggered this run (game-over stat)
+  coins: 0,             // coins grabbed this run (score bonus + game-over stat)
   shieldMsg: "",        // transient "SHIELD!" / "SAVED!" popup text
   shieldMsgTimer: 0,
   explosion: 0,         // seconds left on the barrel-impact explosion FX
@@ -331,6 +332,7 @@ function newRaceSetup() {
   g.rampageFlash = 0;
   g.smashTotal = 0;
   g.rampagesUsed = 0;
+  g.coins = 0;
   g.shieldMsg = "";
   g.shieldMsgTimer = 0;
   g.explosion = 0;
@@ -505,6 +507,7 @@ async function shareScoreCard() {
     combo: g.comboBest || 0,
     smashed: g.smashTotal || 0,
     rampages: g.rampagesUsed || 0,
+    coins: g.coins || 0,
     world: g.world,
   };
   const base = document.createElement("canvas");
@@ -889,6 +892,16 @@ function updateRace(dt) {
     if (!wasActive) g.rampagesUsed += 1;        // only a fresh rampage counts toward the stat
   }
 
+  // Coins on the ideal line — grabbed anytime (even mid-rampage), each pays a
+  // small bonus live and bumps the run's coin count (a game-over stat + a future
+  // garage currency). Following the weave sweeps them up.
+  const gotCoins = checkCoinGrab(g.traffic, playerBox(g.player));
+  if (gotCoins) {
+    g.coins += gotCoins;
+    g.scoreState.score += gotCoins * SCORE.coinValue;
+    sfxCoin();
+  }
+
   tickScore(g.scoreState, g.player.z, 1);
   // Per-second time bonus accumulated continuously.
   g.scoreState.score += SCORE.survivalSecondBonus * dt;
@@ -918,6 +931,7 @@ function drawWorld() {
   drawOilSpills(ctx, g.oils, g.map, g.player.z, g.player.x);
   drawSmoke(ctx, g.map, g.player.z, g.player.x, g.player);
   drawTraffic(ctx, g.traffic, g.map, g.player.z, g.player.x);
+  drawCoins(ctx, g.traffic, g.map, g.player.z, g.player.x);
   drawPickups(ctx, g.pickups, g.map, g.player.z, g.player.x);
   drawCops(ctx, g.cops, g.map, g.player.z, g.player.x);
   drawDistanceHaze(ctx);   // atmosphere over the far field — cars emerge from it
@@ -1036,6 +1050,7 @@ function render() {
       time: g.raceTime,
       lives: g.player.lives,
       densityMul: g.densityMul,
+      coins: g.coins,
     });
     // Keep the steer-zone ripples for the first moment of the race (when the
     // player can finally act), fading out over ~1.5s.
@@ -1060,6 +1075,7 @@ function render() {
       combo: g.comboBest || 0,
       smashed: g.smashTotal || 0,
       rampages: g.rampagesUsed || 0,
+      coins: g.coins || 0,
     });
     return;
   }

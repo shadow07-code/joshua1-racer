@@ -625,6 +625,19 @@ export const SPR_STAR = [
   [5,_,_,_,5],
 ];
 
+// COIN — a small shiny gold coin (7×7) scattered along the ideal weaving line.
+// Top-left highlight (21 light-yellow), gold body (5), bottom-right shadow (9),
+// black rim (0). Reads as round + metallic at a glance.
+export const SPR_COIN = [
+  [_,_,0,0,0,_,_],
+  [_,0,21,21,5,0,_],
+  [0,21,21,5,5,9,0],
+  [0,21,5,5,5,9,0],
+  [0,5,5,5,9,9,0],
+  [_,0,9,9,9,0,_],
+  [_,_,0,0,0,_,_],
+];
+
 // RAMPAGE BOOSTER pickup — a blue nitrous canister topped with a flame, with a
 // yellow label band. Collecting it instantly fires a RAMPAGE. 7w × 11h.
 export const SPR_BOOST = [

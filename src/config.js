@@ -154,6 +154,10 @@ export const RACE = {
   // [min..max] metres of road — a long way apart so they're a treat, not a crutch.
   boosterSpacingMin: 1800,
   boosterSpacingMax: 3400,
+  // Coins: ~this fraction of spawned rows also drops a short coin trail down the
+  // OPEN gap lane (the ideal weaving line), coinsPerTrail coins spread in z.
+  coinRowChance: 0.20,
+  coinsPerTrail: 3,
 };
 
 // Spawn rates and traffic-row spacing.
@@ -195,6 +199,9 @@ export const SCORE = {
   // Splitting a tight 2-car gap (a "sandwich"): a flat bonus that ALSO advances
   // the combo streak (no separate uncapped multiplier any more).
   sandwichBonus: 150,
+  // COINS scattered along the ideal weaving line — each grabbed coin pays this
+  // (a light bonus; the count also shows at game over and feeds a future garage).
+  coinValue: 50,
 };
 
 // Game-over LETTER GRADE by final score — the instant "did I do well?" verdict

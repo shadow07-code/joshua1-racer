@@ -8,7 +8,7 @@
 import { PHYS, RACE } from "../config.js";
 import { project } from "../road.js";
 import { drawSpriteNN, groundShadow, rect } from "../render.js";
-import { TRAFFIC_SKINS } from "../sprites.js";
+import { TRAFFIC_SKINS, SPR_COIN } from "../sprites.js";
 
 const LANES = 5;
 
@@ -19,6 +19,7 @@ function skinHalfZ(skin) { return skin.h * skin.scale / 2; }
 export function makeTrafficSystem(opts = {}) {
   return {
     list: [],
+    coins: [],                   // gold coins scattered down the open gap lane
     nextRowZ: 80,
     lastGapLane: 2,              // start with center lane open
     lastShift: 0,                // last gap-lane shift direction (drives slalom zig-zags)
@@ -153,6 +154,19 @@ function spawnRow(sys, map) {
     });
   }
 
+  // ── Occasional COIN TRAIL down the open gap lane — the ideal weaving line ──
+  // The coins sit exactly where the safe path is, so grabbing them rewards
+  // precise driving and adds a grab-or-play-safe decision. Skipped during the
+  // gentle opening rows. The gap shifts ≤1 lane/row, so successive trails form a
+  // dotted line that follows the weave.
+  if (!wide && Math.random() < RACE.coinRowChance) {
+    const cxCoin = laneToX(gap, map.roadHalfWidth);
+    const n = RACE.coinsPerTrail || 3;
+    for (let i = 0; i < n; i++) {
+      sys.coins.push({ x: cxCoin, z: sys.nextRowZ - i * (sys.rowGapZ / n), got: false });
+    }
+  }
+
   // Advance to next row position with a small spacing jitter.
   sys.nextRowZ += sys.rowGapZ + (Math.random() * 6 - 3);
   sys.rowsSpawned++;
@@ -283,6 +297,8 @@ export function updateTraffic(sys, dt, playerZ, map, cbs, clearAheadDist = 0) {
   // to be culled at -30, popping out of view just below the player). -50 lets them
   // scroll all the way past.
   sys.list = sys.list.filter(c => c.z > playerZ - 50);
+  // Drop coins once they've scrolled past (grabbed or missed).
+  sys.coins = sys.coins.filter(c => !c.got && c.z > playerZ - 20);
 }
 
 // Traffic-vs-traffic car-following. Each car watches the nearest in-lane car
@@ -355,6 +371,34 @@ export function drawTraffic(ctx, sys, map, playerZ, playerX) {
       }
     }
   }
+}
+
+// Draw the gold coins scattered down the gap lane, with a small shifting glint
+// so they sparkle in place (screen-space on the coin — no added optic flow).
+export function drawCoins(ctx, sys, map, playerZ, playerX) {
+  const glint = Math.floor(performance.now() / 140) % 3;   // 0,1,2 — moves the spark
+  for (const c of sys.coins) {
+    if (c.got) continue;
+    const p = project(map, playerZ, playerX, c);
+    if (!p) continue;
+    drawSpriteNN(ctx, SPR_COIN, p.sx - 3, p.sy - 3, 1);    // 7×7 centred on the coin
+    rect(ctx, p.sx - 1 + glint, p.sy - 2, 1, 1, 1);        // white glint travels across
+  }
+}
+
+// Grab any coins the player is overlapping this frame — returns how many. The
+// hit window is generous (coins are a reward), so following the ideal line
+// sweeps them up. Coins are collectible always (even mid-rampage / invuln).
+export function checkCoinGrab(sys, box) {
+  let got = 0;
+  for (const c of sys.coins) {
+    if (c.got) continue;
+    if (box.x1 < c.x + 5 && box.x2 > c.x - 5 && box.z1 < c.z + 6 && box.z2 > c.z - 6) {
+      c.got = true;
+      got++;
+    }
+  }
+  return got;
 }
 
 // Player-vs-traffic collision is EVASION-FRIENDLY: every vehicle's collidable

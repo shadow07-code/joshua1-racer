@@ -717,6 +717,21 @@ export function sfxHeartbeat() {
   thump(t + 0.19, 68, 0.20);     // dub — lower + softer
 }
 
+// COIN grab — a bright, quick two-note "ching" (E6 → B6), the classic pickup
+// blip. Kept light so a fast run of coins layers pleasantly instead of blaring.
+export function sfxCoin() {
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  [[1319, 0], [1976, 0.045]].forEach(([f, off]) => {
+    const o = ctx.createOscillator(); o.type = "square"; o.frequency.value = f;
+    const g = ctx.createGain(); g.gain.value = 0;
+    g.gain.linearRampToValueAtTime(0.13, t + off + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.001, t + off + 0.10);
+    o.connect(g); g.connect(sfxGain);
+    o.start(t + off); o.stop(t + off + 0.12);
+  });
+}
+
 // PERFECT shave — a tiny two-note crystal "ting" layered over the whoosh when a
 // pass is pixel-close. Short and high so it cuts through without clutter.
 export function sfxPerfect() {
