@@ -19,7 +19,7 @@ import {
   setMusicEnabled, setSfxEnabled, isMusicEnabled, isSfxEnabled, applyMix,
   getMusicTrack, setMusicTrack,
 } from "./audio.js";
-import { drawRoad, drawDistanceHaze, drawTimeOfDayTint, distToY } from "./road.js";
+import { drawRoad, drawDistanceHaze, drawTimeOfDayTint, distToY, biomeAt } from "./road.js";
 import { makePlayer, updatePlayer, drawPlayer, playerBox, applyCollisionLoss } from "./entities/player.js";
 import { makeTrafficSystem, updateTraffic, drawTraffic, drawCoins, checkCoinGrab, checkTrafficHit, prepopulateTraffic, smashCar } from "./entities/traffic.js";
 import { makeOilSystem, updateOil, drawOilSpills, checkOilHit } from "./entities/oilspills.js";
@@ -35,7 +35,7 @@ import {
   drawHud, drawTitleScreen, drawMapSelect, drawDifficultySelect,
   drawGameOver, drawPaused, drawCountdown, drawTutorialOverlay, drawSteerHints, drawCombo, drawShieldMsg,
   drawRampageMeter, drawSandwichCombo, drawShareCard, SHARE_CARD_W, SHARE_CARD_H,
-  drawExplosion, drawPerfect, drawLastLifePulse,
+  drawExplosion, drawPerfect, drawLastLifePulse, drawBiomeBanner, drawZoneFlash,
 } from "./hud.js";
 import { registerServiceWorker, initInstallBanner, initInstallButton, initInstallSplash, setInstallButtonVisible } from "./pwa.js";
 import {
@@ -126,6 +126,10 @@ const g = {
   perfectTimer: 0,      // seconds left on the "PERFECT!" micro-pop over the car
   heartTimer: 0,        // countdown to the next heartbeat thump (last-life tension)
   goTime: 0,            // seconds on the game-over screen (guards the tap-to-retry)
+  biome: null,          // current biome (city/tunnel/coast/bridge) — drives road palette + scenery
+  biomeName: "",        // for detecting a biome change
+  biomeBannerTimer: 0,  // transient "▶ TUNNEL ◀" landmark banner
+  biomeFlash: 0,        // brief zone-change dither flash (masks the palette cut)
   countdownTime: 0,
   countdownLastBeep: -1,
   tut: null,            // first-run steering tutorial sub-state
@@ -333,6 +337,10 @@ function newRaceSetup() {
   g.smashTotal = 0;
   g.rampagesUsed = 0;
   g.coins = 0;
+  g.biome = biomeAt(0);            // start in CITY; no banner for the opening zone
+  g.biomeName = g.biome.name;
+  g.biomeBannerTimer = 0;
+  g.biomeFlash = 0;
   g.shieldMsg = "";
   g.shieldMsgTimer = 0;
   g.explosion = 0;
@@ -819,8 +827,21 @@ function updateRace(dt) {
   const helisOnScreen = g.cops.active && g.cops.helis.length > 0;
   if (helisOnScreen && !g._heliSoundOn) { startHeliSound(); g._heliSoundOn = true; }
   else if (!helisOnScreen && g._heliSoundOn) { stopHeliSound(); g._heliSoundOn = false; }
+  // ── Biome cycling ── City → tunnel → coast → bridge every RACE.biomePeriodSec.
+  // On a change: announce the new zone (landmark banner) + a brief flash that
+  // masks the palette cut. The scenery set follows the biome (new spawns only).
+  const biome = biomeAt(g.raceTime);
+  if (biome.name !== g.biomeName) {
+    g.biome = biome;
+    g.biomeName = biome.name;
+    g.biomeBannerTimer = 2.0;
+    g.biomeFlash = 0.22;
+    sfxMenuMove();                 // a soft "new zone" chirp
+  }
+  if (g.biomeBannerTimer > 0) g.biomeBannerTimer = Math.max(0, g.biomeBannerTimer - dt);
+  if (g.biomeFlash > 0) g.biomeFlash = Math.max(0, g.biomeFlash - dt);
   // Pass speed so the roadside thins out at pace (eases the high-speed dizziness).
-  updateScenery(g.scenery, g.player.z, g.map, dt, SPAWN.sceneryPerMeter, speed01);
+  updateScenery(g.scenery, g.player.z, g.map, dt, SPAWN.sceneryPerMeter, speed01, g.biome);
 
   // Player exhaust smoke (no more AI smoke — AI gone).
   updateSmoke(g.player, dt);
@@ -926,7 +947,8 @@ function updateGameOver(dt) {
 
 // ─── Render ──────────────────────────────────────────────────────────────────
 function drawWorld() {
-  drawRoad(ctx, g.map, g.player.z, g.player.speed);
+  const biome = g.biome || biomeAt(g.raceTime);
+  drawRoad(ctx, g.map, g.player.z, g.player.speed, biome);
   drawScenery(ctx, g.scenery, g.map, g.player.z);
   drawOilSpills(ctx, g.oils, g.map, g.player.z, g.player.x);
   drawSmoke(ctx, g.map, g.player.z, g.player.x, g.player);
@@ -934,7 +956,7 @@ function drawWorld() {
   drawCoins(ctx, g.traffic, g.map, g.player.z, g.player.x);
   drawPickups(ctx, g.pickups, g.map, g.player.z, g.player.x);
   drawCops(ctx, g.cops, g.map, g.player.z, g.player.x);
-  drawDistanceHaze(ctx);   // atmosphere over the far field — cars emerge from it
+  drawDistanceHaze(ctx, biome);   // atmosphere over the far field — cars emerge from it
   drawPlayer(ctx, g.player, g.map);
   // Day → dusk → night → dawn colour wash (static screen-space, no optic flow).
   // Drawn LAST so the world is tinted but the HUD/banners (drawn after) stay clear.
@@ -1015,6 +1037,8 @@ function render() {
     if (g.explosion > 0) {
       drawExplosion(ctx, 1 - g.explosion / EXPLOSION_DUR, (W / 2 + g.map.biasX + g.player.x) | 0, PLAYER_Y);
     }
+    // Zone-change flash — a one-shot dither pop that masks the biome palette cut.
+    if (g.biomeFlash > 0) drawZoneFlash(ctx, 1 - g.biomeFlash / 0.22);
     // Last-life danger frame — a red edge pulse (RACE only, not while paused).
     if (g.state === STATES.RACE && g.player.lives === 1) drawLastLifePulse(ctx);
     // Combo-step juice: a brief 2px gold frame around the play area (between
@@ -1041,6 +1065,7 @@ function render() {
       active: g.player.rampage > 0,
     });
     if (g.perfectTimer > 0) drawPerfect(ctx, g.perfectTimer, (W / 2 + g.map.biasX + g.player.x) | 0);
+    if (g.biomeBannerTimer > 0) drawBiomeBanner(ctx, g.biomeName, g.biomeBannerTimer);
     if (g.shieldMsgTimer > 0) drawShieldMsg(ctx, g.shieldMsg);
     drawHud(ctx, {
       score: g.scoreState.score,

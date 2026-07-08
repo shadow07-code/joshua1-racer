@@ -158,6 +158,9 @@ export const RACE = {
   // OPEN gap lane (the ideal weaving line), coinsPerTrail coins spread in z.
   coinRowChance: 0.20,
   coinsPerTrail: 3,
+  // Biome cycling: the scene changes (city → tunnel → coast → bridge) every this
+  // many seconds of a run — visual freshness + "how far did I get" landmarks.
+  biomePeriodSec: 50,
 };
 
 // Spawn rates and traffic-row spacing.

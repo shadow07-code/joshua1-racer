@@ -22,17 +22,21 @@ export function makeScenerySystem() {
   return { list: [], nextSpawnZ: -10 };
 }
 
-function pickKind(map) {
-  const total = map.scenery.reduce((s, e) => s + e.weight, 0);
+function pickKind(set) {
+  const total = set.reduce((s, e) => s + e.weight, 0);
   let r = Math.random() * total;
-  for (const e of map.scenery) {
+  for (const e of set) {
     r -= e.weight;
     if (r <= 0) return e.kind;
   }
-  return map.scenery[0].kind;
+  return set[0].kind;
 }
 
-export function updateScenery(sys, playerZ, map, dt, spawnPerMeter, speed01 = 0) {
+export function updateScenery(sys, playerZ, map, dt, spawnPerMeter, speed01 = 0, biome = null) {
+  // The roadside set follows the current biome (city buildings, coast palms,
+  // tunnel lamps…). Only NEW spawns switch, so a biome change eases in over the
+  // view distance instead of popping.
+  const set = (biome && biome.scenery) ? biome.scenery : map.scenery;
   // Thin the roadside out as speed climbs: fewer objects whip past the camera at
   // pace, which cuts the peripheral "optic flow" that drives the high-speed dizzy
   // feeling. At top speed the spacing roughly doubles. Smooth — only new spawns
@@ -44,7 +48,7 @@ export function updateScenery(sys, playerZ, map, dt, spawnPerMeter, speed01 = 0)
     const minOff = map.roadHalfWidth + 8;
     const maxOff = minOff + 28;
     const x = side * (minOff + Math.random() * (maxOff - minOff));
-    sys.list.push({ kind: pickKind(map), z: sys.nextSpawnZ, x });
+    sys.list.push({ kind: pickKind(set), z: sys.nextSpawnZ, x });
     sys.nextSpawnZ += (1 / spawnPerMeter) * (0.5 + Math.random() * 1.2) * sparse;
   }
   // Keep roadside objects until they've fully scrolled off the bottom (was -12,

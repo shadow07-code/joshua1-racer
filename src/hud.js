@@ -746,6 +746,32 @@ export function drawPerfect(ctx, timer, cx) {
   textOutlined(ctx, label, x, y, blink ? 1 : 5, 0, 1);
 }
 
+// BIOME landmark banner — a transient "▷ TUNNEL ◁" announcement when the scene
+// changes, so each new zone reads as a "how far did I get" milestone. Fades over
+// its ~2s life; drawn just under the top HUD strip so it clears the play focus.
+export function drawBiomeBanner(ctx, name, timer) {
+  if (timer <= 0 || !name) return;
+  const f = Math.max(0, Math.min(1, timer / 2));
+  // Blink out over the last third instead of a true alpha fade (flat palette).
+  if (f < 0.35 && Math.floor(performance.now() / 90) % 2 === 0) return;
+  const label = "- " + name + " -";      // font-safe (no arrow glyphs in FONT_3x5)
+  const y = 16;
+  const w = label.length * 4 - 1;
+  const x = ((W - w) / 2) | 0;
+  rect(ctx, x - 5, y - 2, w + 10, 11, 0);            // dark plate
+  rect(ctx, x - 5, y - 2, w + 10, 1, 5);             // gold top/bottom trim
+  rect(ctx, x - 5, y + 8, w + 10, 1, 9);
+  textOutlinedCentered(ctx, label, y + 1, 5, 0, 1);
+}
+
+// Brief ZONE-CHANGE flash — a quick screen-space dither pop over the play area
+// that masks the biome's hard palette cut and sells it as a deliberate "new
+// zone" beat. One-shot (like the combo/explosion flashes), so no optic flow.
+export function drawZoneFlash(ctx, prog) {
+  if (prog <= 0 || prog >= 1) return;
+  ditherRect(ctx, 0, 9, W, H - 33, 1, (Math.floor(performance.now() / 30) & 1), 2);
+}
+
 // LAST-LIFE PULSE — a red frame hugging the play area that breathes in and out
 // (~1s, matching the heartbeat cadence): thicker + brighter at the peak, thin +
 // dark between. It's a screen-space colour/thickness pulse at the edges only —

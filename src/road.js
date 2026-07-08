@@ -1,10 +1,36 @@
 // Fixed straight multi-lane road, anchored to the screen.
 // Calm rendering tuned to avoid high-speed strobe / eye fatigue: solid grass,
 // static muted edge strips, and a faint center line that fades out with speed.
-import { W, H, PLAYER_Y, PHYS } from "./config.js";
+import { W, H, PLAYER_Y, PHYS, RACE } from "./config.js";
 import { rect } from "./render.js";
 
 const VIEW_AHEAD_METERS = 100;
+
+// ── Biomes ─────────────────────────────────────────────────────────────────────
+// The run cycles through scenes for freshness + landmarks. A biome only changes
+// screen-space PALETTE (the off-road fill / shoulders / edge strips / haze) and
+// the roadside SCENERY set — the asphalt itself is constant, and the palette
+// bands are static (no scroll), so this adds ZERO optic flow (dizzy rule intact).
+// The scenery scrolls + thins with speed exactly as before.
+//   bg = full-screen fill (sky/ground) | shoulder = the band hugging the road
+//   edge = the thin edge strip | haze = the far-horizon atmosphere band
+export const BIOMES = [
+  { name: "CITY",   bg: 10, shoulder: 20, edge: 25, haze: 13,
+    scenery: [ { kind: "building", weight: 4 }, { kind: "building2", weight: 3 },
+               { kind: "tree", weight: 4 }, { kind: "pine", weight: 2 },
+               { kind: "bush", weight: 2 }, { kind: "lamp", weight: 2 } ] },
+  { name: "TUNNEL", bg: 4,  shoulder: 23, edge: 5,  haze: 23,
+    scenery: [ { kind: "lamp", weight: 5 }, { kind: "rock", weight: 2 } ] },
+  { name: "COAST",  bg: 13, shoulder: 21, edge: 25, haze: 13,
+    scenery: [ { kind: "palm", weight: 5 }, { kind: "bush", weight: 2 }, { kind: "rock", weight: 1 } ] },
+  { name: "BRIDGE", bg: 16, shoulder: 2,  edge: 1,  haze: 13,
+    scenery: [ { kind: "lamp", weight: 4 } ] },
+];
+export function biomeAt(seconds) {
+  const period = RACE.biomePeriodSec || 50;
+  const i = Math.floor(Math.max(0, seconds || 0) / period) % BIOMES.length;
+  return BIOMES[i];
+}
 
 export function roadCenterX(map /* unused */, _z, _x, _d) {
   return W / 2 + map.biasX;
@@ -12,7 +38,8 @@ export function roadCenterX(map /* unused */, _z, _x, _d) {
 export function yToDist(y) { return ((PLAYER_Y - y) / PLAYER_Y) * VIEW_AHEAD_METERS; }
 export function distToY(dist) { return PLAYER_Y - (dist / VIEW_AHEAD_METERS) * PLAYER_Y; }
 
-export function drawRoad(ctx, map, playerZ, speed = 0) {
+export function drawRoad(ctx, map, playerZ, speed = 0, biome = null) {
+  const bm = biome || BIOMES[0];
   // Speed-based "calm" factor — ramps 0→1 between 70 and 130 km/h so fast-moving
   // road detail fades out before it can strobe and strain the eyes at speed.
   // Brought in earlier (was 90→150) to ease the high-speed dizzy sensation.
@@ -22,13 +49,14 @@ export function drawRoad(ctx, map, playerZ, speed = 0) {
   const halfW = map.roadHalfWidth;
   const cx = W / 2 + map.biasX;
 
-  // ── Grass — solid fill (no scrolling bands; those strobed across the whole
-  // screen at speed). A static mid-green band hugs each shoulder for subtle
-  // depth — z-independent, so it never flickers.
-  rect(ctx, 0, 0, W, H, map.bgIdx);
+  // ── Off-road fill — solid (no scrolling bands; those strobed across the whole
+  // screen at speed). The colour is the current biome's ground/sky; a static
+  // shoulder band hugs each side of the road for depth — z-independent, so it
+  // never flickers.
+  rect(ctx, 0, 0, W, H, bm.bg);
   const shW = 7;
-  rect(ctx, (cx - halfW - shW) | 0, 0, shW, H, 20);
-  rect(ctx, (cx + halfW) | 0, 0, shW, H, 20);
+  rect(ctx, (cx - halfW - shW) | 0, 0, shW, H, bm.shoulder);
+  rect(ctx, (cx + halfW) | 0, 0, shW, H, bm.shoulder);
 
   // ── Asphalt ──
   rect(ctx, (cx - halfW) | 0, 0, halfW * 2, H, map.roadIdx);
@@ -36,10 +64,11 @@ export function drawRoad(ctx, map, playerZ, speed = 0) {
   rect(ctx, (cx - halfW) | 0, 0, 2, H, 4);
   rect(ctx, (cx + halfW - 2) | 0, 0, 2, H, 4);
 
-  // ── Edge strips — solid, muted, STATIC cream shoulder lines. Replaces the old
-  // alternating magenta/white rumble that flickered hard at the periphery.
-  rect(ctx, (cx - halfW - 3) | 0, 0, 2, H, 25);
-  rect(ctx, (cx + halfW + 1) | 0, 0, 2, H, 25);
+  // ── Edge strips — solid, muted, STATIC lines (biome-coloured: cream shoulder,
+  // tunnel warning-yellow, bridge railing-white). Replaces the old alternating
+  // magenta/white rumble that flickered hard at the periphery.
+  rect(ctx, (cx - halfW - 3) | 0, 0, 2, H, bm.edge);
+  rect(ctx, (cx + halfW + 1) | 0, 0, 2, H, bm.edge);
 
   // ── Asphalt grain — faint scrolling speckle, thinned out and faded with speed
   // so it stops shimmering at pace; skipped entirely once fully calm.
@@ -76,10 +105,11 @@ export function drawRoad(ctx, map, playerZ, speed = 0) {
 // (screen-space, z-independent), so it adds zero optic flow — if anything it
 // softens the most distant, fastest-converging part of the view. Sized so a
 // soft fade is still visible below the race HUD strip (which covers rows 0-8).
-export function drawDistanceHaze(ctx) {
-  hazeBand(ctx, 0, 4, 13, 1.0);     // solid pale blue at the horizon
-  hazeBand(ctx, 4, 6, 13, 0.5);     // 50% checker
-  hazeBand(ctx, 10, 6, 13, 0.25);   // 25% sparse tail
+export function drawDistanceHaze(ctx, biome = null) {
+  const idx = (biome && biome.haze != null) ? biome.haze : 13;   // biome atmosphere
+  hazeBand(ctx, 0, 4, idx, 1.0);     // solid band at the horizon
+  hazeBand(ctx, 4, 6, idx, 0.5);     // 50% checker
+  hazeBand(ctx, 10, 6, idx, 0.25);   // 25% sparse tail
 }
 
 // Screen-space haze helper: density 1 = solid, 0.5 = checkerboard,
