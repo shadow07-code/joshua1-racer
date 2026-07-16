@@ -69,7 +69,11 @@ function bindPointer(canvas) {
   canvas.addEventListener("touchstart", (e) => {
     e.preventDefault();
     for (const t of e.changedTouches) {
-      touchPoints.set(t.identifier, { x: t.clientX, y: t.clientY, side: sideOf(t.clientX, t.clientY) });
+      const side = sideOf(t.clientX, t.clientY);
+      touchPoints.set(t.identifier, { x: t.clientX, y: t.clientY, side });
+      // A tap in the NEUTRAL top half is its own gesture ("TouchTop") — it never
+      // steers, so it's free for actions like unleashing an armed rampage.
+      if (side === null) state.pressed.add("TouchTop");
     }
     state.pressed.add("Touch");
     recompute();
@@ -96,7 +100,9 @@ function bindPointer(canvas) {
   canvas.addEventListener("mousedown", (e) => {
     if (e.button !== 0) return;
     mouseDown = true;
-    touchPoints.set(mouseId, { x: e.clientX, y: e.clientY, side: sideOf(e.clientX, e.clientY) });
+    const side = sideOf(e.clientX, e.clientY);
+    touchPoints.set(mouseId, { x: e.clientX, y: e.clientY, side });
+    if (side === null) state.pressed.add("TouchTop");   // top-half click = the same gesture
     state.pressed.add("Touch");
     recompute();
   });

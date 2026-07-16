@@ -129,10 +129,11 @@ export const RACE = {
   comboKmh: 100,
   comboWindow: 2.8,
   // RAMPAGE pacing: an unbroken chain of `rampageNearMisses` combo-tier near
-  // misses fills the nitro meter and fires NITROUS RAMPAGE. When a rampage
-  // ends the meter is LOCKED until `rampageCooldownPasses` cars have been
-  // passed — no back-to-back rampages.
-  rampageNearMisses: 10,
+  // misses fills the nitro meter and ARMS the rampage — the player then taps the
+  // top of the screen to unleash it when THEY choose. When a rampage ends the
+  // meter is LOCKED until `rampageCooldownPasses` cars have been passed — no
+  // back-to-back rampages. 14 (was 10): earning it should feel like a feat.
+  rampageNearMisses: 14,
   rampageCooldownPasses: 10,
   // RAMPAGE: a nitrous boost where the car smashes through traffic (each smash
   // adds to the combo). When it ends, an instantaneous shockwave from the car

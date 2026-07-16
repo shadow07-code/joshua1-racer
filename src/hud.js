@@ -562,14 +562,22 @@ export function drawSandwichCombo(ctx, count, timer) {
 // After a rampage the row goes muted blue-gray and refills as the cooldown
 // cars are passed — once spent, gold building resumes. Hidden while a rampage
 // is running and when there's nothing to show (clean screen by default).
-export function drawRampageMeter(ctx, { meter, max, cooldown, cooldownMax, active }) {
+export function drawRampageMeter(ctx, { meter, max, cooldown, cooldownMax, active, armed }) {
   if (active) return;
-  if (meter <= 0 && cooldown <= 0) return;
+  if (!armed && meter <= 0 && cooldown <= 0) return;
   const cellW = 3, cellH = 2, gap = 1;
   const wTot = max * (cellW + gap) - gap;
   const x0 = ((W - wTot) / 2) | 0;
   const y = 34;   // sits below the COMBO banner + the transient SANDWICH line
   rect(ctx, x0 - 2, y - 2, wTot + 4, cellH + 4, 0);          // dark plate
+  // ARMED — the whole row strobes white/gold: it's full and waiting on YOUR tap.
+  if (armed) {
+    const hot = Math.floor(performance.now() / 80) % 2 === 0;
+    for (let i = 0; i < max; i++) {
+      rect(ctx, x0 + i * (cellW + gap), y, cellW, cellH, hot ? 1 : 5);
+    }
+    return;
+  }
   const cooling = cooldown > 0;
   const fillN = cooling ? Math.max(0, cooldownMax - cooldown) : meter;
   // Build-up (J3): the last 3 pips pulse before RAMPAGE, faster the closer it gets.
@@ -580,6 +588,15 @@ export function drawRampageMeter(ctx, { meter, max, cooldown, cooldownMax, activ
   for (let i = 0; i < max; i++) {
     rect(ctx, x0 + i * (cellW + gap), y, cellW, cellH, i < fillN ? fillIdx : 4);
   }
+}
+
+// RAMPAGE READY prompt — shown while the meter is armed: a strobing headline +
+// the unleash instruction, sitting just under the meter so the eye finds it
+// without leaving the road. Static screen-space text (blink only, no motion).
+export function drawRampageReady(ctx) {
+  const hot = Math.floor(performance.now() / 160) % 2 === 0;
+  textOutlinedCentered(ctx, "RAMPAGE READY", 42, hot ? 5 : 9, 0, 1);
+  textCentered(ctx, "TAP TOP OF SCREEN", 52, hot ? 1 : 21, 1);
 }
 
 

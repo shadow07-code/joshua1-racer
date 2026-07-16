@@ -13,7 +13,7 @@ import {
   startEngine, setEngine, stopEngine, setEngineRampage, setEngineStrain, getEngineStyle, setEngineStyle,
   sfxAccelAccent, sfxBrake, sfxPickup, sfxCrash, sfxExplosion, sfxBump, sfxBarrelDrop, sfxCombo,
   sfxWhoosh, sfxPerfect, sfxHeartbeat, sfxCoin,
-  sfxShieldUp, sfxShieldHit, sfxShockwave, sfxRampageCharge, sfxNitrous,
+  sfxShieldUp, sfxShieldHit, sfxShockwave, sfxRampageCharge, sfxRampageReady, sfxNitrous,
   sfxMenuMove, sfxMenuSelect, sfxFinish, sfxCountdownBeep,
   startHeliSound, stopHeliSound,
   setMusicEnabled, setSfxEnabled, isMusicEnabled, isSfxEnabled, applyMix,
@@ -36,6 +36,7 @@ import {
   drawGameOver, drawPaused, drawCountdown, drawTutorialOverlay, drawSteerHints, drawCombo, drawShieldMsg,
   drawRampageMeter, drawSandwichCombo, drawShareCard, SHARE_CARD_W, SHARE_CARD_H,
   drawExplosion, drawPerfect, drawLastLifePulse, drawBiomeBanner, drawZoneFlash,
+  drawRampageReady,
 } from "./hud.js";
 import { registerServiceWorker, initInstallBanner, initInstallButton, initInstallSplash, setInstallButtonVisible } from "./pwa.js";
 import {
@@ -114,8 +115,10 @@ const g = {
   sandwichCombo: 0,     // banked sandwiches this combo run (combo-score multiplier)
   sandwichComboTimer: 0,// transient "SANDWICH COMBO" banner timer
   rampageMeter: 0,      // combo-tier near misses banked toward the next RAMPAGE
+  rampageArmed: false,  // meter is FULL — banked, strobing, waiting for the player's tap
   rampageCooldown: 0,   // cars still to pass before the meter can build again
   rampageFlash: 0,      // brief edge flash when a rampage fires
+  unleashFlash: 0,      // one-shot full-frame flash on a tap-unleashed rampage
   smashTotal: 0,        // cars smashed this run (game-over stat)
   rampagesUsed: 0,      // rampages triggered this run (game-over stat)
   coins: 0,             // coins grabbed this run (score bonus + game-over stat)
@@ -332,8 +335,10 @@ function newRaceSetup() {
   g.sandwichCombo = 0;
   g.sandwichComboTimer = 0;
   g.rampageMeter = 0;
+  g.rampageArmed = false;
   g.rampageCooldown = 0;
   g.rampageFlash = 0;
+  g.unleashFlash = 0;
   g.smashTotal = 0;
   g.rampagesUsed = 0;
   g.coins = 0;
@@ -369,8 +374,27 @@ function takeHit(_invulnSec) {
   g.combo = 0; g.comboTimer = 0;        // a real crash breaks the streak
   g.sandwichCombo = 0; g.sandwichComboTimer = 0;  // ...and the sandwich multiplier
   g.rampageMeter = 0;                   // ...and dumps the banked rampage meter
+  g.rampageArmed = false;               // ...including an ARMED one (crash = lost)
   if (g.player.lives <= 0) { endRace("GAME OVER"); return true; }
   return false;
+}
+
+// The player taps to UNLEASH an armed rampage — the peak moment, made theirs.
+// Full spectacle within the dizzy rule: an 80ms hit-stop beat, a one-shot
+// full-frame dither flash + the thick edge frame, and the nitrous engine snarl.
+function unleashRampage() {
+  g.rampageArmed = false;
+  g.rampageMeter = 0;
+  g.player.rampage = RACE.rampageDuration;
+  g.player.boost = RACE.rampageDuration;
+  g.rampagesUsed += 1;
+  g.rampageFlash = 0.18;
+  g.unleashFlash = 0.25;
+  g.hitStop = Math.max(g.hitStop, 0.08);
+  g.shieldMsg = "RAMPAGE!"; g.shieldMsgTimer = 1.6;
+  sfxNitrous();
+  sfxShieldUp();
+  setEngineRampage(true);
 }
 
 // A traffic car smashed during a rampage — knocked off the road, advances the
@@ -646,6 +670,11 @@ function updateRace(dt) {
   if (consumePress("p", "P")) { pauseGame(); return; }
   if (consumePress("m", "M")) { toggleMusic(); }
   if (consumePress("Escape")) { stopMusic(); stopAllLoopingSfx(); g.state = STATES.TITLE; return; }
+  // UNLEASH an armed rampage: a tap on the (neutral, non-steering) top half of
+  // the screen — or Enter on desktop — detonates the banked nitrous.
+  if (g.rampageArmed && g.player.rampage <= 0 && consumePress("TouchTop", "Enter")) {
+    unleashRampage();
+  }
 
   g.raceTime += dt;
 
@@ -743,23 +772,20 @@ function updateRace(dt) {
         const gain = Math.round(SCORE.nearMissBonus * comboMult() * precision);
         g.scoreState.score += gain;
         sfxCombo(g.combo);
-        // Risk → reward: an unbroken chain of `rampageNearMisses` shaves fires
-        // NITROUS RAMPAGE. The meter only builds while armed — never during a
-        // rampage, never during the post-rampage pass cooldown.
-        if (g.player.rampage <= 0 && g.rampageCooldown <= 0) {
+        // Risk → reward: an unbroken chain of `rampageNearMisses` shaves fills
+        // the meter and ARMS the nitrous — the player then unleashes it with a
+        // tap on the top of the screen, when THEY choose (agency + anticipation
+        // instead of an auto-fire). The meter only builds while unarmed — never
+        // during a rampage, never during the post-rampage pass cooldown.
+        if (g.player.rampage <= 0 && g.rampageCooldown <= 0 && !g.rampageArmed) {
           g.rampageMeter += 1;
           // J3: the last few near-misses audibly "charge" the nitrous.
           const fromFull = RACE.rampageNearMisses - g.rampageMeter;
           if (fromFull >= 0 && fromFull <= 2) sfxRampageCharge(2 - fromFull);
           if (g.rampageMeter >= RACE.rampageNearMisses) {
-            g.rampageMeter = 0;
-            g.player.rampage = RACE.rampageDuration;
-            g.player.boost = RACE.rampageDuration;
-            g.rampagesUsed += 1;
-            g.rampageFlash = 0.12;
-            g.shieldMsg = "RAMPAGE!"; g.shieldMsgTimer = 1.6;
-            sfxShieldUp();
-            setEngineRampage(true);
+            g.rampageArmed = true;         // banked — survives a combo lapse, lost on a crash
+            g.shieldMsg = "RAMPAGE READY!"; g.shieldMsgTimer = 1.4;
+            sfxRampageReady();
           }
         }
       } else {
@@ -801,6 +827,7 @@ function updateRace(dt) {
   if (g.comboFlash > 0) g.comboFlash = Math.max(0, g.comboFlash - dt);
   if (g.shieldMsgTimer > 0) g.shieldMsgTimer = Math.max(0, g.shieldMsgTimer - dt);
   if (g.rampageFlash > 0) g.rampageFlash = Math.max(0, g.rampageFlash - dt);
+  if (g.unleashFlash > 0) g.unleashFlash = Math.max(0, g.unleashFlash - dt);
   if (g.sandwichComboTimer > 0) g.sandwichComboTimer = Math.max(0, g.sandwichComboTimer - dt);
   if (g.explosion > 0) g.explosion = Math.max(0, g.explosion - dt);
   if (g.perfectTimer > 0) g.perfectTimer = Math.max(0, g.perfectTimer - dt);
@@ -905,6 +932,7 @@ function updateRace(dt) {
     g.player.rampage = RACE.rampageDuration;   // (re)fill — RESETS the timer even mid-rampage
     g.player.boost = RACE.rampageDuration;
     g.rampageMeter = 0;
+    g.rampageArmed = false;                    // the canister IS the rampage — no double-dip
     g.rampageCooldown = 0;
     g.rampageFlash = 0.12;                      // feedback on every grab (incl. a refresh)
     g.shieldMsg = "RAMPAGE!"; g.shieldMsgTimer = 1.6;
@@ -1039,6 +1067,8 @@ function render() {
     }
     // Zone-change flash — a one-shot dither pop that masks the biome palette cut.
     if (g.biomeFlash > 0) drawZoneFlash(ctx, 1 - g.biomeFlash / 0.22);
+    // Unleash flash — the same one-shot pop, fired the instant a rampage is tapped.
+    if (g.unleashFlash > 0) drawZoneFlash(ctx, 1 - g.unleashFlash / 0.25);
     // Last-life danger frame — a red edge pulse (RACE only, not while paused).
     if (g.state === STATES.RACE && g.player.lives === 1) drawLastLifePulse(ctx);
     // Combo-step juice: a brief 2px gold frame around the play area (between
@@ -1063,7 +1093,10 @@ function render() {
       meter: g.rampageMeter, max: RACE.rampageNearMisses,
       cooldown: g.rampageCooldown, cooldownMax: RACE.rampageCooldownPasses,
       active: g.player.rampage > 0,
+      armed: g.rampageArmed,
     });
+    // The armed prompt — strobing "RAMPAGE READY / TAP TOP OF SCREEN".
+    if (g.state === STATES.RACE && g.rampageArmed && g.player.rampage <= 0) drawRampageReady(ctx);
     if (g.perfectTimer > 0) drawPerfect(ctx, g.perfectTimer, (W / 2 + g.map.biasX + g.player.x) | 0);
     if (g.biomeBannerTimer > 0) drawBiomeBanner(ctx, g.biomeName, g.biomeBannerTimer);
     if (g.shieldMsgTimer > 0) drawShieldMsg(ctx, g.shieldMsg);

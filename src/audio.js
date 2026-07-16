@@ -747,6 +747,29 @@ export function sfxPerfect() {
   });
 }
 
+// Rampage ARMED — a triumphant rising fanfare + a held shimmer note: the meter
+// is full and the nitrous is YOURS to unleash. Brighter and longer than the
+// charge blips so the moment clearly reads as "you earned it — now tap".
+export function sfxRampageReady() {
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  [392, 523, 659, 784, 1046].forEach((f, i) => {
+    const o = ctx.createOscillator(); o.type = "square"; o.frequency.value = f;
+    const g = ctx.createGain(); g.gain.value = 0;
+    g.gain.linearRampToValueAtTime(0.16, t + i * 0.045 + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.045 + 0.14);
+    o.connect(g); g.connect(sfxGain);
+    o.start(t + i * 0.045); o.stop(t + i * 0.045 + 0.16);
+  });
+  // Held shimmer on top — a soft high fifth that rings out.
+  const o2 = ctx.createOscillator(); o2.type = "triangle"; o2.frequency.value = 1568;
+  const g2 = ctx.createGain(); g2.gain.value = 0;
+  g2.gain.linearRampToValueAtTime(0.08, t + 0.22);
+  g2.gain.exponentialRampToValueAtTime(0.001, t + 0.75);
+  o2.connect(g2); g2.connect(sfxGain);
+  o2.start(t + 0.2); o2.stop(t + 0.8);
+}
+
 // Rampage CHARGE — a short rising blip whose pitch climbs with `step` (0..3) so
 // the last few near-misses before a rampage audibly "spin up" the nitrous.
 export function sfxRampageCharge(step = 0) {
