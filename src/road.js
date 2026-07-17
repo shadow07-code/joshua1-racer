@@ -38,7 +38,7 @@ export function roadCenterX(map /* unused */, _z, _x, _d) {
 export function yToDist(y) { return ((PLAYER_Y - y) / PLAYER_Y) * VIEW_AHEAD_METERS; }
 export function distToY(dist) { return PLAYER_Y - (dist / VIEW_AHEAD_METERS) * PLAYER_Y; }
 
-export function drawRoad(ctx, map, playerZ, speed = 0, biome = null) {
+export function drawRoad(ctx, map, playerZ, speed = 0, biome = null, rampageOn = false) {
   const bm = biome || BIOMES[0];
   // Speed-based "calm" factor — ramps 0→1 between 70 and 130 km/h so fast-moving
   // road detail fades out before it can strobe and strain the eyes at speed.
@@ -66,9 +66,39 @@ export function drawRoad(ctx, map, playerZ, speed = 0, biome = null) {
 
   // ── Edge strips — solid, muted, STATIC lines (biome-coloured: cream shoulder,
   // tunnel warning-yellow, bridge railing-white). Replaces the old alternating
-  // magenta/white rumble that flickered hard at the periphery.
-  rect(ctx, (cx - halfW - 3) | 0, 0, 2, H, bm.edge);
-  rect(ctx, (cx + halfW + 1) | 0, 0, 2, H, bm.edge);
+  // magenta/white rumble that flickered hard at the periphery. During a RAMPAGE
+  // they turn solid gold — the whole road reads as "power mode" (colour-only
+  // swap on static columns; no flicker, no motion).
+  const edgeIdx = rampageOn ? 5 : bm.edge;
+  rect(ctx, (cx - halfW - 3) | 0, 0, 2, H, edgeIdx);
+  rect(ctx, (cx + halfW + 1) | 0, 0, 2, H, edgeIdx);
+
+  // ── Biome set dressing — small STATIC screen-space accents that make each
+  // zone read at a glance. All are fixed-position (z-independent, no scroll),
+  // so they add zero optic flow — pure scenery paint, dizzy rule intact.
+  if (bm.name === "TUNNEL") {
+    // A row of ceiling lights glowing through the dark, just under the haze.
+    for (let x = 8; x < W; x += 16) {
+      rect(ctx, x, 18, 2, 2, 5);          // gold lamp
+      rect(ctx, x, 20, 2, 1, 9);          // warm under-glow
+    }
+  } else if (bm.name === "COAST") {
+    // A broken white surf line where the sea meets each sand shoulder.
+    const surfL = (cx - halfW - shW - 1) | 0, surfR = (cx + halfW + shW) | 0;
+    for (let y = 0; y < H; y += 7) {
+      rect(ctx, surfL, y, 1, 4, 1);
+      rect(ctx, surfR, y + 3, 1, 4, 1);   // offset so the two sides don't mirror
+    }
+  } else if (bm.name === "BRIDGE") {
+    // Railing posts marching along both edges of the deck, with a thin top rail.
+    const railL = (cx - halfW - shW) | 0, railR = (cx + halfW + shW - 1) | 0;
+    for (let y = 2; y < H; y += 13) {
+      rect(ctx, railL, y, 1, 7, 23);      // dark steel post
+      rect(ctx, railR, y, 1, 7, 23);
+      rect(ctx, railL, y, 1, 1, 1);       // lit cap
+      rect(ctx, railR, y, 1, 1, 1);
+    }
+  }
 
   // ── Asphalt grain — faint scrolling speckle, thinned out and faded with speed
   // so it stops shimmering at pace; skipped entirely once fully calm.

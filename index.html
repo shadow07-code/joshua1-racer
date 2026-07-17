@@ -158,6 +158,51 @@
       border-width: 3px;
       border-radius: 7px;
     }
+    /* RAMPAGE button — a red arcade slam-button that hovers top-centre (between
+       the pause button and the toolbar) ONLY while the nitro meter is armed.
+       Pulses with a hot red glow so it's unmissable mid-flow; pressing it
+       unleashes the banked rampage. Shown/hidden per-frame by main.js. */
+    #btn-rampage {
+      position: fixed;
+      top: calc(env(safe-area-inset-top) + 34px);
+      left: 50%;
+      transform: translateX(-50%);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      background: #E40058;                 /* player red */
+      color: #fff;
+      border: 3px solid #FC7460;           /* light-red rim */
+      border-radius: 9px;
+      padding: 12px 18px;
+      font: inherit;
+      font-size: 15px;
+      font-weight: bold;
+      letter-spacing: 1.5px;
+      white-space: nowrap;
+      cursor: pointer;
+      z-index: 9;
+      animation: rampagePulse 0.55s ease-in-out infinite;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: none;
+      user-select: none;
+    }
+    #btn-rampage.show { display: inline-flex; }
+    #btn-rampage:active {
+      background: #FC7460; color: #0f0f0f;
+      transform: translateX(-50%) translateY(3px);
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.5) !important;
+      animation: none;
+    }
+    @keyframes rampagePulse {
+      0%, 100% { box-shadow: 0 4px 0 rgba(0,0,0,0.5), 0 0 8px 2px rgba(228,0,88,0.5); background: #E40058; }
+      50%      { box-shadow: 0 4px 0 rgba(0,0,0,0.5), 0 0 20px 7px rgba(252,116,96,0.9); background: #FF1A6E; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      #btn-rampage { animation: none; box-shadow: 0 4px 0 rgba(0,0,0,0.5), 0 0 14px 4px rgba(228,0,88,0.7); }
+    }
+
     /* Pause button — fixed top-left, below the score strip. display is toggled
        to inline-flex by main.js only during a race. */
     #btn-pause {
@@ -574,6 +619,10 @@
   <!-- Pause button — top-left, just below the score strip (clear of the centred
        combo / sandwich-combo text). Shown only during a race (wired in main.js). -->
   <button id="btn-pause" title="Pause (P)" aria-label="Pause game">⏸</button>
+
+  <!-- Rampage slam-button — hovers top-centre only while the nitro meter is
+       armed; pressing it unleashes the banked rampage (wired in main.js). -->
+  <button id="btn-rampage" aria-label="Unleash the armed rampage">🔥 PRESS FOR RAMPAGE</button>
 
   <!-- On-screen steering pads (shown during gameplay; wired by input.js) -->
   <div id="steer-controls" aria-hidden="true">

@@ -36,7 +36,6 @@ import {
   drawGameOver, drawPaused, drawCountdown, drawTutorialOverlay, drawSteerHints, drawCombo, drawShieldMsg,
   drawRampageMeter, drawSandwichCombo, drawShareCard, SHARE_CARD_W, SHARE_CARD_H,
   drawExplosion, drawPerfect, drawLastLifePulse, drawBiomeBanner, drawZoneFlash,
-  drawRampageReady,
 } from "./hud.js";
 import { registerServiceWorker, initInstallBanner, initInstallButton, initInstallSplash, setInstallButtonVisible } from "./pwa.js";
 import {
@@ -155,6 +154,7 @@ function refreshWorldHi() {
 const btnMusic = document.getElementById("btn-music");
 const btnSfx = document.getElementById("btn-sfx");
 const btnPause = document.getElementById("btn-pause");
+const btnRampage = document.getElementById("btn-rampage");
 const soundControls = document.getElementById("sound-controls");
 const pauseSound = document.getElementById("pause-sound");
 const SFX_KEY = "joshua1.sfx";
@@ -229,6 +229,27 @@ refreshSoundControls();
 btnMusic.addEventListener("click", toggleMusic);
 btnSfx.addEventListener("click", toggleSfx);
 btnPause.addEventListener("click", () => pauseGame());
+// The hovering red RAMPAGE slam-button — fires on pointerdown (zero tap latency),
+// only meaningful while armed. Visibility is synced per-frame (syncRampageButton).
+btnRampage.addEventListener("pointerdown", (e) => {
+  e.preventDefault();
+  e.stopPropagation();
+  if (g.state === STATES.RACE && g.rampageArmed && g.player.rampage <= 0) {
+    ensureAudio();
+    unleashRampage();
+  }
+});
+
+// Show the rampage button exactly while it can be pressed. Called every frame
+// from render() — cheap (touches the DOM only when the armed state flips).
+let _rampageBtnShown = false;
+function syncRampageButton() {
+  const show = g.state === STATES.RACE && g.rampageArmed && g.player.rampage <= 0;
+  if (show !== _rampageBtnShown) {
+    _rampageBtnShown = show;
+    btnRampage.classList.toggle("show", show);
+  }
+}
 
 // Shared handler for a .snd-opt tap — used by BOTH the title-screen controls and
 // the pause-menu controls, so the player can change SFX / music mid-game,
@@ -670,8 +691,9 @@ function updateRace(dt) {
   if (consumePress("p", "P")) { pauseGame(); return; }
   if (consumePress("m", "M")) { toggleMusic(); }
   if (consumePress("Escape")) { stopMusic(); stopAllLoopingSfx(); g.state = STATES.TITLE; return; }
-  // UNLEASH an armed rampage: a tap on the (neutral, non-steering) top half of
-  // the screen — or Enter on desktop — detonates the banked nitrous.
+  // UNLEASH an armed rampage. Primary control is the hovering red PRESS FOR
+  // RAMPAGE button (pointerdown in initUI wiring); a tap on the neutral top
+  // half of the canvas or Enter on desktop still work as forgiving fallbacks.
   if (g.rampageArmed && g.player.rampage <= 0 && consumePress("TouchTop", "Enter")) {
     unleashRampage();
   }
@@ -976,7 +998,7 @@ function updateGameOver(dt) {
 // ─── Render ──────────────────────────────────────────────────────────────────
 function drawWorld() {
   const biome = g.biome || biomeAt(g.raceTime);
-  drawRoad(ctx, g.map, g.player.z, g.player.speed, biome);
+  drawRoad(ctx, g.map, g.player.z, g.player.speed, biome, g.player.rampage > 0);
   drawScenery(ctx, g.scenery, g.map, g.player.z);
   drawOilSpills(ctx, g.oils, g.map, g.player.z, g.player.x);
   drawSmoke(ctx, g.map, g.player.z, g.player.x, g.player);
@@ -1033,6 +1055,7 @@ function syncOverlays() {
 function render() {
   clear(ctx, 12);
   syncOverlays();
+  syncRampageButton();
   // Title screen also backs the name-entry and leaderboard modals.
   if (g.state === STATES.TITLE || g.state === STATES.NAME_ENTRY || g.state === STATES.LEADERBOARD) {
     drawTitleScreen(ctx, bestEverScore(), g.world, g.playerName);
@@ -1095,8 +1118,6 @@ function render() {
       active: g.player.rampage > 0,
       armed: g.rampageArmed,
     });
-    // The armed prompt — strobing "RAMPAGE READY / TAP TOP OF SCREEN".
-    if (g.state === STATES.RACE && g.rampageArmed && g.player.rampage <= 0) drawRampageReady(ctx);
     if (g.perfectTimer > 0) drawPerfect(ctx, g.perfectTimer, (W / 2 + g.map.biasX + g.player.x) | 0);
     if (g.biomeBannerTimer > 0) drawBiomeBanner(ctx, g.biomeName, g.biomeBannerTimer);
     if (g.shieldMsgTimer > 0) drawShieldMsg(ctx, g.shieldMsg);

@@ -63,10 +63,12 @@ export function drawHud(ctx, {
     rect(ctx, sx + 1, panelTop + 4, 1, 15, 3);
   }
 
-  // Cell 1 — speedometer (peaks at PHYS.topSpeedKmh, currently 200)
+  // Cell 1 — speedometer (peaks at PHYS.topSpeedKmh, currently 200). The readout
+  // turns gold at the very top end — a quiet "you're flat out" reward.
   drawSprite(ctx, ICN_SPEED, 3, panelTop + 7);
-  const kmh = Math.round(speed / PHYS.maxSpeed * (PHYS.topSpeedKmh || 200));
-  text(ctx, pad(kmh, 3), 13, panelTop + 9, 1);
+  const topKmh = PHYS.topSpeedKmh || 200;
+  const kmh = Math.round(speed / PHYS.maxSpeed * topKmh);
+  text(ctx, pad(kmh, 3), 13, panelTop + 9, kmh >= topKmh - 5 ? 5 : 1);
   text(ctx, "KMH", 13, panelTop + 15, 5);
 
   // Cell 2 — time elapsed
@@ -74,11 +76,13 @@ export function drawHud(ctx, {
   text(ctx, mmss(time || 0), 62, panelTop + 9, 1);
   text(ctx, "TIME", 62, panelTop + 15, 5);
 
-  // Cell 3 — lives (hearts)
+  // Cell 3 — lives (hearts). On the FINAL life the lone heart blinks in time
+  // with the danger pulse — the HUD itself says "this is it".
   const livesCount = Math.max(0, lives || 0);
+  const lastBeat = livesCount === 1 && Math.floor(performance.now() / 260) % 2 === 0;
   for (let i = 0; i < 3; i++) {
     const x = 92 + i * 8;
-    if (i < livesCount) {
+    if (i < livesCount && !(i === 0 && lastBeat)) {
       drawSprite(ctx, ICN_HEART, x, panelTop + 8);
     } else {
       // empty heart slot — drawn dim/dark
@@ -590,14 +594,8 @@ export function drawRampageMeter(ctx, { meter, max, cooldown, cooldownMax, activ
   }
 }
 
-// RAMPAGE READY prompt — shown while the meter is armed: a strobing headline +
-// the unleash instruction, sitting just under the meter so the eye finds it
-// without leaving the road. Static screen-space text (blink only, no motion).
-export function drawRampageReady(ctx) {
-  const hot = Math.floor(performance.now() / 160) % 2 === 0;
-  textOutlinedCentered(ctx, "RAMPAGE READY", 42, hot ? 5 : 9, 0, 1);
-  textCentered(ctx, "TAP TOP OF SCREEN", 52, hot ? 1 : 21, 1);
-}
+// (The armed-rampage prompt is now the hovering HTML "PRESS FOR RAMPAGE"
+// button — see #btn-rampage in index.html, shown/hidden per-frame by main.js.)
 
 
 // Deterministic full-screen starfield for the game-over backdrop (separate from
