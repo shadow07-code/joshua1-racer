@@ -169,25 +169,9 @@ export function drawPlayer(ctx, p, map) {
   // (no steering lean).
   groundShadow(ctx, (cx + p.x) | 0, PLAYER_Y + halfH - 3, 5);
   drawSpriteNN(ctx, SPR_PLAYER, cx + p.x - halfW + wobble, PLAYER_Y - halfH, PLAYER_SCALE);
-  // COMBO POWER GLOW — the car visibly charges with the capped multiplier
-  // (p.comboGlow, ×1..×8 from main.js). Underglow strips spill from the sides
-  // at ×2+, twin exhaust streaks grow with the tier at ×4+, and everything
-  // burns white-hot at the ×8 cap. All of it is pinned to the car (screen-
-  // space, fixed size) so it adds zero optic flow. Rampage has its own flames.
-  const mult = p.comboGlow || 1;
-  if (mult >= 2 && p.rampage <= 0) {
-    const flick = Math.floor(performance.now() / 70) % 2 === 0;
-    const idx = mult >= 8 ? (flick ? 1 : 5) : (mult >= 5 ? 5 : 9);  // orange → gold → white-hot
-    const gy = (PLAYER_Y - 3) | 0;
-    rect(ctx, (cxp - halfW - 2) | 0, gy, 1, 7, idx);                // side underglow spill
-    rect(ctx, (cxp + halfW + 1) | 0, gy, 1, 7, idx);
-    if (mult >= 4) {
-      const len = 2 + mult;                                         // 6..10 px at ×4..×8
-      const ty = (PLAYER_Y + halfH) | 0;
-      rect(ctx, cxp - 3, ty, 1, len - (flick ? 1 : 0), idx);        // twin exhaust streaks
-      rect(ctx, cxp + 2, ty, 1, len - (flick ? 0 : 1), idx);
-    }
-  }
+  // (No combo glow around the car — the red/orange underglow + exhaust streaks
+  // read as clutter against the sprite. The COMBO xN banner carries that
+  // feedback instead. Rampage keeps its own flames + aura below.)
   // RAMPAGE aura — a pulsing fiery ring around the car while nitrous is active.
   if (p.rampage > 0) {
     const cyp = (PLAYER_Y) | 0;

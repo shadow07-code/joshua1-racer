@@ -853,9 +853,6 @@ function updateRace(dt) {
   if (g.sandwichComboTimer > 0) g.sandwichComboTimer = Math.max(0, g.sandwichComboTimer - dt);
   if (g.explosion > 0) g.explosion = Math.max(0, g.explosion - dt);
   if (g.perfectTimer > 0) g.perfectTimer = Math.max(0, g.perfectTimer - dt);
-  // The car visibly "powers up" with the capped combo multiplier — drawPlayer
-  // reads this for the underglow/trail (attached to the car, zero optic flow).
-  g.player.comboGlow = comboMult();
 
   // ── LAST-LIFE TENSION ── On the final life the engine strains (a detune wobble)
   // and a heartbeat thumps ~once a second, so the near-death moment feels urgent.
