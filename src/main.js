@@ -40,12 +40,17 @@ import {
 import { registerServiceWorker, initInstallBanner, initInstallButton, initInstallSplash, setInstallButtonVisible } from "./pwa.js";
 import {
   initUI, setLeaderboardButtonVisible, setSoundControlsVisible, setNameButtonVisible,
+  setGarageButtonVisible, showGaragePanel, renderGarage,
   showNameEntry, showGameOverActions,
   showLeaderboardPanel, renderLeaderboard, showPauseMenu,
 } from "./ui.js";
 import {
   getPlayerName, setPlayerName, submitScore, fetchTop, flushPending, cachedTop,
 } from "./leaderboard.js";
+import {
+  CARS, addCoins, claimUnlocks, getWallet, nextLocked,
+  getSelectedId, setSelectedId, ownedIds, carSprite,
+} from "./garage.js";
 
 const canvas = document.getElementById("game");
 const ctx = getCtx(canvas);
@@ -60,6 +65,7 @@ const STATES = {
   TITLE: "TITLE",
   NAME_ENTRY: "NAME_ENTRY",
   LEADERBOARD: "LEADERBOARD",
+  GARAGE: "GARAGE",
   MAP_SELECT: "MAP_SELECT",
   DIFFICULTY: "DIFFICULTY",
   TUTORIAL: "TUTORIAL",
@@ -95,6 +101,9 @@ const g = {
   pickups: null,
   scoreState: makeScoreState(),
   isNewHi: false,
+  wallet: 0,             // banked coin balance after this run
+  unlocked: [],          // cars this run's coins just unlocked (game-over celebration)
+  nextCar: null,         // the cheapest still-locked car (drives the progress bar)
   bestDelta: 0,          // points over the previous personal best (for "NEW BEST +X")
   rankInfo: null,        // { rank, total } from the leaderboard submit, or { offline:true }; null = pending
   endReason: "GAME OVER",
@@ -460,7 +469,17 @@ function endRace(reason) {
   g.bestDelta = (g.isNewHi && prevHi > 0) ? Math.max(0, Math.floor(g.scoreState.score) - prevHi) : 0;
   g.rankInfo = null;   // "RANKING…" until the submit returns the standing
   g.goTime = 0;        // guards the tap-to-retry so the fatal touch can't insta-restart
+  // ── Bank this run's coins ── Score dies with you; coins DON'T. Even a short
+  // run pays into the wallet, so every attempt advances the next unlock. Any
+  // car the new balance covers is claimed right here for a game-over payoff.
+  g.wallet = addCoins(g.coins || 0);
+  g.unlocked = claimUnlocks();          // [] unless this run crossed a price
+  g.nextCar = nextLocked();             // null once everything is owned
+  // Equip a freshly unlocked livery straight away — the reward should be visible
+  // on the very next run (the garage picker will let you switch back).
+  if (g.unlocked.length) setSelectedId(g.unlocked[g.unlocked.length - 1].id);
   if (g.isNewHi) playFlourish();
+  if (g.unlocked.length) playFlourish();
   // Submit to the global board; the response carries this run's rank + total so
   // the game-over screen can show a percentile ("TOP 14%  RANK 14/98").
   submitScore({
@@ -526,6 +545,28 @@ function updateNameEntry() {
 function openLeaderboard(returnTo) {
   g.lbReturnTo = returnTo;
   g.state = STATES.LEADERBOARD;
+}
+
+// ── Garage ── The car collection. Coins auto-unlock liveries cheapest-first as
+// the wallet grows, so this panel is about CHOOSING among what you own (and
+// seeing how close the next one is).
+function openGarage() {
+  ensureAudio();
+  sfxMenuSelect();
+  g.state = STATES.GARAGE;
+}
+function refreshGarage() {
+  renderGarage({
+    cars: CARS,
+    wallet: getWallet(),
+    owned: ownedIds(),
+    selected: getSelectedId(),
+    spriteFor: carSprite,
+  });
+}
+function updateGarage() {
+  if (consumePress("Escape", "Enter", " ")) g.state = STATES.TITLE;
+  consumeAnyPress();
 }
 
 function updateLeaderboard() {
@@ -1016,7 +1057,8 @@ function syncOverlays() {
   if (g.state === _lastUiState) return;
   _lastUiState = g.state;
   const onTitle = g.state === STATES.TITLE;
-  const onMenu = onTitle || g.state === STATES.NAME_ENTRY || g.state === STATES.LEADERBOARD;
+  const onMenu = onTitle || g.state === STATES.NAME_ENTRY || g.state === STATES.LEADERBOARD
+              || g.state === STATES.GARAGE;
   // Returning to the title: refresh the WORLD #1 chip from cache, then fetch fresh.
   if (onTitle) {
     refreshWorldHi();
@@ -1025,6 +1067,7 @@ function syncOverlays() {
   setInstallButtonVisible(onTitle);
   setLeaderboardButtonVisible(onTitle);
   setNameButtonVisible(onTitle);
+  setGarageButtonVisible(onTitle);
   // Sound controls live on the title screen only (positioned above TAP TO START).
   setSoundControlsVisible(onTitle);
   refreshSoundControls();
@@ -1040,6 +1083,8 @@ function syncOverlays() {
   showNameEntry(g.state === STATES.NAME_ENTRY);
   showGameOverActions(g.state === STATES.GAME_OVER);
   showPauseMenu(g.state === STATES.PAUSED);
+  showGaragePanel(g.state === STATES.GARAGE);
+  if (g.state === STATES.GARAGE) refreshGarage();
   showLeaderboardPanel(g.state === STATES.LEADERBOARD);
   if (g.state === STATES.LEADERBOARD) {
     renderLeaderboard({ entries: cachedTop() }, g.playerName);   // instant from cache
@@ -1054,7 +1099,8 @@ function render() {
   syncOverlays();
   syncRampageButton();
   // Title screen also backs the name-entry and leaderboard modals.
-  if (g.state === STATES.TITLE || g.state === STATES.NAME_ENTRY || g.state === STATES.LEADERBOARD) {
+  if (g.state === STATES.TITLE || g.state === STATES.NAME_ENTRY
+      || g.state === STATES.LEADERBOARD || g.state === STATES.GARAGE) {
     drawTitleScreen(ctx, bestEverScore(), g.world, g.playerName);
     return;
   }
@@ -1152,6 +1198,9 @@ function render() {
       smashed: g.smashTotal || 0,
       rampages: g.rampagesUsed || 0,
       coins: g.coins || 0,
+      wallet: g.wallet || 0,
+      unlocked: g.unlocked || [],
+      nextCar: g.nextCar || null,
     });
     return;
   }
@@ -1184,6 +1233,7 @@ function update(dt) {
     case STATES.TITLE: updateTitle(); break;
     case STATES.NAME_ENTRY: updateNameEntry(); break;
     case STATES.LEADERBOARD: updateLeaderboard(); break;
+    case STATES.GARAGE: updateGarage(); break;
     case STATES.MAP_SELECT: updateMapSelect(); break;
     case STATES.DIFFICULTY: updateDifficulty(); break;
     case STATES.TUTORIAL: updateTutorial(dt); break;
@@ -1198,6 +1248,13 @@ initUI({
   onNameConfirm: (name) => confirmName(name),
   onNameBack: () => { g.state = STATES.TITLE; },
   onOpenNameEdit: () => openNameEntry(),
+  onOpenGarage: () => openGarage(),
+  onGarageBack: () => { g.state = STATES.TITLE; },
+  onGaragePick: (id) => {
+    ensureAudio(); sfxMenuSelect();
+    setSelectedId(id);
+    refreshGarage();          // repaint so EQUIPPED moves to the new pick
+  },
   onOpenLeaderboard: () => { ensureAudio(); sfxMenuSelect(); openLeaderboard(STATES.TITLE); },
   onLeaderboardBack: () => { g.state = g.lbReturnTo || STATES.TITLE; },
   onPlayAgain: () => playAgain(),

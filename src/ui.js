@@ -4,7 +4,7 @@
 // the overlays and reports user intent back through callbacks.
 
 import { sanitizeName, getPlayerName } from "./leaderboard.js";
-import { W, H } from "./config.js";
+import { W, H, PALETTE } from "./config.js";
 
 let el = {};            // cached elements
 let cb = {};            // callbacks supplied by main.js
@@ -14,7 +14,12 @@ export function initUI(callbacks) {
   el = {
     btnLeaderboard: document.getElementById("btn-leaderboard"),
     btnName: document.getElementById("btn-name"),
+    btnGarage: document.getElementById("btn-garage"),
     btnInstall: document.getElementById("btn-install"),
+    garagePanel: document.getElementById("garage"),
+    garageList: document.getElementById("garage-list"),
+    garageWallet: document.getElementById("garage-wallet"),
+    garageBack: document.getElementById("garage-back"),
     soundControls: document.getElementById("sound-controls"),
     namePanel: document.getElementById("name-entry"),
     nameInput: document.getElementById("name-input"),
@@ -48,6 +53,20 @@ export function initUI(callbacks) {
     el.btnName.addEventListener("click", (e) => {
       e.stopPropagation();
       cb.onOpenNameEdit && cb.onOpenNameEdit();
+    });
+  }
+
+  // Title GARAGE button + the panel's BACK.
+  if (el.btnGarage) {
+    el.btnGarage.addEventListener("click", (e) => {
+      e.stopPropagation();
+      cb.onOpenGarage && cb.onOpenGarage();
+    });
+  }
+  if (el.garageBack) {
+    el.garageBack.addEventListener("click", (e) => {
+      e.stopPropagation();
+      cb.onGarageBack && cb.onGarageBack();
     });
   }
 
@@ -116,7 +135,7 @@ export function positionTitleUI() {
   let top = Math.round(m.offY + 67 * m.scale);
   // Install (the big glowing CTA) leads, then the utility pills, then the sound
   // controls block. Hidden/removed nodes are skipped, so the stack stays tight.
-  for (const node of [el.btnInstall, el.btnLeaderboard, el.btnName, el.soundControls]) {
+  for (const node of [el.btnInstall, el.btnLeaderboard, el.btnGarage, el.btnName, el.soundControls]) {
     if (!node || !node.classList.contains("show")) continue;
     node.style.bottom = "auto";
     node.style.top = top + "px";
@@ -132,6 +151,77 @@ export function setLeaderboardButtonVisible(show) {
 export function setNameButtonVisible(show) {
   toggle(el.btnName, show);
   if (show) positionTitleUI();
+}
+
+export function setGarageButtonVisible(show) {
+  toggle(el.btnGarage, show);
+  if (show) positionTitleUI();
+}
+
+export function showGaragePanel(show) { toggle(el.garagePanel, show); }
+
+// Render a pixel sprite (2D palette-index array, -1 = transparent) into a canvas
+// element for the garage rows — keeps the car previews true to the in-game art.
+function spriteCanvas(sprite, scale = 2) {
+  const h = sprite.length;
+  let w = 0;
+  for (const row of sprite) if (row.length > w) w = row.length;
+  const cv = document.createElement("canvas");
+  cv.width = w * scale; cv.height = h * scale;
+  const c = cv.getContext("2d");
+  for (let y = 0; y < h; y++) {
+    const row = sprite[y];
+    for (let x = 0; x < row.length; x++) {
+      const idx = row[x];
+      if (idx < 0) continue;
+      c.fillStyle = PALETTE[idx];
+      c.fillRect(x * scale, y * scale, scale, scale);
+    }
+  }
+  return cv;
+}
+
+// Build the garage list. data = { cars, wallet, owned, selected, spriteFor }.
+// Owned cars are tappable to equip; locked ones show their price (and how close
+// the wallet is for the cheapest one).
+export function renderGarage(data) {
+  if (!el.garageList) return;
+  const { cars = [], wallet = 0, owned = [], selected = "rosso", spriteFor } = data || {};
+  if (el.garageWallet) el.garageWallet.textContent = "BANK " + wallet;
+  el.garageList.innerHTML = "";
+
+  let firstLocked = true;
+  for (const car of cars) {
+    const isOwned = owned.includes(car.id);
+    const isEquipped = isOwned && car.id === selected;
+
+    const row = document.createElement("div");
+    row.className = "garage-row" + (isOwned ? "" : " locked") + (isEquipped ? " equipped" : "");
+
+    if (spriteFor) row.appendChild(spriteCanvas(spriteFor(car.id), 2));
+
+    const name = document.createElement("span");
+    name.className = "car-name";
+    name.textContent = car.name;
+
+    const state = document.createElement("span");
+    state.className = "car-state";
+    if (isEquipped) state.textContent = "EQUIPPED";
+    else if (isOwned) state.textContent = "TAP TO USE";
+    else if (firstLocked) { state.textContent = wallet + "/" + car.price; firstLocked = false; }
+    else state.textContent = String(car.price);
+
+    row.appendChild(name);
+    row.appendChild(state);
+
+    if (isOwned && !isEquipped) {
+      row.addEventListener("click", (e) => {
+        e.stopPropagation();
+        cb.onGaragePick && cb.onGaragePick(car.id);
+      });
+    }
+    el.garageList.appendChild(row);
+  }
 }
 
 export function setSoundControlsVisible(show) {

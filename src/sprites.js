@@ -4,7 +4,8 @@
 const _ = -1;
 
 // ── Helper: paint-swap a body color triple (dark/main/light) into a sprite ────
-function recolorBody(base, fromDark, fromMain, fromLight, toDark, toMain, toLight) {
+// Exported so garage.js can mint car liveries from the base Ferrari with no new art.
+export function recolorBody(base, fromDark, fromMain, fromLight, toDark, toMain, toLight) {
   return base.map(row => row.map(c => {
     if (c === fromDark) return toDark;
     if (c === fromMain) return toMain;
@@ -139,7 +140,7 @@ function stampJ(sprite) {
 // top-left lighting (lit flank 8 / shaded flank 7); body tones 6/7/8 recolour.
 //   6 body | 7 shadow | 8 highlight | 0 outline/tyres/hoops | 4 wheel/louvre/exhaust
 //   13 windscreen | 5 headlight/badge | 9 taillight | 23 cockpit | 14 driver | 1 suit
-const SPR_FERRARI_BASE = [
+export const SPR_FERRARI_BASE = [
   [_,_,_,0,0,0,0,_,_,_],     //  0 nose tip
   [_,_,0,6,8,8,6,0,_,_],     //  1 nose
   [_,0,5,8,6,6,7,5,0,_],     //  2 headlights + hood

@@ -11,6 +11,7 @@ import {
   SPR_DRIVER_STAND, SPR_DRIVER_THUMB, SPR_COIN,
   ICN_SPEED, ICN_FLAG, ICN_TROPHY, ICN_PASS,
 } from "./sprites.js";
+import { selectedSprite } from "./garage.js";
 
 // Small heart icon for the LIVES counter.
 const ICN_HEART = [
@@ -212,7 +213,7 @@ function drawHeroCar(ctx, t, topY) {
   const x = (cx - 10) | 0;                 // sprite is 10w → centre at 80, PARKED (no wobble)
   const baseY = topY + 15 * scale;         // sprite is 15h
   groundShadow(ctx, cx, baseY, 11);
-  drawSpriteScaled(ctx, SPR_PLAYER, x, topY, scale);
+  drawSpriteScaled(ctx, selectedSprite(), x, topY, scale);   // your equipped livery
   // Gentle idle exhaust shimmer at the rear (it's parked but running).
   if ((Math.floor(t / 160) % 2) === 0) {
     disc(ctx, 76, baseY + 2, 2, 9);
@@ -615,7 +616,7 @@ export function gradeFor(score) {
   return GRADES[GRADES.length - 1];
 }
 
-export function drawGameOver(ctx, { name, score, hi, isNew, bestDelta, rankInfo, reason, passed, time, topSpeed, combo, smashed, rampages, coins }) {
+export function drawGameOver(ctx, { name, score, hi, isNew, bestDelta, rankInfo, reason, passed, time, topSpeed, combo, smashed, rampages, coins, wallet, unlocked, nextCar }) {
   const t = performance.now();
   const flash = Math.floor(t / 300) % 2 === 0;
   // Dark backdrop with a quiet twinkling starfield — ties the screen to the
@@ -636,7 +637,8 @@ export function drawGameOver(ctx, { name, score, hi, isNew, bestDelta, rankInfo,
   const N = 8;                       // ledger rows (score/best live in the verdict)
   const panelH = rowH * N + 10;
   const heroH = 22;
-  const totalH = 26 + 2 + heroH + 10 + 10 + panelH;
+  const bankH = 16;                  // the coin-bank strip under the ledger
+  const totalH = 26 + 2 + heroH + 10 + 10 + panelH + bankH;
   const avail = H * 0.66;
   const baseY = Math.max(4, ((avail - totalH) / 2) | 0);
 
@@ -710,10 +712,35 @@ export function drawGameOver(ctx, { name, score, hi, isNew, bestDelta, rankInfo,
   statRow("SMASHED",    pad(smashed != null ? smashed : 0, 3), 9);
   statRow("RAMPAGES",   "X" + (rampages || 0),                 5);
 
-  // One-tap retry prompt — a blinking hint just under the ledger (the whole
+  // ── COIN BANK ── The payoff that survives death: this run's coins are added
+  // to a permanent wallet, and the bar shows how close the next car now is. Even
+  // a terrible run moves it, so no attempt is ever wasted.
+  let bankY = statsTop + panelH + 3;
+  if (unlocked && unlocked.length) {
+    // Celebration beat — a new livery just paid off.
+    const car = unlocked[unlocked.length - 1];
+    rect(ctx, 6, bankY, W - 12, 13, flash ? 5 : 9);          // strobing gold plate
+    textOutlinedCentered(ctx, "NEW CAR: " + car.name, bankY + 4, 1, 0, 1);
+  } else {
+    drawSprite(ctx, SPR_COIN, 8, bankY);
+    text(ctx, "+" + (coins || 0), 17, bankY + 1, 5);
+    textRight(ctx, "BANK " + (wallet || 0), W - 8, bankY + 1, 1);
+    if (nextCar) {
+      // Progress toward the cheapest locked car.
+      const have = Math.max(0, Math.min(nextCar.price, wallet || 0));
+      const frac = nextCar.price > 0 ? have / nextCar.price : 1;
+      const barY = bankY + 9, barW = W - 16;
+      rect(ctx, 8, barY, barW, 3, 4);                         // track
+      rect(ctx, 8, barY, Math.max(1, (barW * frac) | 0), 3, 5); // fill
+      text(ctx, nextCar.name, 8, barY + 5, 13);
+      textRight(ctx, have + "/" + nextCar.price, W - 8, barY + 5, 13);
+    }
+  }
+  bankY += (unlocked && unlocked.length) ? 15 : 20;
+
+  // One-tap retry prompt — a blinking hint under the bank strip (the whole
   // canvas is tappable to restart; the HTML PLAY AGAIN button does the same).
-  const hintY = statsTop + panelH + 4;
-  if (hintY < H - 26) textOutlinedCentered(ctx, "TAP TO RETRY", hintY, flash ? 5 : 1, 0, 1);
+  if (bankY < H - 26) textOutlinedCentered(ctx, "TAP TO RETRY", bankY, flash ? 5 : 1, 0, 1);
 }
 
 // Impact EXPLOSION — a brief expanding fireball + shrapnel sparks + a quick

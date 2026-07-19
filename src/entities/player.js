@@ -1,8 +1,8 @@
 // Player car — auto-accelerate with a start-of-race speed ramp, brake, steer, slip.
 import { PHYS, PLAYER_Y, W } from "../config.js";
-import { SPR_PLAYER } from "../sprites.js";
 import { drawSpriteNN, groundShadow, ring, disc, rect } from "../render.js";
 import { roadCenterX } from "../road.js";
+import { selectedSprite } from "../garage.js";
 
 // Player car scale. Nudged to 1.05 (+5%) per request so the Ferrari reads a
 // touch larger on screen. This is a small UPSCALE via nearest-neighbour
@@ -168,7 +168,7 @@ export function drawPlayer(ctx, p, map) {
   // Grounding shadow under the car, then the Ferrari sprite — always straight
   // (no steering lean).
   groundShadow(ctx, (cx + p.x) | 0, PLAYER_Y + halfH - 3, 5);
-  drawSpriteNN(ctx, SPR_PLAYER, cx + p.x - halfW + wobble, PLAYER_Y - halfH, PLAYER_SCALE);
+  drawSpriteNN(ctx, selectedSprite(), cx + p.x - halfW + wobble, PLAYER_Y - halfH, PLAYER_SCALE);
   // (No combo glow around the car — the red/orange underglow + exhaust streaks
   // read as clutter against the sprite. The COMBO xN banner carries that
   // feedback instead. Rampage keeps its own flames + aura below.)
