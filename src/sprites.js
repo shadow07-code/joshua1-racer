@@ -14,6 +14,14 @@ export function recolorBody(base, fromDark, fromMain, fromLight, toDark, toMain,
   }));
 }
 
+// ── Helper: vertical flip — turns a car to face the CAMERA ────────────────────
+// Sprites are drawn front-at-top (driving away from us). Flipping the rows makes
+// the car face us instead, so its headlights lead and its taillights trail —
+// exactly what a wrong-way vehicle should look like coming down the road.
+export function flipSpriteY(spr) {
+  return spr.slice().reverse();
+}
+
 // ── Helper: 1px "lean" variants ───────────────────────────────────────────────
 // Shifts the nose rows one pixel toward the steer/drift direction (and tail
 // rows the opposite way) so a car visibly angles into its lateral movement.
@@ -427,6 +435,28 @@ export const TRAFFIC_SKINS = [
   mkSkin(SPR_BUS_WHITE,    10, 22, 0.16, 20, []),
   mkSkin(SPR_BUS_ORANGE,   10, 22, 0.16, 20, []),
 ];
+
+// Skins for WRONG-WAY (oncoming) traffic — the same vehicles turned to face the
+// camera. Only the small/nippy shapes are used (sedans + the taxi): a wrong-way
+// bus would be both absurd and unfairly wide. Built once, lazily, and cached.
+const _oncomingCache = new Map();
+export function oncomingSkin(skin) {
+  let flipped = _oncomingCache.get(skin);
+  if (flipped) return flipped;
+  flipped = {
+    ...skin,
+    spr: flipSpriteY(skin.spr),
+    sprL: flipSpriteY(skin.sprL || skin.spr),
+    sprR: flipSpriteY(skin.sprR || skin.spr),
+    // Row of the (now trailing) taillights after the flip — used to pin the
+    // blinker/marker overlay correctly on a reversed sprite.
+    tailRow: skin.h - 1 - skin.tailRow,
+  };
+  _oncomingCache.set(skin, flipped);
+  return flipped;
+}
+// The pool a wrong-way car is drawn from: sedans + taxi only (indices 0-5).
+export const ONCOMING_SKINS = TRAFFIC_SKINS.slice(0, 6);
 
 // ─── Scenery ──────────────────────────────────────────────────────────────────
 export const SPR_TREE = [

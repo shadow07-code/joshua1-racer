@@ -8,7 +8,7 @@
 import { PHYS, RACE } from "../config.js";
 import { project } from "../road.js";
 import { drawSpriteNN, groundShadow, rect } from "../render.js";
-import { TRAFFIC_SKINS, SPR_COIN } from "../sprites.js";
+import { TRAFFIC_SKINS, ONCOMING_SKINS, oncomingSkin, SPR_COIN } from "../sprites.js";
 
 const LANES = 5;
 
@@ -28,6 +28,8 @@ export function makeTrafficSystem(opts = {}) {
     densityMul: 1.0,             // current difficulty density (set by main.js)
     passedCount: 0,
     rowsSpawned: 0,
+    nextOncomingZ: null,         // z of the next wrong-way car (null until unlocked)
+    oncomingWarn: 0,             // metres to the nearest approaching wrong-way car (0 = none)
   };
 }
 
@@ -50,14 +52,21 @@ function pickSkin() {
 function pickPhrase(sys) {
   const dm = sys.densityMul || 1;
   const last = sys.phrase ? sys.phrase.type : "breather";
-  // A gauntlet ("the drop") always resolves to air — a short breather right after.
-  if (last === "gauntlet") return { type: "breather", left: 1 + (Math.random() < 0.5 ? 1 : 0), dir: 1 };
+  // A gauntlet or a squeeze ("the drop") always resolves to air — a short
+  // breather right after, so the pressure has somewhere to release.
+  if (last === "gauntlet" || last === "closing") {
+    return { type: "breather", left: 1 + (Math.random() < 0.5 ? 1 : 0), dir: 1 };
+  }
   const wG = Math.min(0.32, 0.08 + (dm - 1) * 0.5);   // gauntlets heat up with density
+  const wC = RACE.closingRowChance;                   // the one-row squeeze
   const r = Math.random();
-  if (r < 0.04)        return { type: "tough",    left: 1, dir: Math.random() < 0.5 ? -2 : 2 };
-  if (r < 0.04 + wG)   return { type: "gauntlet", left: 3 + (Math.random() * 3 | 0), dir: 1 };
-  if (r < 0.20 + wG)   return { type: "breather", left: 1 + (Math.random() < 0.4 ? 1 : 0), dir: 1 };
-  if (r < 0.46 + wG)   return { type: "sweep",    left: 3 + (Math.random() * 3 | 0), dir: Math.random() < 0.5 ? -1 : 1 };
+  if (r < 0.04)                  return { type: "tough",    left: 1, dir: Math.random() < 0.5 ? -2 : 2 };
+  // CLOSING: a single row where the flankers pinch the gap shut as you arrive —
+  // commit early or bail to the escape lane. Always followed by a breather.
+  if (r < 0.04 + wC)             return { type: "closing",  left: 1, dir: 1 };
+  if (r < 0.04 + wC + wG)        return { type: "gauntlet", left: 3 + (Math.random() * 3 | 0), dir: 1 };
+  if (r < 0.20 + wC + wG)        return { type: "breather", left: 1 + (Math.random() < 0.4 ? 1 : 0), dir: 1 };
+  if (r < 0.46 + wC + wG)        return { type: "sweep",    left: 3 + (Math.random() * 3 | 0), dir: Math.random() < 0.5 ? -1 : 1 };
   return { type: "slalom", left: 4 + (Math.random() * 4 | 0), dir: 1 };
 }
 
@@ -70,17 +79,19 @@ function spawnRow(sys, map) {
   else if (!ph || ph.left <= 0) ph = pickPhrase(sys);
 
   // Per-phrase gap-lane shift.
-  let shift, threadRow = false;
+  let shift, threadRow = false, closingRow = false;
   if (ph.type === "slalom")        shift = sys.lastShift > 0 ? -1 : 1;      // zig-zag
   else if (ph.type === "sweep")    shift = ph.dir;                          // steady walk
   else if (ph.type === "gauntlet") { shift = sys.lastShift > 0 ? -1 : 1; threadRow = true; }
+  else if (ph.type === "closing")  { shift = 0; closingRow = true; }        // squeeze in place
   else if (ph.type === "tough")    shift = ph.dir;                          // ±2 juke
   else                             shift = 0;                               // breather: hold
 
   let gap = sys.lastGapLane + shift;
   if (gap < 0) gap = 1;                        // bounce off the left edge
   else if (gap >= LANES) gap = LANES - 2;      // bounce off the right edge
-  if (threadRow) { if (gap <= 0) gap = 1; else if (gap >= LANES - 1) gap = LANES - 2; }
+  // Both squeeze types need a lane on EACH side of the gap to do the pinching.
+  if (threadRow || closingRow) { if (gap <= 0) gap = 1; else if (gap >= LANES - 1) gap = LANES - 2; }
   const effShift = gap - sys.lastGapLane;
   if (ph.type === "sweep" && effShift === 0) ph.dir = -ph.dir;   // reverse a sweep at the wall
   if (effShift !== 0) sys.lastShift = effShift > 0 ? 1 : -1;
@@ -99,6 +110,11 @@ function spawnRow(sys, map) {
       const far = gap >= 2 ? gap - 2 : gap + 2;
       if (far >= 0 && far < LANES) lanesToFill.push(far);
     }
+  } else if (closingRow) {
+    // CLOSING: exactly the two flankers — they'll squeeze the gap shut when the
+    // player gets close. Nothing else is placed, so the lanes beyond them stay
+    // open as the bail-out (this is a timing test, never a dead end).
+    lanesToFill = [gap - 1, gap + 1].filter(l => l >= 0 && l < LANES);
   } else if (ph.type === "breather") {
     // Open road — one distant car so it reads as a real exhale, not an empty void.
     const far = [];
@@ -116,8 +132,10 @@ function spawnRow(sys, map) {
   }
 
   // Wall cars hold their lane (clean, readable weave); only the lone breather car
-  // is likely to drift. Gauntlet flanks never drift (keeps the split gap open).
-  const driftChance = threadRow ? 0 : (ph.type === "breather" ? 0.6 : 0.22);
+  // is likely to drift. Gauntlet + closing flanks never take a RANDOM drift
+  // (closing cars get their scripted squeeze below instead).
+  const driftChance = (threadRow || closingRow) ? 0 : (ph.type === "breather" ? 0.6 : 0.22);
+  const gapX = laneToX(gap, map.roadHalfWidth);
 
   for (const lane of lanesToFill) {
     const skin = pickSkin();
@@ -151,6 +169,14 @@ function spawnRow(sys, map) {
       pendingDriftVx: drift * (6 + Math.random() * 5), // px/s lateral once engaged
       signalT: drift ? 0.7 + Math.random() * 0.8 : 0,  // blink-before-merge lead-in (s)
       sigPhase: Math.random() * 560,                   // unsynced blinker phase (ms)
+      // CLOSING flankers: hold station, then squeeze toward the gap once the
+      // player is inside RACE.closingTriggerZ (see updateTraffic). Blinkers run
+      // the whole time so the intent is telegraphed from a long way out.
+      closingVx: closingRow ? (x < gapX ? RACE.closingRate : -RACE.closingRate) : 0,
+      // Stop a half-car short of the lane centre, so a fully-shut squeeze reads
+      // as two cars edge-to-edge (never overlapping sprites). The remaining gap
+      // is narrower than the player, so arriving late genuinely means bailing.
+      closingLimit: closingRow ? gapX + (x < gapX ? -skinHalfX(skin) : skinHalfX(skin)) : gapX,
     });
   }
 
@@ -172,6 +198,38 @@ function spawnRow(sys, map) {
   sys.rowsSpawned++;
 }
 
+// ── WRONG-WAY CAR ── A lone vehicle coming the other way. It closes at roughly
+// double the rate of overtaken traffic, so it has to be spotted and planned for
+// EARLY — the one threat that can genuinely corner a good driver. Kept fair by
+// construction: it spawns at least 2 lanes clear of the current racing line, it
+// never drifts, and it's a single car in one lane out of five.
+function spawnOncoming(sys, map, playerZ) {
+  // Pick a lane well away from the line the player is currently threading.
+  const cands = [];
+  for (let l = 0; l < LANES; l++) if (Math.abs(l - sys.lastGapLane) >= 2) cands.push(l);
+  if (!cands.length) return;                       // nowhere safe — skip this one
+  const lane = cands[Math.floor(Math.random() * cands.length)];
+  const skin = ONCOMING_SKINS[Math.floor(Math.random() * ONCOMING_SKINS.length)];
+  sys.list.push({
+    skin: oncomingSkin(skin),
+    z: sys.nextOncomingZ,
+    x: laneToX(lane, map.roadHalfWidth),
+    laneIdx: lane,
+    speed: -PHYS.cruiseSpeed * RACE.oncomingSpeedMul,   // NEGATIVE = toward the player
+    cruise: null,                                        // never eases back up
+    oncoming: true,
+    passed: false,
+    nearMissed: false,
+    driftVx: 0,
+    pendingDriftVx: 0,
+    signalT: 0,
+    sigPhase: Math.random() * 560,
+    closingVx: 0,
+  });
+  sys.nextOncomingZ += RACE.oncomingSpacingMin +
+    Math.random() * (RACE.oncomingSpacingMax - RACE.oncomingSpacingMin);
+}
+
 // Initial wave so the road is busy at race start. Does NOT mark anything as passed.
 export function prepopulateTraffic(sys, map, distance = 600) {
   while (sys.nextRowZ < distance) {
@@ -187,7 +245,7 @@ function driftBlocked(cars, c) {
   const dir = c.driftVx > 0 ? 1 : -1;
   const cHx = skinHalfX(c.skin), cHz = skinHalfZ(c.skin);
   for (const o of cars) {
-    if (o === c || o.smashed) continue;
+    if (o === c || o.smashed || o.oncoming) continue;   // wrong-way cars flash past — don't wait on them
     if (Math.abs(o.z - c.z) >= cHz + skinHalfZ(o.skin) + 6) continue; // not alongside
     const dx = (o.x - c.x) * dir;                  // lateral distance, drift-signed
     if (dx <= 0) continue;                         // on the other side — irrelevant
@@ -207,7 +265,7 @@ export function smashCar(c, fromX = 0) {
   c.vz = -(20 + Math.random() * 25);
 }
 
-export function updateTraffic(sys, dt, playerZ, map, cbs, clearAheadDist = 0) {
+export function updateTraffic(sys, dt, playerZ, map, cbs, clearAheadDist = 0, allowOncoming = false) {
   // Spawn ahead so the road is always populated up to ~220m ahead. During the
   // post-rampage grace window, push the spawn cursor past the cleared zone so no
   // fresh cars appear in the player's path.
@@ -217,6 +275,21 @@ export function updateTraffic(sys, dt, playerZ, map, cbs, clearAheadDist = 0) {
   }
   while (sys.nextRowZ < ahead) {
     spawnRow(sys, map);
+  }
+
+  // ── Wrong-way traffic ── Unlocked once the run has real pace (main.js gates on
+  // km/h). The first one is scheduled a comfortable distance out so it never
+  // ambushes the player the instant it unlocks.
+  if (allowOncoming) {
+    if (sys.nextOncomingZ == null) {
+      sys.nextOncomingZ = playerZ + 260 + Math.random() * 200;
+    }
+    while (sys.nextOncomingZ < ahead) {
+      if (clearAheadDist > 0 && sys.nextOncomingZ < playerZ + clearAheadDist) {
+        sys.nextOncomingZ = playerZ + clearAheadDist;   // respect the rampage grace
+      }
+      spawnOncoming(sys, map, playerZ);
+    }
   }
 
   // Grace window: fling any car that's in the near-ahead corridor off the road so
@@ -230,6 +303,7 @@ export function updateTraffic(sys, dt, playerZ, map, cbs, clearAheadDist = 0) {
   }
 
   const halfRoad = map.roadHalfWidth;
+  let warnDist = 0;                   // nearest approaching wrong-way car (metres)
   for (const c of sys.list) {
     // Smashed cars are knocked off the road: they tumble sideways/back and no
     // longer drive, change lanes, get "passed", or collide.
@@ -239,6 +313,27 @@ export function updateTraffic(sys, dt, playerZ, map, cbs, clearAheadDist = 0) {
       continue;
     }
     c.z += c.speed * dt;
+
+    // Wrong-way car: track the nearest one still ahead, for the HUD warning.
+    if (c.oncoming) {
+      const d = c.z - playerZ;
+      if (d > 0 && d < RACE.oncomingWarnDist && (warnDist === 0 || d < warnDist)) warnDist = d;
+    }
+
+    // ── CLOSING squeeze ── The flankers hold station until the player is inside
+    // the trigger distance, then pinch toward the gap. Because it only engages
+    // late, the player can always SEE it start and choose: commit through, or
+    // bail to the open lane beyond. Stops at the lane centre so the pair can
+    // never overlap each other.
+    if (c.closingVx) {
+      const d = c.z - playerZ;
+      if (d > 0 && d < RACE.closingTriggerZ) {
+        const nx = c.x + c.closingVx * dt;
+        const past = c.closingVx > 0 ? (nx >= c.closingLimit) : (nx <= c.closingLimit);
+        c.x = past ? c.closingLimit : nx;
+        if (past) c.closingVx = 0;
+      }
+    }
 
     // Signal lead-in: the indicator blinks for a moment BEFORE the drift
     // engages (telegraphing the merge), then the car starts tracking.
@@ -289,6 +384,8 @@ export function updateTraffic(sys, dt, playerZ, map, cbs, clearAheadDist = 0) {
     }
   }
 
+  sys.oncomingWarn = warnDist;
+
   // Keep traffic from stacking: cars follow (slow for) the car ahead in their
   // lane and never overlap it — except for a rare bump.
   resolveTrafficSeparation(sys, dt);
@@ -311,11 +408,11 @@ function resolveTrafficSeparation(sys, dt) {
   cars.sort((a, b) => a.z - b.z);   // rear → front
   for (let i = 0; i < cars.length; i++) {
     const c = cars[i];
-    if (c.smashed) continue;                                // off-road, ignore
+    if (c.smashed || c.oncoming) continue;                  // off-road / wrong-way: ignore
     let leader = null, gap = 0, minGap = 0;
     for (let j = i + 1; j < cars.length; j++) {
       const o = cars[j];
-      if (o.smashed) continue;
+      if (o.smashed || o.oncoming) continue;                // never "follow" a wrong-way car
       const dz = o.z - c.z;
       if (dz > 45) break;                                   // nothing close ahead
       const latClear = skinHalfX(c.skin) + skinHalfX(o.skin) + 1.5;
@@ -358,13 +455,28 @@ export function drawTraffic(ctx, sys, map, playerZ, playerX) {
     // Shadow hugs the car's visible base so it looks grounded, not flying.
     groundShadow(ctx, p.sx, p.sy + hz - 2, hx);
     drawSpriteNN(ctx, spr, p.sx - hx, p.sy - hz, c.skin.scale);
+    // WRONG-WAY: twin headlights blazing at the camera + a blinking hazard bar,
+    // so an approaching car is unmistakable long before it arrives. The sprite is
+    // already flipped, so its lights lead — this just makes them glow.
+    if (c.oncoming && !c.smashed) {
+      const sx0 = Math.round(p.sx - hx), sy0 = Math.round(p.sy + hz) - 2;
+      rect(ctx, sx0 + 1, sy0, 2, 2, 1);                     // white headlights
+      rect(ctx, sx0 + c.skin.w - 3, sy0, 2, 2, 1);
+      if (Math.floor((tNow + (c.sigPhase || 0)) / 200) % 2 === 0) {
+        rect(ctx, sx0 + 1, sy0 - 2, c.skin.w - 2, 1, 9);    // orange hazard flash
+      }
+    }
     // Turn-signal indicator — a bright amber corner light over the taillight on
     // the side the car is merging toward, blinking through the lead-in AND the
     // drift itself. Per-car phase offset so the road never flashes in unison.
     // Anchored with the SAME rounding as the sprite blit so it pins exactly to
     // the taillight + outline columns at any fractional screen position.
     if (!c.smashed) {
-      const sig = c.signalT > 0 ? Math.sign(c.pendingDriftVx || 0) : Math.sign(c.driftVx || 0);
+      // A CLOSING flanker signals from spawn (its squeeze is scripted), so the
+      // pinch is telegraphed the whole way in — the timing test stays fair.
+      const sig = c.closingVx ? Math.sign(c.closingVx)
+                : c.signalT > 0 ? Math.sign(c.pendingDriftVx || 0)
+                : Math.sign(c.driftVx || 0);
       if (sig && Math.floor((tNow + (c.sigPhase || 0)) / 280) % 2 === 0) {
         const sx0 = Math.round(p.sx - hx), sy0 = Math.round(p.sy - hz);
         rect(ctx, sx0 + (sig > 0 ? c.skin.w - 3 : 1), sy0 + c.skin.tailRow, 2, 2, 5);

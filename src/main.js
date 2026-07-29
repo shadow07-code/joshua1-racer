@@ -12,7 +12,7 @@ import {
   playFlourish,
   startEngine, setEngine, stopEngine, setEngineRampage, setEngineStrain, getEngineStyle, setEngineStyle,
   sfxAccelAccent, sfxBrake, sfxPickup, sfxCrash, sfxExplosion, sfxBump, sfxBarrelDrop, sfxCombo,
-  sfxWhoosh, sfxPerfect, sfxHeartbeat, sfxCoin,
+  sfxWhoosh, sfxPerfect, sfxHeartbeat, sfxCoin, sfxHorn,
   sfxShieldUp, sfxShieldHit, sfxShockwave, sfxRampageCharge, sfxRampageReady, sfxNitrous,
   sfxMenuMove, sfxMenuSelect, sfxFinish, sfxCountdownBeep,
   startHeliSound, stopHeliSound,
@@ -36,6 +36,7 @@ import {
   drawGameOver, drawPaused, drawCountdown, drawTutorialOverlay, drawSteerHints, drawCombo, drawShieldMsg,
   drawRampageMeter, drawSandwichCombo, drawShareCard, SHARE_CARD_W, SHARE_CARD_H,
   drawExplosion, drawPerfect, drawLastLifePulse, drawBiomeBanner, drawZoneFlash,
+  drawOncomingWarning,
 } from "./hud.js";
 import { registerServiceWorker, initInstallBanner, initInstallButton, initInstallSplash, setInstallButtonVisible } from "./pwa.js";
 import {
@@ -135,6 +136,7 @@ const g = {
   explosion: 0,         // seconds left on the barrel-impact explosion FX
   hitStop: 0,           // seconds of gameplay FREEZE left (micro impact-pause on a tight shave)
   perfectTimer: 0,      // seconds left on the "PERFECT!" micro-pop over the car
+  lastOncomingWarn: 0,  // previous frame's wrong-way distance (edge-triggers the horn)
   heartTimer: 0,        // countdown to the next heartbeat thump (last-life tension)
   goTime: 0,            // seconds on the game-over screen (guards the tap-to-retry)
   biome: null,          // current biome (city/tunnel/coast/bridge) — drives road palette + scenery
@@ -382,6 +384,7 @@ function newRaceSetup() {
   g.hitStop = 0;
   g.perfectTimer = 0;
   g.heartTimer = 0;
+  g.lastOncomingWarn = 0;
 }
 
 // Duration (seconds) of the barrel-impact explosion FX.
@@ -806,6 +809,7 @@ function updateRace(dt) {
       // rampage meter is armed and near misses bank toward the next one.
       if (g.rampageCooldown > 0) g.rampageCooldown -= 1;
     },
+
     onNearMiss: (tightness) => {
       // Two tiers. Below comboKmh (100): every close shave still pays a flat
       // bonus with a discreet "NEAR MISS" flash — but no multiplier. At
@@ -857,7 +861,13 @@ function updateRace(dt) {
         sfxPickup();
       }
     },
-  }, clearDist);
+  }, clearDist, g.topSpeedKmh >= RACE.oncomingFromKmh);
+
+  // Wrong-way alert — one horn per approaching car, the moment it comes into
+  // warning range (g.traffic.oncomingWarn is the distance to the nearest one).
+  const warn = g.traffic.oncomingWarn || 0;
+  if (warn > 0 && g.lastOncomingWarn <= 0) sfxHorn();
+  g.lastOncomingWarn = warn;
 
   // ── Rampage + post-rampage shockwave ──
   if (g.player.rampage > 0) {
@@ -1163,6 +1173,7 @@ function render() {
     });
     if (g.perfectTimer > 0) drawPerfect(ctx, g.perfectTimer, (W / 2 + g.map.biasX + g.player.x) | 0);
     if (g.biomeBannerTimer > 0) drawBiomeBanner(ctx, g.biomeName, g.biomeBannerTimer);
+    if (g.state === STATES.RACE) drawOncomingWarning(ctx, g.traffic.oncomingWarn, RACE.oncomingWarnDist);
     if (g.shieldMsgTimer > 0) drawShieldMsg(ctx, g.shieldMsg);
     drawHud(ctx, {
       score: g.scoreState.score,

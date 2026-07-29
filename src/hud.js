@@ -788,6 +788,24 @@ export function drawPerfect(ctx, timer, cx) {
   textOutlined(ctx, label, x, y, blink ? 1 : 5, 0, 1);
 }
 
+// WRONG-WAY WARNING — a red hazard bar that lights up while a car is coming the
+// other way, flashing faster the closer it gets. Sits at the top of the play
+// area (clear of the combo banner). Static screen-space: blink + colour only.
+export function drawOncomingWarning(ctx, dist, maxDist) {
+  if (!dist || dist <= 0) return;
+  const near = 1 - Math.max(0, Math.min(1, dist / (maxDist || 150)));   // 0 far → 1 close
+  const period = 260 - near * 170;                                       // 260ms → 90ms
+  if (Math.floor(performance.now() / period) % 2 !== 0) return;
+  const label = "!! WRONG WAY !!";
+  const w = label.length * 4 - 1;
+  const x = ((W - w) / 2) | 0;
+  const y = 11;
+  rect(ctx, x - 5, y - 2, w + 10, 11, 0);                 // dark plate
+  rect(ctx, x - 5, y - 2, w + 10, 1, 6);                  // red trim
+  rect(ctx, x - 5, y + 8, w + 10, 1, 6);
+  textOutlinedCentered(ctx, label, y + 1, near > 0.6 ? 1 : 6, 0, 1);
+}
+
 // BIOME landmark banner — a transient "▷ TUNNEL ◁" announcement when the scene
 // changes, so each new zone reads as a "how far did I get" milestone. Fades over
 // its ~2s life; drawn just under the top HUD strip so it clears the play focus.

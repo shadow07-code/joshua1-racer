@@ -162,6 +162,24 @@ export const RACE = {
   // Biome cycling: the scene changes (city → tunnel → coast → bridge) every this
   // many seconds of a run — visual freshness + "how far did I get" landmarks.
   biomePeriodSec: 50,
+  // ── WRONG-WAY (oncoming) traffic ──
+  // A lone car comes the other way down a lane well clear of the racing line.
+  // It closes at roughly double the speed of overtaken traffic, so it must be
+  // read EARLY — the main answer to "the player is never truly cornered".
+  // Gated so it only shows up once the run has real pace.
+  oncomingFromKmh: 120,
+  oncomingSpacingMin: 420,   // metres of road between wrong-way cars
+  oncomingSpacingMax: 900,
+  oncomingSpeedMul: 0.42,    // × cruiseSpeed, TOWARD the player
+  oncomingWarnDist: 150,     // metres out at which the warning banner lights up
+  // ── CLOSING GAPS ──
+  // Occasionally the two cars flanking the open lane squeeze toward each other.
+  // They hold station until the player is within closingTriggerZ, so the squeeze
+  // is a TIMING test (commit early or bail), never an unwinnable spawn. The
+  // adjacent flow lane always stays open as the escape hatch.
+  closingRowChance: 0.16,
+  closingTriggerZ: 58,       // metres ahead at which the squeeze engages
+  closingRate: 7,            // px/s each flanker moves inward
 };
 
 // Spawn rates and traffic-row spacing.

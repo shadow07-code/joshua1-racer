@@ -717,6 +717,23 @@ export function sfxHeartbeat() {
   thump(t + 0.19, 68, 0.20);     // dub — lower + softer
 }
 
+// WRONG-WAY HORN — a blaring two-tone car horn (a dissonant fifth, the classic
+// "get out of the way" sound) fired once when a wrong-way car comes into range.
+export function sfxHorn() {
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  [370, 466].forEach((f) => {
+    const o = ctx.createOscillator(); o.type = "sawtooth"; o.frequency.value = f;
+    const g = ctx.createGain(); g.gain.value = 0;
+    g.gain.linearRampToValueAtTime(0.10, t + 0.03);
+    g.gain.setValueAtTime(0.10, t + 0.34);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.48);
+    const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 1500;
+    o.connect(lp); lp.connect(g); g.connect(sfxGain);
+    o.start(t); o.stop(t + 0.5);
+  });
+}
+
 // COIN grab — a bright, quick two-note "ching" (E6 → B6), the classic pickup
 // blip. Kept light so a fast run of coins layers pleasantly instead of blaring.
 export function sfxCoin() {
