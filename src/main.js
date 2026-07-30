@@ -36,7 +36,6 @@ import {
   drawGameOver, drawPaused, drawCountdown, drawTutorialOverlay, drawSteerHints, drawCombo, drawShieldMsg,
   drawRampageMeter, drawSandwichCombo, drawShareCard, SHARE_CARD_W, SHARE_CARD_H,
   drawExplosion, drawPerfect, drawLastLifePulse, drawBiomeBanner, drawZoneFlash,
-  drawOncomingWarning,
 } from "./hud.js";
 import { registerServiceWorker, initInstallBanner, initInstallButton, initInstallSplash, setInstallButtonVisible } from "./pwa.js";
 import {
@@ -863,11 +862,11 @@ function updateRace(dt) {
     },
   }, clearDist, g.topSpeedKmh >= RACE.oncomingFromKmh);
 
-  // Wrong-way alert — one horn per approaching car, the moment it comes into
-  // warning range (g.traffic.oncomingWarn is the distance to the nearest one).
-  const warn = g.traffic.oncomingWarn || 0;
-  if (warn > 0 && g.lastOncomingWarn <= 0) sfxHorn();
-  g.lastOncomingWarn = warn;
+  // Wrong-way horn — one blast per car, fired as it bears down (no HUD warning:
+  // the whole point is that it ambushes you). Edge-triggered off the distance.
+  const nearOncoming = g.traffic.oncomingNear || 0;
+  if (nearOncoming > 0 && g.lastOncomingWarn <= 0) sfxHorn();
+  g.lastOncomingWarn = nearOncoming;
 
   // ── Rampage + post-rampage shockwave ──
   if (g.player.rampage > 0) {
@@ -1173,7 +1172,6 @@ function render() {
     });
     if (g.perfectTimer > 0) drawPerfect(ctx, g.perfectTimer, (W / 2 + g.map.biasX + g.player.x) | 0);
     if (g.biomeBannerTimer > 0) drawBiomeBanner(ctx, g.biomeName, g.biomeBannerTimer);
-    if (g.state === STATES.RACE) drawOncomingWarning(ctx, g.traffic.oncomingWarn, RACE.oncomingWarnDist);
     if (g.shieldMsgTimer > 0) drawShieldMsg(ctx, g.shieldMsg);
     drawHud(ctx, {
       score: g.scoreState.score,

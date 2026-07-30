@@ -171,7 +171,10 @@ export const RACE = {
   oncomingSpacingMin: 420,   // metres of road between wrong-way cars
   oncomingSpacingMax: 900,
   oncomingSpeedMul: 0.42,    // × cruiseSpeed, TOWARD the player
-  oncomingWarnDist: 150,     // metres out at which the warning banner lights up
+  // Metres out at which the wrong-way car sounds its horn. Deliberately SHORT:
+  // there's no HUD warning — the car ambushes you, and the horn lands as it
+  // bears down (~0.8s out at racing speed), so it's a shock, not an alert.
+  oncomingHornDist: 70,
   // ── CLOSING GAPS ──
   // Occasionally the two cars flanking the open lane squeeze toward each other.
   // They hold station until the player is within closingTriggerZ, so the squeeze

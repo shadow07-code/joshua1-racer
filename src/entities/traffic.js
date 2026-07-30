@@ -29,7 +29,7 @@ export function makeTrafficSystem(opts = {}) {
     passedCount: 0,
     rowsSpawned: 0,
     nextOncomingZ: null,         // z of the next wrong-way car (null until unlocked)
-    oncomingWarn: 0,             // metres to the nearest approaching wrong-way car (0 = none)
+    oncomingNear: 0,             // metres to the nearest wrong-way car inside horn range (0 = none)
   };
 }
 
@@ -303,7 +303,7 @@ export function updateTraffic(sys, dt, playerZ, map, cbs, clearAheadDist = 0, al
   }
 
   const halfRoad = map.roadHalfWidth;
-  let warnDist = 0;                   // nearest approaching wrong-way car (metres)
+  let nearDist = 0;                   // nearest wrong-way car inside horn range (metres)
   for (const c of sys.list) {
     // Smashed cars are knocked off the road: they tumble sideways/back and no
     // longer drive, change lanes, get "passed", or collide.
@@ -314,10 +314,12 @@ export function updateTraffic(sys, dt, playerZ, map, cbs, clearAheadDist = 0, al
     }
     c.z += c.speed * dt;
 
-    // Wrong-way car: track the nearest one still ahead, for the HUD warning.
+    // Wrong-way car: note the nearest one still ahead and inside horn range, so
+    // main.js can blare the horn once as it bears down (no HUD warning at all —
+    // it's meant to ambush).
     if (c.oncoming) {
       const d = c.z - playerZ;
-      if (d > 0 && d < RACE.oncomingWarnDist && (warnDist === 0 || d < warnDist)) warnDist = d;
+      if (d > 0 && d < RACE.oncomingHornDist && (nearDist === 0 || d < nearDist)) nearDist = d;
     }
 
     // ── CLOSING squeeze ── The flankers hold station until the player is inside
@@ -384,7 +386,7 @@ export function updateTraffic(sys, dt, playerZ, map, cbs, clearAheadDist = 0, al
     }
   }
 
-  sys.oncomingWarn = warnDist;
+  sys.oncomingNear = nearDist;
 
   // Keep traffic from stacking: cars follow (slow for) the car ahead in their
   // lane and never overlap it — except for a rare bump.
