@@ -1,6 +1,6 @@
 // Unified input — keyboard + canvas-touch + on-screen steer buttons.
 // No brake handling — game is auto-accelerate.
-import { KEYS } from "./config.js";
+import { KEYS, PHYS } from "./config.js";
 
 const state = {
   steer: 0,
@@ -11,6 +11,23 @@ const state = {
 const heldKeys = new Set();
 const touchPoints = new Map(); // identifier -> { x, y, side }
 const btnHeld = { L: false, R: false }; // explicit on-screen-button state
+
+// ── DASH double-tap detection ────────────────────────────────────────────────
+// Two quick presses on the SAME side (steer pad, screen half, or arrow key)
+// queue a "DashL"/"DashR" press. Tracked in one place so every control scheme
+// gets the gesture for free.
+let lastTapSide = null, lastTapAt = 0;
+function noteTap(side) {
+  if (!side) return;
+  const now = performance.now();
+  if (side === lastTapSide && now - lastTapAt < (PHYS.dashWindowMs || 320)) {
+    state.pressed.add(side === "L" ? "DashL" : "DashR");
+    lastTapSide = null;                 // consumed — a 3rd tap starts a new pair
+    return;
+  }
+  lastTapSide = side;
+  lastTapAt = now;
+}
 
 function recompute() {
   let s = 0;
@@ -41,6 +58,9 @@ window.addEventListener("keydown", (e) => {
   if (!heldKeys.has(e.key)) {
     heldKeys.add(e.key);
     state.pressed.add(e.key);
+    // Double-tapping an arrow / A / D dashes too (keyboard parity with touch).
+    if (KEYS.left.includes(e.key)) noteTap("L");
+    else if (KEYS.right.includes(e.key)) noteTap("R");
   }
   recompute();
 }, { passive: false });
@@ -74,7 +94,9 @@ function bindPointer(canvas) {
   canvas.addEventListener("touchstart", (e) => {
     e.preventDefault();
     for (const t of e.changedTouches) {
-      touchPoints.set(t.identifier, { x: t.clientX, y: t.clientY, side: sideOf(t.clientX, t.clientY) });
+      const side = sideOf(t.clientX, t.clientY);
+      touchPoints.set(t.identifier, { x: t.clientX, y: t.clientY, side });
+      noteTap(side);                     // double-tap a side to DASH
     }
     state.pressed.add("Touch");
     recompute();
@@ -101,7 +123,9 @@ function bindPointer(canvas) {
   canvas.addEventListener("mousedown", (e) => {
     if (e.button !== 0) return;
     mouseDown = true;
-    touchPoints.set(mouseId, { x: e.clientX, y: e.clientY, side: sideOf(e.clientX, e.clientY) });
+    const side = sideOf(e.clientX, e.clientY);
+    touchPoints.set(mouseId, { x: e.clientX, y: e.clientY, side });
+    noteTap(side);
     state.pressed.add("Touch");
     recompute();
   });
@@ -128,6 +152,7 @@ function bindSteerButtons() {
   const press = (side) => {
     btnHeld[side] = true;
     state.pressed.add("Touch");
+    noteTap(side);                       // double-tap the pad to DASH
     recompute();
   };
   const release = (side) => {
@@ -178,4 +203,17 @@ export function consumeAnyPress() {
     return true;
   }
   return false;
+}
+
+// Drop every queued press WITHOUT reporting it. Call this on a state transition
+// so input from the previous screen can't leak into the next one. This is what
+// stops a game-over from auto-retrying: "Touch" is never consumed during a race,
+// so the tap the player was holding when they died would otherwise still be
+// sitting in the queue and instantly trigger the tap-to-retry.
+export function clearPresses() {
+  state.pressed.clear();
+  // Also forget any half-finished double-tap, so the tap that dismissed the last
+  // screen can't pair with the first tap of the new one and fire a stray dash.
+  lastTapSide = null;
+  lastTapAt = 0;
 }

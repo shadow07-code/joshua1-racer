@@ -75,6 +75,15 @@ export const PHYS = {
   // hard left/right and emergency reversals stay responsive. Higher = snappier.
   steerEase: 16,
   steerSpeedFactor: 0.65,
+  // ── DASH ── A committed sidestep: double-tap a side (or double-tap an arrow
+  // key) and the car snaps across roughly a lane. It's the game's SECOND VERB —
+  // steering is a continuous axis, this is a discrete, timed commitment. You
+  // cannot steer while dashing, so it's a real decision, not a free upgrade.
+  dashSpeed: 150,        // px/s lateral while dashing — covers ~1 lane in dashTime
+                         // (~2× normal steering, so it's worth using but never a teleport)
+  dashTime: 0.16,        // seconds the dash lasts
+  dashCooldown: 1.1,     // seconds before another dash is available
+  dashWindowMs: 320,     // max gap between the two taps to count as a double-tap
   carHalfWidth: 5,    // matches the smaller 10×15 player sprite (was 6)
   carHalfHeight: 7,   // was 8
   // Display: top speed shows as 200 KMH; 100 km/h marker used for ramp phase split.
@@ -183,6 +192,13 @@ export const RACE = {
   closingRowChance: 0.16,
   closingTriggerZ: 58,       // metres ahead at which the squeeze engages
   closingRate: 7,            // px/s each flanker moves inward
+  // Minimum gap between hit-stops. At speed, rows arrive every ~0.35s, so an
+  // unthrottled 60ms freeze per tight shave reads as STUTTER instead of impact.
+  // This keeps it a rare accent (the whoosh/PERFECT feedback still fires every time).
+  hitStopCooldown: 0.45,
+  // After a crash the next couple of spawned rows are forced open, so the player
+  // isn't dropped straight back into the pattern that just killed them.
+  crashBreatherRows: 2,
 };
 
 // Spawn rates and traffic-row spacing.

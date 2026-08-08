@@ -6,13 +6,13 @@
 import { W, H, PHYS, SPAWN, RACE, SCORE, PLAYER_Y } from "./config.js";
 import { getCtx, clear, rect } from "./render.js";
 import { MAPS, MAP_LIST, DIFFICULTY_LIST } from "./maps.js";
-import { initInput, getInput, consumePress, consumeAnyPress } from "./input.js";
+import { initInput, getInput, consumePress, consumeAnyPress, clearPresses } from "./input.js";
 import {
   initAudio, resumeAudio, suspendAudio, startMusic, stopMusic, setMusicIntensity, setMusicTempoFactor,
   playFlourish,
   startEngine, setEngine, stopEngine, setEngineRampage, setEngineStrain, getEngineStyle, setEngineStyle,
   sfxAccelAccent, sfxBrake, sfxPickup, sfxCrash, sfxExplosion, sfxBump, sfxBarrelDrop, sfxCombo,
-  sfxWhoosh, sfxPerfect, sfxHeartbeat, sfxCoin, sfxHorn,
+  sfxWhoosh, sfxPerfect, sfxHeartbeat, sfxCoin, sfxHorn, sfxDash,
   sfxShieldUp, sfxShieldHit, sfxShockwave, sfxRampageCharge, sfxRampageReady, sfxNitrous,
   sfxMenuMove, sfxMenuSelect, sfxFinish, sfxCountdownBeep,
   startHeliSound, stopHeliSound,
@@ -20,7 +20,7 @@ import {
   getMusicTrack, setMusicTrack,
 } from "./audio.js";
 import { drawRoad, drawDistanceHaze, drawTimeOfDayTint, distToY, biomeAt } from "./road.js";
-import { makePlayer, updatePlayer, drawPlayer, playerBox, applyCollisionLoss } from "./entities/player.js";
+import { makePlayer, updatePlayer, drawPlayer, playerBox, applyCollisionLoss, startDash } from "./entities/player.js";
 import { makeTrafficSystem, updateTraffic, drawTraffic, drawCoins, checkCoinGrab, checkTrafficHit, prepopulateTraffic, smashCar } from "./entities/traffic.js";
 import { makeOilSystem, updateOil, drawOilSpills, checkOilHit } from "./entities/oilspills.js";
 import { makePickupSystem, updatePickups, drawPickups, checkPickup } from "./entities/pickups.js";
@@ -51,6 +51,7 @@ import {
   CARS, addCoins, claimUnlocks, getWallet, nextLocked,
   getSelectedId, setSelectedId, ownedIds, carSprite,
 } from "./garage.js";
+import { makeGhostRecorder, recordGhost, saveGhost, loadGhost, drawGhost } from "./ghost.js";
 
 const canvas = document.getElementById("game");
 const ctx = getCtx(canvas);
@@ -100,6 +101,8 @@ const g = {
   oils: null,
   pickups: null,
   scoreState: makeScoreState(),
+  ghostRec: null,        // this run's recording (saved if it becomes the new best)
+  ghost: null,           // the personal-best track being replayed, or null
   isNewHi: false,
   wallet: 0,             // banked coin balance after this run
   unlocked: [],          // cars this run's coins just unlocked (game-over celebration)
@@ -134,6 +137,7 @@ const g = {
   shieldMsgTimer: 0,
   explosion: 0,         // seconds left on the barrel-impact explosion FX
   hitStop: 0,           // seconds of gameplay FREEZE left (micro impact-pause on a tight shave)
+  hitStopCool: 0,       // lockout so hit-stops stay an accent, not a stutter
   perfectTimer: 0,      // seconds left on the "PERFECT!" micro-pop over the car
   lastOncomingWarn: 0,  // previous frame's wrong-way distance (edge-triggers the horn)
   heartTimer: 0,        // countdown to the next heartbeat thump (last-life tension)
@@ -304,6 +308,7 @@ function pauseGame() {
   if (g.state !== STATES.RACE) return;
   g.prevState = g.state;
   g.state = STATES.PAUSED;
+  clearPresses();          // don't let race input leak in and instantly resume
   stopMusic();
   stopAllLoopingSfx();
   suspendAudio();
@@ -345,6 +350,9 @@ function newRaceSetup() {
   g.oils = makeOilSystem(g.map);
   g.pickups = makePickupSystem();
   g.cops = makeCopsSystem();
+  // Ghost: record this run, and replay the personal best recorded for this map.
+  g.ghostRec = makeGhostRecorder();
+  g.ghost = loadGhost(g.map.key, g.difficulty);
   g.scenery = makeScenerySystem();
   for (let i = 0; i < 25; i++) updateScenery(g.scenery, 0, g.map, 0.016, SPAWN.sceneryPerMeter);
   prepopulateTraffic(g.traffic, g.map, 500);
@@ -381,6 +389,7 @@ function newRaceSetup() {
   g.shieldMsgTimer = 0;
   g.explosion = 0;
   g.hitStop = 0;
+  g.hitStopCool = 0;
   g.perfectTimer = 0;
   g.heartTimer = 0;
   g.lastOncomingWarn = 0;
@@ -407,6 +416,12 @@ function takeHit(_invulnSec) {
   g.sandwichCombo = 0; g.sandwichComboTimer = 0;  // ...and the sandwich multiplier
   g.rampageMeter = 0;                   // ...and dumps the banked rampage meter
   g.rampageArmed = false;               // ...including an ARMED one (crash = lost)
+  // RECOVERY BEAT: force the next couple of spawned rows open so the player gets
+  // a moment to regather instead of being fed straight back into the phrase that
+  // just killed them (which is how one crash chains into losing every life).
+  if (g.traffic) {
+    g.traffic.phrase = { type: "breather", left: RACE.crashBreatherRows, dir: 1 };
+  }
   if (g.player.lives <= 0) { endRace("GAME OVER"); return true; }
   return false;
 }
@@ -468,9 +483,16 @@ function endRace(reason) {
   // game-over screen can show how much this run beat it by ("NEW BEST +X").
   const prevHi = Math.floor(g.scoreState.hi || 0);
   g.isNewHi = finalizeScore(g.scoreState);
+  // A new personal best becomes the ghost everyone races from here on.
+  if (g.isNewHi) saveGhost(g.ghostRec, g.map.key, g.difficulty);
   g.bestDelta = (g.isNewHi && prevHi > 0) ? Math.max(0, Math.floor(g.scoreState.score) - prevHi) : 0;
   g.rankInfo = null;   // "RANKING…" until the submit returns the standing
   g.goTime = 0;        // guards the tap-to-retry so the fatal touch can't insta-restart
+  // Drop any input queued during the race. "Touch" is never consumed while
+  // racing, so the tap the player was holding when they crashed would otherwise
+  // still be queued and would auto-retry the moment the goTime guard expires —
+  // the "game over screen skipped itself" bug.
+  clearPresses();
   // ── Bank this run's coins ── Score dies with you; coins DON'T. Even a short
   // run pays into the wallet, so every attempt advances the next unlock. Any
   // car the new balance covers is claimed right here for a game-over payoff.
@@ -741,7 +763,15 @@ function updateRace(dt) {
     unleashRampage();
   }
 
+  // DASH — double-tapping a side queues DashL/DashR. Consume both every frame so
+  // a stale one can't fire later, but only act on the first.
+  const dashL = consumePress("DashL"), dashR = consumePress("DashR");
+  if (dashL || dashR) {
+    if (startDash(g.player, dashL ? -1 : 1)) sfxDash();
+  }
+
   g.raceTime += dt;
+  recordGhost(g.ghostRec, g.raceTime, g.player);   // track this run for the ghost
 
   updatePlayer(g.player, dt, input, g.map, { onAccelAccent: sfxAccelAccent, onFenceBump: sfxBump });
 
@@ -824,7 +854,12 @@ function updateRace(dt) {
       // pixel-close one also pops "PERFECT!" over the car with a crystal ting.
       if (t >= 0.45) {
         sfxWhoosh(t);
-        g.hitStop = Math.max(g.hitStop, 0.06);
+        // The freeze is THROTTLED (the whoosh isn't): back-to-back tight shaves
+        // would otherwise stutter the whole run instead of punctuating it.
+        if (g.hitStopCool <= 0) {
+          g.hitStop = Math.max(g.hitStop, 0.06);
+          g.hitStopCool = RACE.hitStopCooldown;
+        }
       }
       if (t >= 0.6) {
         g.perfectTimer = 0.5;
@@ -903,6 +938,7 @@ function updateRace(dt) {
   if (g.sandwichComboTimer > 0) g.sandwichComboTimer = Math.max(0, g.sandwichComboTimer - dt);
   if (g.explosion > 0) g.explosion = Math.max(0, g.explosion - dt);
   if (g.perfectTimer > 0) g.perfectTimer = Math.max(0, g.perfectTimer - dt);
+  if (g.hitStopCool > 0) g.hitStopCool = Math.max(0, g.hitStopCool - dt);
 
   // ── LAST-LIFE TENSION ── On the final life the engine strains (a detune wobble)
   // and a heartbeat thumps ~once a second, so the near-death moment feels urgent.
@@ -1050,6 +1086,8 @@ function drawWorld() {
   drawOilSpills(ctx, g.oils, g.map, g.player.z, g.player.x);
   drawSmoke(ctx, g.map, g.player.z, g.player.x, g.player);
   drawTraffic(ctx, g.traffic, g.map, g.player.z, g.player.x);
+  // Your personal-best self, at the position it held at this point in the run.
+  if (g.ghost) drawGhost(ctx, g.ghost, g.raceTime, g.map, g.player.z, g.player.x);
   drawCoins(ctx, g.traffic, g.map, g.player.z, g.player.x);
   drawPickups(ctx, g.pickups, g.map, g.player.z, g.player.x);
   drawCops(ctx, g.cops, g.map, g.player.z, g.player.x);

@@ -682,7 +682,7 @@ export function sfxCombo(level) {
 // away, like traffic ripping past an open cockpit. `tight` 0..1 (1 = the
 // closest shave) makes it brighter and louder, so the risk is audible.
 export function sfxWhoosh(tight = 0.5) {
-  if (!ctx) return;
+  if (!ctx || !throttle("whoosh", 110)) return;
   const t = ctx.currentTime;
   const k = Math.max(0, Math.min(1, tight));
   const src = ctx.createBufferSource(); src.buffer = getNoiseBuf();
@@ -717,6 +717,18 @@ export function sfxHeartbeat() {
   thump(t + 0.19, 68, 0.20);     // dub — lower + softer
 }
 
+// Rate-limiter for the spammy one-shots. Several near-misses can resolve in the
+// SAME frame (a sandwich is two at once), and each SFX builds fresh oscillator /
+// buffer nodes — stacking them muddies the mix and causes crackle on low-end
+// phones. Returns true if this sound is allowed to play now.
+const _lastPlay = Object.create(null);
+function throttle(key, minMs) {
+  const now = (ctx && ctx.currentTime * 1000) || performance.now();
+  if (_lastPlay[key] != null && now - _lastPlay[key] < minMs) return false;
+  _lastPlay[key] = now;
+  return true;
+}
+
 // WRONG-WAY HORN — a blaring two-tone car horn (a dissonant fifth, the classic
 // "get out of the way" sound) fired once when a wrong-way car comes into range.
 export function sfxHorn() {
@@ -737,7 +749,7 @@ export function sfxHorn() {
 // COIN grab — a bright, quick two-note "ching" (E6 → B6), the classic pickup
 // blip. Kept light so a fast run of coins layers pleasantly instead of blaring.
 export function sfxCoin() {
-  if (!ctx) return;
+  if (!ctx || !throttle("coin", 70)) return;
   const t = ctx.currentTime;
   [[1319, 0], [1976, 0.045]].forEach(([f, off]) => {
     const o = ctx.createOscillator(); o.type = "square"; o.frequency.value = f;
@@ -749,10 +761,35 @@ export function sfxCoin() {
   });
 }
 
+// DASH — a short, sharp filtered-noise swipe with a rising tone: the sound of
+// the car snapping sideways. Punchier and drier than the near-miss whoosh so the
+// two never blur together.
+export function sfxDash() {
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  const src = ctx.createBufferSource(); src.buffer = getNoiseBuf();
+  const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.Q.value = 2.2;
+  bp.frequency.setValueAtTime(900, t);
+  bp.frequency.exponentialRampToValueAtTime(3600, t + 0.10);
+  const g = ctx.createGain(); g.gain.value = 0;
+  g.gain.linearRampToValueAtTime(0.22, t + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+  src.connect(bp); bp.connect(g); g.connect(sfxGain);
+  src.start(t); src.stop(t + 0.16);
+  const o = ctx.createOscillator(); o.type = "square";
+  o.frequency.setValueAtTime(520, t);
+  o.frequency.exponentialRampToValueAtTime(1200, t + 0.09);
+  const og = ctx.createGain(); og.gain.value = 0;
+  og.gain.linearRampToValueAtTime(0.09, t + 0.01);
+  og.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+  o.connect(og); og.connect(sfxGain);
+  o.start(t); o.stop(t + 0.14);
+}
+
 // PERFECT shave — a tiny two-note crystal "ting" layered over the whoosh when a
 // pass is pixel-close. Short and high so it cuts through without clutter.
 export function sfxPerfect() {
-  if (!ctx) return;
+  if (!ctx || !throttle("perfect", 160)) return;
   const t = ctx.currentTime;
   [[1568, 0], [2093, 0.05]].forEach(([f, off]) => {
     const o = ctx.createOscillator(); o.type = "sine"; o.frequency.value = f;
