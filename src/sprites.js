@@ -22,6 +22,19 @@ export function flipSpriteY(spr) {
   return spr.slice().reverse();
 }
 
+// ── Helper: "ghost" variant — a checkerboard-masked copy of a sprite ─────────
+// Knocks out every other pixel so the sprite reads as translucent while staying
+// inside the flat 8-bit palette (no real alpha). Used for the personal-best
+// ghost car. Cached, since it's rebuilt per frame otherwise.
+const _ghostCache = new Map();
+export function ghostSprite(spr) {
+  let g = _ghostCache.get(spr);
+  if (g) return g;
+  g = spr.map((row, y) => row.map((c, x) => ((x + y) & 1) ? -1 : c));
+  _ghostCache.set(spr, g);
+  return g;
+}
+
 // ── Helper: 1px "lean" variants ───────────────────────────────────────────────
 // Shifts the nose rows one pixel toward the steer/drift direction (and tail
 // rows the opposite way) so a car visibly angles into its lateral movement.

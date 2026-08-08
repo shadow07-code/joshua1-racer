@@ -325,7 +325,7 @@ export function drawTitleScreen(ctx, allTimeBest, world, playerName) {
 
   // ── Control hints (pinned to the bottom edge) ──
   textCentered(ctx, "TAP SIDES OR ARROWS", H - 26, 1, 1);
-  textCentered(ctx, "AUTO GAS  NO BRAKE", H - 16, 21, 1);
+  textCentered(ctx, "DOUBLE TAP TO DASH", H - 16, 5, 1);
   textCentered(ctx, "3 LIVES  DODGE TRAFFIC", H - 8, 14, 1);
 }
 
