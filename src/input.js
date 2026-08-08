@@ -50,14 +50,18 @@ window.addEventListener("keyup", (e) => {
   recompute();
 });
 
-// Only the bottom half of the screen steers — the two bottom quadrants
-// (bottom-left = steer left, bottom-right = steer right). The top half is a
-// neutral "watch the road" zone so high taps don't accidentally steer.
-const STEER_TOP_FRAC = 0.5;
+// The WHOLE canvas steers: tap/hold anywhere on the left half to go left, the
+// right half to go right — top to bottom, no dead zone. (It used to be
+// bottom-half only, which made high taps silently do nothing.) HTML overlays —
+// the ◀▶ pads and the rampage button — sit above the canvas and swallow their
+// own taps, so pressing them never steers. Raise this to re-introduce a neutral
+// band at the top (0 = none, 0.5 = the old bottom-half-only behaviour).
+const STEER_TOP_FRAC = 0;
 
 function bindPointer(canvas) {
-  // Returns "L"/"R" for a touch in the bottom quadrants, or null for a neutral
-  // (top-half) touch. Taps anywhere still count as a menu "Touch" press.
+  // Returns "L"/"R" for the half of the canvas a touch landed on (or null if it
+  // falls in the neutral top band, when one is configured). Taps anywhere still
+  // count as a menu "Touch" press.
   const sideOf = (clientX, clientY) => {
     const rect = canvas.getBoundingClientRect();
     const localY = clientY - rect.top;
@@ -69,11 +73,7 @@ function bindPointer(canvas) {
   canvas.addEventListener("touchstart", (e) => {
     e.preventDefault();
     for (const t of e.changedTouches) {
-      const side = sideOf(t.clientX, t.clientY);
-      touchPoints.set(t.identifier, { x: t.clientX, y: t.clientY, side });
-      // A tap in the NEUTRAL top half is its own gesture ("TouchTop") — it never
-      // steers, so it's free for actions like unleashing an armed rampage.
-      if (side === null) state.pressed.add("TouchTop");
+      touchPoints.set(t.identifier, { x: t.clientX, y: t.clientY, side: sideOf(t.clientX, t.clientY) });
     }
     state.pressed.add("Touch");
     recompute();
@@ -100,9 +100,7 @@ function bindPointer(canvas) {
   canvas.addEventListener("mousedown", (e) => {
     if (e.button !== 0) return;
     mouseDown = true;
-    const side = sideOf(e.clientX, e.clientY);
-    touchPoints.set(mouseId, { x: e.clientX, y: e.clientY, side });
-    if (side === null) state.pressed.add("TouchTop");   // top-half click = the same gesture
+    touchPoints.set(mouseId, { x: e.clientX, y: e.clientY, side: sideOf(e.clientX, e.clientY) });
     state.pressed.add("Touch");
     recompute();
   });

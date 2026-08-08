@@ -734,10 +734,10 @@ function updateRace(dt) {
   if (consumePress("p", "P")) { pauseGame(); return; }
   if (consumePress("m", "M")) { toggleMusic(); }
   if (consumePress("Escape")) { stopMusic(); stopAllLoopingSfx(); g.state = STATES.TITLE; return; }
-  // UNLEASH an armed rampage. Primary control is the hovering red PRESS FOR
-  // RAMPAGE button (pointerdown in initUI wiring); a tap on the neutral top
-  // half of the canvas or Enter on desktop still work as forgiving fallbacks.
-  if (g.rampageArmed && g.player.rampage <= 0 && consumePress("TouchTop", "Enter")) {
+  // UNLEASH an armed rampage. The control is the big red 🔥 button at the bottom
+  // centre (pointerdown, wired near the toolbar buttons); Enter is the desktop
+  // fallback. There's no tap-zone fallback any more — the whole canvas steers.
+  if (g.rampageArmed && g.player.rampage <= 0 && consumePress("Enter")) {
     unleashRampage();
   }
 
