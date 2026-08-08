@@ -50,13 +50,14 @@ window.addEventListener("keyup", (e) => {
   recompute();
 });
 
-// The WHOLE canvas steers: tap/hold anywhere on the left half to go left, the
-// right half to go right — top to bottom, no dead zone. (It used to be
-// bottom-half only, which made high taps silently do nothing.) HTML overlays —
-// the ◀▶ pads and the rampage button — sit above the canvas and swallow their
-// own taps, so pressing them never steers. Raise this to re-introduce a neutral
-// band at the top (0 = none, 0.5 = the old bottom-half-only behaviour).
-const STEER_TOP_FRAC = 0;
+// Steering covers the BOTTOM ~75% of the screen: tap/hold the left or right half
+// anywhere in that band. The TOP 25% is a neutral zone reserved for the fixed
+// controls that live up there — the sound toggles top-right and the pause button
+// top-left — so reaching for them never yanks the car sideways. (It was bottom-
+// half only, which wasted a lot of reachable screen; 0 = no dead zone at all.)
+// HTML overlays (the ◀▶ pads, the rampage button) sit above the canvas and
+// swallow their own taps, so pressing them never steers either.
+const STEER_TOP_FRAC = 0.25;
 
 function bindPointer(canvas) {
   // Returns "L"/"R" for the half of the canvas a touch landed on (or null if it

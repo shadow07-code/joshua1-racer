@@ -173,9 +173,9 @@
       width: 78px;
       height: 78px;
       border-radius: 50%;
-      background: #E40058;                 /* player red */
+      background: #D42D00;                 /* deep fire red */
       color: #fff;
-      border: 4px solid #FC7460;           /* light-red rim */
+      border: 4px solid #FFA424;           /* amber flame rim */
       padding: 0;
       font: inherit;
       font-size: 36px;
@@ -189,17 +189,18 @@
     }
     #btn-rampage.show { display: inline-flex; }
     #btn-rampage:active {
-      background: #FC7460;
+      background: #FF8A14;                 /* flares bright orange on press */
       transform: translateX(-50%) translateY(3px) scale(0.94);
       box-shadow: 0 1px 0 rgba(0, 0, 0, 0.5) !important;
       animation: none;
     }
+    /* Breathes like a flame: deep fire red → bright orange, with a hot glow. */
     @keyframes rampagePulse {
-      0%, 100% { box-shadow: 0 4px 0 rgba(0,0,0,0.5), 0 0 10px 3px rgba(228,0,88,0.55); background: #E40058; }
-      50%      { box-shadow: 0 4px 0 rgba(0,0,0,0.5), 0 0 26px 10px rgba(252,116,96,0.95); background: #FF1A6E; }
+      0%, 100% { box-shadow: 0 4px 0 rgba(0,0,0,0.5), 0 0 10px 3px rgba(212,45,0,0.6);  background: #D42D00; }
+      50%      { box-shadow: 0 4px 0 rgba(0,0,0,0.5), 0 0 26px 10px rgba(255,138,20,0.95); background: #FF5F00; }
     }
     @media (prefers-reduced-motion: reduce) {
-      #btn-rampage { animation: none; box-shadow: 0 4px 0 rgba(0,0,0,0.5), 0 0 18px 6px rgba(228,0,88,0.7); }
+      #btn-rampage { animation: none; box-shadow: 0 4px 0 rgba(0,0,0,0.5), 0 0 18px 6px rgba(255,130,10,0.7); }
     }
 
     /* Pause button — fixed top-left, below the score strip. display is toggled
