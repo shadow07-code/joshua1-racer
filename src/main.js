@@ -12,7 +12,7 @@ import {
   playFlourish,
   startEngine, setEngine, stopEngine, setEngineRampage, setEngineStrain, getEngineStyle, setEngineStyle,
   sfxAccelAccent, sfxBrake, sfxPickup, sfxCrash, sfxExplosion, sfxBump, sfxBarrelDrop, sfxCombo,
-  sfxWhoosh, sfxPerfect, sfxHeartbeat, sfxCoin, sfxHorn, sfxDash,
+  sfxWhoosh, sfxPerfect, sfxHeartbeat, sfxCoin, sfxHorn, sfxDash, sfxEventStart,
   sfxShieldUp, sfxShieldHit, sfxShockwave, sfxRampageCharge, sfxRampageReady, sfxNitrous,
   sfxMenuMove, sfxMenuSelect, sfxFinish, sfxCountdownBeep,
   startHeliSound, stopHeliSound,
@@ -36,6 +36,7 @@ import {
   drawGameOver, drawPaused, drawCountdown, drawTutorialOverlay, drawSteerHints, drawCombo, drawShieldMsg,
   drawRampageMeter, drawSandwichCombo, drawShareCard, SHARE_CARD_W, SHARE_CARD_H,
   drawExplosion, drawPerfect, drawLastLifePulse, drawBiomeBanner, drawZoneFlash,
+  drawEventBanner, drawEventTimer,
 } from "./hud.js";
 import { registerServiceWorker, initInstallBanner, initInstallButton, initInstallSplash, setInstallButtonVisible } from "./pwa.js";
 import {
@@ -52,6 +53,7 @@ import {
   getSelectedId, setSelectedId, ownedIds, carSprite,
 } from "./garage.js";
 import { makeGhostRecorder, recordGhost, saveGhost, loadGhost, drawGhost } from "./ghost.js";
+import { makeEventDirector, updateEvents, failEvent } from "./events.js";
 
 const canvas = document.getElementById("game");
 const ctx = getCtx(canvas);
@@ -103,6 +105,7 @@ const g = {
   scoreState: makeScoreState(),
   ghostRec: null,        // this run's recording (saved if it becomes the new best)
   ghost: null,           // the personal-best track being replayed, or null
+  events: null,          // in-run EVENT director (RUSH HOUR / CONVOY / WRONG WAY)
   isNewHi: false,
   wallet: 0,             // banked coin balance after this run
   unlocked: [],          // cars this run's coins just unlocked (game-over celebration)
@@ -353,6 +356,7 @@ function newRaceSetup() {
   // Ghost: record this run, and replay the personal best recorded for this map.
   g.ghostRec = makeGhostRecorder();
   g.ghost = loadGhost(g.map.key, g.difficulty);
+  g.events = makeEventDirector();
   g.scenery = makeScenerySystem();
   for (let i = 0; i < 25; i++) updateScenery(g.scenery, 0, g.map, 0.016, SPAWN.sceneryPerMeter);
   prepopulateTraffic(g.traffic, g.map, 500);
@@ -422,6 +426,7 @@ function takeHit(_invulnSec) {
   if (g.traffic) {
     g.traffic.phrase = { type: "breather", left: RACE.crashBreatherRows, dir: 1 };
   }
+  failEvent(g.events);                  // crashing forfeits the current event's payout
   if (g.player.lives <= 0) { endRace("GAME OVER"); return true; }
   return false;
 }
@@ -813,8 +818,33 @@ function updateRace(dt) {
   // base on a slow cycle (surge → breather → surge) so difficulty isn't monotonic.
   // (Doesn't touch the gap-lane logic, so every row stays threadable.)
   const wave = 1 + RACE.densityWaveAmp * Math.sin(g.raceTime * (2 * Math.PI / RACE.densityWavePeriod));
-  g.traffic.rowGapZ = (baseRowGapForMap(g.map) / g.densityMul) * wave;
-  g.traffic.densityMul = g.densityMul;
+
+  // ── IN-RUN EVENTS ── Fire / expire the current set-piece, then let it
+  // re-weight the systems below (density, traffic pool, oncoming rate).
+  const sig = updateEvents(g.events, dt, g.raceTime, g.topSpeedKmh);
+  if (sig && sig.started) {
+    sfxEventStart();
+  } else if (sig && sig.ended) {
+    const ev = sig.ended;
+    if (sig.failed) {
+      // Crashed during it — the payout is for getting through CLEAN.
+      g.events.clearMsg = "EVENT FAILED";
+      g.events.clearIdx = 7;
+    } else {
+      g.scoreState.score += ev.score;
+      g.coins += ev.coins;
+      g.events.clearMsg = "CLEARED +" + ev.score;
+      g.events.clearIdx = 5;
+      sfxFinish();
+    }
+    g.events.clearT = 1.8;
+  }
+  const ev = g.events.active;
+  g.traffic.event = ev;                          // traffic reads pool / phrase / oncoming rate
+  const evDensity = (ev && ev.density) || 1;     // RUSH HOUR packs the road
+  const effDensity = g.densityMul * evDensity;
+  g.traffic.rowGapZ = (baseRowGapForMap(g.map) / effDensity) * wave;
+  g.traffic.densityMul = effDensity;
 
   // After a rampage, keep the near road ahead clear for a few seconds.
   const clearDist = g.player.rampageClear > 0 ? RACE.rampageClearDist : 0;
@@ -927,7 +957,10 @@ function updateRace(dt) {
 
   // Combo decay — lapse the streak if you go too long without a near-miss.
   // A lapsed chain also dumps the banked rampage meter (it rewards UNBROKEN runs).
-  if (g.comboTimer > 0) {
+  // CONVOY holds your streak open (its reward for a pure-slalom stretch), so the
+  // timer only drains outside a combo-safe event.
+  const comboSafe = !!(g.events.active && g.events.active.comboSafe);
+  if (g.comboTimer > 0 && !comboSafe) {
     g.comboTimer -= dt;
     if (g.comboTimer <= 0) { g.combo = 0; g.rampageMeter = 0; g.sandwichCombo = 0; }
   }
@@ -1210,6 +1243,15 @@ function render() {
     });
     if (g.perfectTimer > 0) drawPerfect(ctx, g.perfectTimer, (W / 2 + g.map.biasX + g.player.x) | 0);
     if (g.biomeBannerTimer > 0) drawBiomeBanner(ctx, g.biomeName, g.biomeBannerTimer);
+    // Event call-out, payout line, and the draining progress bar while one runs.
+    if (g.events.bannerT > 0 && g.events.active) {
+      drawEventBanner(ctx, g.events.active.name, g.events.bannerT, g.events.active.idx);
+    } else if (g.events.clearT > 0) {
+      drawEventBanner(ctx, g.events.clearMsg, g.events.clearT, g.events.clearIdx);
+    }
+    if (g.events.active) {
+      drawEventTimer(ctx, g.events.timeLeft / g.events.total, g.events.active.idx);
+    }
     if (g.shieldMsgTimer > 0) drawShieldMsg(ctx, g.shieldMsg);
     drawHud(ctx, {
       score: g.scoreState.score,

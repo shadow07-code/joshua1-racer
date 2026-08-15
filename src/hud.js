@@ -792,6 +792,30 @@ export function drawPerfect(ctx, timer, cx) {
 // only tells are the car itself: blazing headlights, a blinking hazard bar, and
 // its horn once it's nearly on top of you.)
 
+// EVENT announcement — a big centred call-out when a set-piece starts, and the
+// payout line when you clear one. Blinks, sits well clear of the top HUD, and is
+// gone in ~2s. Static screen-space text (colour + blink only).
+export function drawEventBanner(ctx, label, timer, idx) {
+  if (timer <= 0 || !label) return;
+  const blink = Math.floor(performance.now() / 110) % 2 === 0;
+  const y = (H * 0.30) | 0;
+  const w = label.length * 8 - 2;                    // scale-2 text width
+  const x = ((W - w) / 2) | 0;
+  rect(ctx, x - 6, y - 4, w + 12, 18, 0);            // dark plate
+  rect(ctx, x - 6, y - 4, w + 12, 1, idx);           // trim in the event's colour
+  rect(ctx, x - 6, y + 13, w + 12, 1, idx);
+  textOutlinedCentered(ctx, label, y, blink ? 1 : idx, 0, 2);
+}
+
+// EVENT progress — a slim bar tucked directly under the score strip that drains
+// over the event's life, so you always know one is running and roughly how much
+// is left. No words (the announcement already named it), so the screen stays clean.
+export function drawEventTimer(ctx, frac, idx) {
+  const f = Math.max(0, Math.min(1, frac));
+  rect(ctx, 0, 9, W, 2, 4);                          // track
+  rect(ctx, 0, 9, (W * f) | 0, 2, idx);              // remaining
+}
+
 // BIOME landmark banner — a transient "▷ TUNNEL ◁" announcement when the scene
 // changes, so each new zone reads as a "how far did I get" milestone. Fades over
 // its ~2s life; drawn just under the top HUD strip so it clears the play focus.

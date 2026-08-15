@@ -192,6 +192,13 @@ export const RACE = {
   closingRowChance: 0.16,
   closingTriggerZ: 58,       // metres ahead at which the squeeze engages
   closingRate: 7,            // px/s each flanker moves inward
+  // ── IN-RUN EVENTS ── Named, time-boxed set-pieces (RUSH HOUR / CONVOY /
+  // WRONG WAY) that give a run an arc instead of a flat density ramp. Each
+  // re-weights systems that already exist, announces itself, and pays out if
+  // you get through it without crashing.
+  eventFirstAt: 32,      // seconds before the first event of a run
+  eventGapMin: 30,       // quiet stretch between events
+  eventGapMax: 44,
   // Minimum gap between hit-stops. At speed, rows arrive every ~0.35s, so an
   // unthrottled 60ms freeze per tight shave reads as STUTTER instead of impact.
   // This keeps it a rare accent (the whoosh/PERFECT feedback still fires every time).

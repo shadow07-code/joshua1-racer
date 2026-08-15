@@ -8,7 +8,7 @@
 import { PHYS, RACE } from "../config.js";
 import { project } from "../road.js";
 import { drawSpriteNN, groundShadow, rect } from "../render.js";
-import { TRAFFIC_SKINS, ONCOMING_SKINS, oncomingSkin, SPR_COIN } from "../sprites.js";
+import { TRAFFIC_SKINS, ONCOMING_SKINS, TRUCK_SKINS, oncomingSkin, SPR_COIN } from "../sprites.js";
 
 const LANES = 5;
 
@@ -28,6 +28,8 @@ export function makeTrafficSystem(opts = {}) {
     densityMul: 1.0,             // current difficulty density (set by main.js)
     passedCount: 0,
     rowsSpawned: 0,
+    event: null,                 // active in-run EVENT (set by main.js) — narrows
+                                 // the skin pool, forces a phrase, alters oncoming rate
     nextOncomingZ: null,         // z of the next wrong-way car (null until unlocked)
     oncomingNear: 0,             // metres to the nearest wrong-way car inside horn range (0 = none)
   };
@@ -38,8 +40,10 @@ function laneToX(laneIdx, halfRoad) {
   return -halfRoad + laneW * (laneIdx + 0.5);
 }
 
-function pickSkin() {
-  return TRAFFIC_SKINS[Math.floor(Math.random() * TRAFFIC_SKINS.length)];
+// The active event can narrow the vehicle pool (CONVOY = trucks only).
+function pickSkin(sys) {
+  const pool = (sys && sys.event && sys.event.trucksOnly) ? TRUCK_SKINS : TRAFFIC_SKINS;
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
 // PATTERN DIRECTOR — instead of memoryless rows, traffic comes in short PHRASES
@@ -74,8 +78,10 @@ function pickPhrase(sys) {
 // corridor) the player can thread, shaped by the current phrase.
 function spawnRow(sys, map) {
   const wide = sys.rowsSpawned < 4;
+  const forced = sys.event && sys.event.phrase;                  // e.g. CONVOY = pure slalom
   let ph = sys.phrase;
   if (wide) ph = { type: "breather", left: 1, dir: 1 };          // gentle opening
+  else if (forced) ph = { type: forced, left: 1, dir: sys.lastShift > 0 ? 1 : -1 };
   else if (!ph || ph.left <= 0) ph = pickPhrase(sys);
 
   // Per-phrase gap-lane shift.
@@ -138,7 +144,7 @@ function spawnRow(sys, map) {
   const gapX = laneToX(gap, map.roadHalfWidth);
 
   for (const lane of lanesToFill) {
-    const skin = pickSkin();
+    const skin = pickSkin(sys);
     const x = laneToX(lane, map.roadHalfWidth);
     const jitter = (Math.random() - 0.5) * 4; // small z stagger inside a row
     const speed = PHYS.cruiseSpeed * (skin.speedMul + (Math.random() * 0.08 - 0.02));
@@ -226,8 +232,10 @@ function spawnOncoming(sys, map, playerZ) {
     sigPhase: Math.random() * 560,
     closingVx: 0,
   });
-  sys.nextOncomingZ += RACE.oncomingSpacingMin +
-    Math.random() * (RACE.oncomingSpacingMax - RACE.oncomingSpacingMin);
+  // The WRONG WAY event tightens the spacing so they come thick and fast.
+  const spacingMul = (sys.event && sys.event.oncomingMul) || 1;
+  sys.nextOncomingZ += (RACE.oncomingSpacingMin +
+    Math.random() * (RACE.oncomingSpacingMax - RACE.oncomingSpacingMin)) * spacingMul;
 }
 
 // Initial wave so the road is busy at race start. Does NOT mark anything as passed.

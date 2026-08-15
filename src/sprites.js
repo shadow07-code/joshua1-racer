@@ -470,6 +470,8 @@ export function oncomingSkin(skin) {
 }
 // The pool a wrong-way car is drawn from: sedans + taxi only (indices 0-5).
 export const ONCOMING_SKINS = TRAFFIC_SKINS.slice(0, 6);
+// Long box trucks (indices 9-11) — the CONVOY event draws only from these.
+export const TRUCK_SKINS = TRAFFIC_SKINS.slice(9, 12);
 
 // ─── Scenery ──────────────────────────────────────────────────────────────────
 export const SPR_TREE = [

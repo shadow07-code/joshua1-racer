@@ -761,6 +761,23 @@ export function sfxCoin() {
   });
 }
 
+// EVENT START — a two-tone klaxon alert: something is about to change. Lower and
+// more "announcement" than the combo blips so it cuts through without alarming.
+export function sfxEventStart() {
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  [[440, 0], [587, 0.16], [440, 0.32]].forEach(([f, off]) => {
+    const o = ctx.createOscillator(); o.type = "square"; o.frequency.value = f;
+    const g = ctx.createGain(); g.gain.value = 0;
+    g.gain.linearRampToValueAtTime(0.16, t + off + 0.02);
+    g.gain.setValueAtTime(0.16, t + off + 0.11);
+    g.gain.exponentialRampToValueAtTime(0.001, t + off + 0.15);
+    const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 1800;
+    o.connect(lp); lp.connect(g); g.connect(sfxGain);
+    o.start(t + off); o.stop(t + off + 0.17);
+  });
+}
+
 // DASH — a short, sharp filtered-noise swipe with a rising tone: the sound of
 // the car snapping sideways. Punchier and drier than the near-miss whoosh so the
 // two never blur together.
