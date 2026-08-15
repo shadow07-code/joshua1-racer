@@ -761,6 +761,22 @@ export function sfxCoin() {
   });
 }
 
+// RISK GATE cleared — a rising three-note gold arpeggio (E6-B6-E7). Same family
+// as the coin "ching" so it reads as a payout, but longer and climbing, so
+// threading a gate sounds like a bigger deal than sweeping up a trail.
+export function sfxGate() {
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  [[1319, 0], [1976, 0.055], [2637, 0.11]].forEach(([f, off]) => {
+    const o = ctx.createOscillator(); o.type = "square"; o.frequency.value = f;
+    const g = ctx.createGain(); g.gain.value = 0;
+    g.gain.linearRampToValueAtTime(0.15, t + off + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.001, t + off + 0.20);
+    o.connect(g); g.connect(sfxGain);
+    o.start(t + off); o.stop(t + off + 0.22);
+  });
+}
+
 // EVENT START — a two-tone klaxon alert: something is about to change. Lower and
 // more "announcement" than the combo blips so it cuts through without alarming.
 export function sfxEventStart() {

@@ -192,6 +192,22 @@ export const RACE = {
   closingRowChance: 0.16,
   closingTriggerZ: 58,       // metres ahead at which the squeeze engages
   closingRate: 7,            // px/s each flanker moves inward
+  // ── RISK GATES ──
+  // The one place the player CHOOSES to take risk instead of only reacting to it.
+  // A walled row parks a gold gate in the lane right beside the guaranteed gap:
+  // ignore it and take the free safe line, or thread the gate's narrow slot for a
+  // fat coin stack + a combo beat. Clipping a post costs a life. Optional by
+  // construction (the gap is still open), telegraphed by chevrons painted up the
+  // lane ~2 rows early, and it pays COINS + COMBO only — never speed, lives or
+  // rampage, which would corrupt the global leaderboard (same rule as the garage).
+  gateFromKmh: 110,          // unlocks once the run has some pace (before wrong-way)
+  gateRowChance: 0.11,       // weight in the phrase director (measured: ~1 gate per 17s
+                             // of non-event road, ~1 per 26s once events take their share)
+  gateSlotHalf: 8,           // px half-width of the drive-through slot (car half is 5)
+  gateHalfZ: 3,              // metres half-depth of the barrier
+  gateChevrons: 3,           // approach markers painted up the gate lane
+  gateChevronGap: 18,        // metres between them — the ~2-row early telegraph
+  gateCoins: 25,             // coins paid for threading it (a coin TRAIL is 3)
   // ── IN-RUN EVENTS ── Named, time-boxed set-pieces (RUSH HOUR / CONVOY /
   // WRONG WAY) that give a run an arc instead of a flat density ramp. Each
   // re-weights systems that already exist, announces itself, and pays out if
@@ -250,6 +266,9 @@ export const SCORE = {
   // COINS scattered along the ideal weaving line — each grabbed coin pays this
   // (a light bonus; the count also shows at game over and feeds a future garage).
   coinValue: 50,
+  // Threading a RISK GATE — a flat bonus × the capped combo multiplier, on top of
+  // the coin stack. Scored like a sandwich (the other "deliberate line" beat).
+  gateBonus: 300,
 };
 
 // Game-over LETTER GRADE by final score — the instant "did I do well?" verdict

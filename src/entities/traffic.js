@@ -20,6 +20,8 @@ export function makeTrafficSystem(opts = {}) {
   return {
     list: [],
     coins: [],                   // gold coins scattered down the open gap lane
+    gates: [],                   // optional RISK GATES parked in a walled lane
+    allowGates: false,           // set by main.js once the run has enough pace
     nextRowZ: 80,
     lastGapLane: 2,              // start with center lane open
     lastShift: 0,                // last gap-lane shift direction (drives slalom zig-zags)
@@ -56,21 +58,26 @@ function pickSkin(sys) {
 function pickPhrase(sys) {
   const dm = sys.densityMul || 1;
   const last = sys.phrase ? sys.phrase.type : "breather";
-  // A gauntlet or a squeeze ("the drop") always resolves to air — a short
-  // breather right after, so the pressure has somewhere to release.
-  if (last === "gauntlet" || last === "closing") {
+  // A gauntlet, a squeeze or a gate ("the drop") always resolves to air — a short
+  // breather right after, so the pressure has somewhere to release. A gate also
+  // needs it: taking the greed line leaves you off the racing line.
+  if (last === "gauntlet" || last === "closing" || last === "gate") {
     return { type: "breather", left: 1 + (Math.random() < 0.5 ? 1 : 0), dir: 1 };
   }
   const wG = Math.min(0.32, 0.08 + (dm - 1) * 0.5);   // gauntlets heat up with density
   const wC = RACE.closingRowChance;                   // the one-row squeeze
+  // RISK GATES are the quiet-stretch decision: kept OUT of events so a set-piece
+  // stays one clean idea (and so a gate can never land inside WRONG WAY's storm).
+  const wR = (sys.allowGates && !sys.event) ? RACE.gateRowChance : 0;
   const r = Math.random();
   if (r < 0.04)                  return { type: "tough",    left: 1, dir: Math.random() < 0.5 ? -2 : 2 };
   // CLOSING: a single row where the flankers pinch the gap shut as you arrive —
   // commit early or bail to the escape lane. Always followed by a breather.
   if (r < 0.04 + wC)             return { type: "closing",  left: 1, dir: 1 };
-  if (r < 0.04 + wC + wG)        return { type: "gauntlet", left: 3 + (Math.random() * 3 | 0), dir: 1 };
-  if (r < 0.20 + wC + wG)        return { type: "breather", left: 1 + (Math.random() < 0.4 ? 1 : 0), dir: 1 };
-  if (r < 0.46 + wC + wG)        return { type: "sweep",    left: 3 + (Math.random() * 3 | 0), dir: Math.random() < 0.5 ? -1 : 1 };
+  if (r < 0.04 + wC + wR)        return { type: "gate",     left: 1, dir: 1 };
+  if (r < 0.04 + wC + wR + wG)   return { type: "gauntlet", left: 3 + (Math.random() * 3 | 0), dir: 1 };
+  if (r < 0.20 + wC + wR + wG)   return { type: "breather", left: 1 + (Math.random() < 0.4 ? 1 : 0), dir: 1 };
+  if (r < 0.46 + wC + wR + wG)   return { type: "sweep",    left: 3 + (Math.random() * 3 | 0), dir: Math.random() < 0.5 ? -1 : 1 };
   return { type: "slalom", left: 4 + (Math.random() * 4 | 0), dir: 1 };
 }
 
@@ -85,11 +92,12 @@ function spawnRow(sys, map) {
   else if (!ph || ph.left <= 0) ph = pickPhrase(sys);
 
   // Per-phrase gap-lane shift.
-  let shift, threadRow = false, closingRow = false;
+  let shift, threadRow = false, closingRow = false, gateRow = false;
   if (ph.type === "slalom")        shift = sys.lastShift > 0 ? -1 : 1;      // zig-zag
   else if (ph.type === "sweep")    shift = ph.dir;                          // steady walk
   else if (ph.type === "gauntlet") { shift = sys.lastShift > 0 ? -1 : 1; threadRow = true; }
   else if (ph.type === "closing")  { shift = 0; closingRow = true; }        // squeeze in place
+  else if (ph.type === "gate")     { shift = 0; gateRow = true; }           // hold the safe line steady while you decide
   else if (ph.type === "tough")    shift = ph.dir;                          // ±2 juke
   else                             shift = 0;                               // breather: hold
 
@@ -105,10 +113,25 @@ function spawnRow(sys, map) {
   ph.left -= 1;
   sys.phrase = ph;
 
+  // A GATE goes in a lane directly BESIDE the guaranteed gap, so the choice is one
+  // lane of steering away and both options are on screen together: free safe line,
+  // or the gold slot. Picked before the lane fill so that lane gets no car.
+  let gateLane = -1;
+  if (gateRow) {
+    const sides = [gap - 1, gap + 1].filter(l => l >= 0 && l < LANES);
+    gateLane = sides[Math.floor(Math.random() * sides.length)];
+  }
+
   // ── Which lanes get cars — the gap + a flowing corridor always stay open ──
   const dm = sys.densityMul || 1;
   let lanesToFill;
-  if (threadRow) {
+  if (gateRow) {
+    // The row is WALLED: every lane gets a car except the guaranteed gap and the
+    // gate's own lane. That's what makes the gate a real fork rather than an
+    // ornament — there are exactly two ways through, one free and one paid for.
+    lanesToFill = [];
+    for (let i = 0; i < LANES; i++) if (i !== gap && i !== gateLane) lanesToFill.push(i);
+  } else if (threadRow) {
     // GAUNTLET: flank the gap on BOTH sides so threading it is a SANDWICH; a third
     // car two lanes off squeezes harder as density climbs.
     lanesToFill = [gap - 1, gap + 1].filter(l => l >= 0 && l < LANES);
@@ -140,7 +163,9 @@ function spawnRow(sys, map) {
   // Wall cars hold their lane (clean, readable weave); only the lone breather car
   // is likely to drift. Gauntlet + closing flanks never take a RANDOM drift
   // (closing cars get their scripted squeeze below instead).
-  const driftChance = (threadRow || closingRow) ? 0 : (ph.type === "breather" ? 0.6 : 0.22);
+  // A gate row's walls hold their lanes too — a car merging across the gate lane
+  // would turn an optional dare into a coin flip.
+  const driftChance = (threadRow || closingRow || gateRow) ? 0 : (ph.type === "breather" ? 0.6 : 0.22);
   const gapX = laneToX(gap, map.roadHalfWidth);
 
   for (const lane of lanesToFill) {
@@ -186,12 +211,28 @@ function spawnRow(sys, map) {
     });
   }
 
+  // ── RISK GATE ── Two barrier posts walling the lane, with a gold slot between
+  // them wide enough for a straight, committed car and nothing else. Threading it
+  // pays the coin stack; clipping a post costs a life. Nothing here touches the
+  // guaranteed gap, so the row stays solvable for a player who simply says no.
+  if (gateRow) {
+    sys.gates.push({
+      z: sys.nextRowZ,
+      x: laneToX(gateLane, map.roadHalfWidth),
+      laneHalf: (map.roadHalfWidth * 2) / LANES / 2,   // posts fill the lane out to its edges
+      passed: false,
+      cleared: false,
+      hit: false,
+    });
+  }
+
   // ── Occasional COIN TRAIL down the open gap lane — the ideal weaving line ──
+  // Skipped on a gate row: free coins on the safe line would undercut the dare.
   // The coins sit exactly where the safe path is, so grabbing them rewards
   // precise driving and adds a grab-or-play-safe decision. Skipped during the
   // gentle opening rows. The gap shifts ≤1 lane/row, so successive trails form a
   // dotted line that follows the weave.
-  if (!wide && Math.random() < RACE.coinRowChance) {
+  if (!wide && !gateRow && Math.random() < RACE.coinRowChance) {
     const cxCoin = laneToX(gap, map.roadHalfWidth);
     const n = RACE.coinsPerTrail || 3;
     for (let i = 0; i < n; i++) {
@@ -396,6 +437,22 @@ export function updateTraffic(sys, dt, playerZ, map, cbs, clearAheadDist = 0, al
 
   sys.oncomingNear = nearDist;
 
+  // ── RISK GATE resolution ── The moment a gate slides behind the player, it pays
+  // out IF they were actually inside the slot as they crossed it. Driving past in
+  // the safe lane is a legitimate choice, not a failure — it just pays nothing.
+  // A gate whose post was struck (or smashed mid-rampage) never pays.
+  const pX = cbs?.playerX ?? 0;
+  for (const gt of sys.gates) {
+    if (gt.passed || gt.z > playerZ) continue;
+    gt.passed = true;
+    if (!gt.hit && Math.abs(pX - gt.x) <= RACE.gateSlotHalf) {
+      gt.cleared = true;
+      cbs?.onGate?.();
+    }
+  }
+  // Kept a little past the player so a cleared gate's green caps stay visible.
+  sys.gates = sys.gates.filter(gt => gt.z > playerZ - 20);
+
   // Keep traffic from stacking: cars follow (slow for) the car ahead in their
   // lane and never overlap it — except for a rare bump.
   resolveTrafficSeparation(sys, dt);
@@ -506,6 +563,64 @@ export function drawCoins(ctx, sys, map, playerZ, playerX) {
     drawSpriteNN(ctx, SPR_COIN, p.sx - 3, p.sy - 3, 1);    // 7×7 centred on the coin
     rect(ctx, p.sx - 1 + glint, p.sy - 2, 1, 1, 1);        // white glint travels across
   }
+}
+
+// ── RISK GATES ── Draw the approach chevrons first, then the gate itself.
+//
+// The chevrons are the TELEGRAPH: they're painted up the gate lane behind the
+// gate, so they cross the 100 m view horizon roughly two rows before the gate
+// does — the player sees "there's a decision in this lane" while they still have
+// room to set up for it, instead of being asked to react.
+//
+// Everything blinks by swapping a palette index on a fixed rect (gold ⇄ amber),
+// which is a colour change in place — no motion, no scaling, dizzy rule intact.
+export function drawGates(ctx, sys, map, playerZ, playerX) {
+  const pulse = Math.floor(performance.now() / 160) % 2 === 0;
+  const slot = RACE.gateSlotHalf;
+  for (const gt of sys.gates) {
+    const markIdx = gt.cleared ? 17 : gt.hit ? 4 : (pulse ? 5 : 21);
+    for (let i = 1; i <= RACE.gateChevrons; i++) {
+      const cp = project(map, playerZ, playerX, { z: gt.z - i * RACE.gateChevronGap, x: gt.x });
+      if (!cp) continue;
+      rect(ctx, cp.sx - 3, cp.sy + 1, 7, 1, markIdx);   // a flat arrowhead pointing up-screen
+      rect(ctx, cp.sx - 2, cp.sy,     5, 1, markIdx);
+      rect(ctx, cp.sx - 1, cp.sy - 1, 3, 1, markIdx);
+    }
+
+    const p = project(map, playerZ, playerX, gt);
+    if (!p) continue;
+    const postW = Math.max(2, Math.round(gt.laneHalf - slot));
+    const hz = 9;                                   // post height in px
+    const topY = p.sy - hz;
+    const lx = Math.round(p.sx - gt.laneHalf), rx = Math.round(p.sx + slot);
+    const bodyIdx = gt.hit ? 4 : 22;                // rust barrier; dark once wrecked
+    const capIdx  = gt.hit ? 4 : gt.cleared ? 17 : (pulse ? 5 : 9);
+    for (const px of [lx, rx]) {
+      rect(ctx, px, topY, postW, hz, bodyIdx);
+      rect(ctx, px, topY, postW, 2, capIdx);        // lit cap — reads as "gate", not "traffic"
+      for (let y = topY + 3; y < topY + hz; y += 2) rect(ctx, px, y, postW, 1, 1);  // hazard stripes
+    }
+    if (!gt.hit) {
+      // The threshold you have to cross, and the prize sitting on it.
+      rect(ctx, Math.round(p.sx - slot), p.sy, slot * 2, 1, gt.cleared ? 17 : (pulse ? 5 : 21));
+      if (!gt.cleared) drawSpriteNN(ctx, SPR_COIN, p.sx - 3, p.sy - 8, 1);
+    }
+  }
+}
+
+// Player-vs-gate-post collision. The slot itself is deliberately empty: a car
+// that lines up straight goes through, a car still carving does not. Posts run
+// from the slot edge out to the lane edge, so the gate genuinely walls its lane.
+export function checkGateHit(sys, box) {
+  const slot = RACE.gateSlotHalf, hz = RACE.gateHalfZ;
+  for (const gt of sys.gates) {
+    if (gt.hit) continue;
+    if (box.z1 >= gt.z + hz || box.z2 <= gt.z - hz) continue;
+    const inLeft  = box.x1 < gt.x - slot && box.x2 > gt.x - gt.laneHalf;
+    const inRight = box.x1 < gt.x + gt.laneHalf && box.x2 > gt.x + slot;
+    if (inLeft || inRight) return gt;
+  }
+  return null;
 }
 
 // Grab any coins the player is overlapping this frame — returns how many. The
