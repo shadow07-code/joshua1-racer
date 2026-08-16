@@ -256,7 +256,7 @@ function drawTitleDriver(ctx, t, carCx, carBaseY) {
   }
 }
 
-export function drawTitleScreen(ctx, allTimeBest, world, playerName) {
+export function drawTitleScreen(ctx, allTimeBest, world, playerName, daily) {
   const t = performance.now();
 
   // Hero shot anchored to the bottom so it fills any screen height.
@@ -313,6 +313,31 @@ export function drawTitleScreen(ctx, allTimeBest, world, playerName) {
     textRight(ctx, pad(world.score, 6), chipX + chipW - 4, wy + 1, 5, 1);
   } else {
     textRight(ctx, "------", chipX + chipW - 4, wy + 1, 4, 1);
+  }
+
+  // ── DAILY CHALLENGE strip — bolted to the underside of the best-score chip so
+  // it reads as one info stack rather than another floating panel. Two text rows
+  // plus a progress bar: what today asks for, and how close you already are.
+  if (daily) {
+    const dY = chipY + rowH * 2 + 4, dH = 20;
+    rect(ctx, chipX, dY, chipW, dH, 0);
+    rect(ctx, chipX, dY, chipW, 1, daily.done ? 17 : 5);
+    rect(ctx, chipX, dY + dH - 1, chipW, 1, 4);
+    // Row 1 — the header, with the streak on the right once there is one.
+    text(ctx, "DAILY", chipX + 4, dY + 3, daily.done ? 17 : 5, 1);
+    if (daily.streak > 0) textRight(ctx, "STREAK " + daily.streak, chipX + chipW - 4, dY + 3, 9, 1);
+    // Row 2 — the goal itself, or the payout once it's in the bag.
+    if (daily.done) {
+      textRight(ctx, "DONE  +" + daily.reward, chipX + chipW - 4, dY + 10, 17, 1);
+      text(ctx, "COMPLETE", chipX + 4, dY + 10, 17, 1);
+    } else {
+      text(ctx, daily.label.slice(0, 26), chipX + 4, dY + 10, 1, 1);
+    }
+    // Progress bar hugging the bottom edge of the plate.
+    const frac = daily.target > 0 ? Math.min(1, daily.prog / daily.target) : 1;
+    const barW = chipW - 8;
+    rect(ctx, chipX + 4, dY + dH - 4, barW, 2, 4);
+    rect(ctx, chipX + 4, dY + dH - 4, Math.max(1, (barW * frac) | 0), 2, daily.done ? 17 : 5);
   }
 
   // ── "TAP TO START" — slim banner pinned just above the control hints ──
@@ -616,7 +641,7 @@ export function gradeFor(score) {
   return GRADES[GRADES.length - 1];
 }
 
-export function drawGameOver(ctx, { name, score, hi, isNew, bestDelta, rankInfo, reason, passed, time, topSpeed, combo, smashed, rampages, coins, wallet, unlocked, nextCar }) {
+export function drawGameOver(ctx, { name, score, hi, isNew, bestDelta, rankInfo, reason, passed, time, topSpeed, combo, smashed, rampages, coins, wallet, unlocked, nextCar, daily }) {
   const t = performance.now();
   const flash = Math.floor(t / 300) % 2 === 0;
   // Dark backdrop with a quiet twinkling starfield — ties the screen to the
@@ -737,6 +762,28 @@ export function drawGameOver(ctx, { name, score, hi, isNew, bestDelta, rankInfo,
     }
   }
   bankY += (unlocked && unlocked.length) ? 15 : 20;
+
+  // ── DAILY CHALLENGE ── Most retries never pass through the title screen, so
+  // the day's goal has to report here or the player forgets it exists. Drawn
+  // only when there's room for it AND the retry prompt: it's deliberately
+  // outside the centred layout above, so on a cramped viewport it degrades away
+  // instead of pushing TAP TO RETRY off the bottom.
+  if (daily && bankY + 11 < H - 26) {
+    const doneNow = daily.done;
+    if (daily.completedThisRun) {
+      // The moment it lands — a celebration plate, same weight as a new car.
+      rect(ctx, 6, bankY, W - 12, 10, flash ? 17 : 10);
+      textOutlinedCentered(ctx, "DAILY DONE  +" + daily.reward, bankY + 2, 1, 0, 1);
+    } else {
+      text(ctx, "DAILY", 8, bankY, doneNow ? 17 : 5);
+      textRight(ctx, doneNow ? "COMPLETE" : (daily.prog + "/" + daily.target), W - 8, bankY, doneNow ? 17 : 13);
+      const frac = daily.target > 0 ? Math.min(1, daily.prog / daily.target) : 1;
+      const barW = W - 16;
+      rect(ctx, 8, bankY + 7, barW, 2, 4);
+      rect(ctx, 8, bankY + 7, Math.max(1, (barW * frac) | 0), 2, doneNow ? 17 : 5);
+    }
+    bankY += 13;
+  }
 
   // One-tap retry prompt — a blinking hint under the bank strip (the whole
   // canvas is tappable to restart; the HTML PLAY AGAIN button does the same).

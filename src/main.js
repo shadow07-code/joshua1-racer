@@ -22,6 +22,7 @@ import {
 import { drawRoad, drawDistanceHaze, drawTimeOfDayTint, distToY, biomeAt } from "./road.js";
 import { makePlayer, updatePlayer, drawPlayer, playerBox, applyCollisionLoss, startDash } from "./entities/player.js";
 import { makeTrafficSystem, updateTraffic, drawTraffic, drawCoins, checkCoinGrab, checkTrafficHit, prepopulateTraffic, smashCar, drawGates, checkGateHit } from "./entities/traffic.js";
+import { getDaily, applyRun as applyDailyRun } from "./daily.js";
 import { makeOilSystem, updateOil, drawOilSpills, checkOilHit } from "./entities/oilspills.js";
 import { makePickupSystem, updatePickups, drawPickups, checkPickup } from "./entities/pickups.js";
 import { makeCopsSystem, updateCops, drawCops, checkBarrelHit } from "./entities/cops.js";
@@ -137,6 +138,7 @@ const g = {
   rampagesUsed: 0,      // rampages triggered this run (game-over stat)
   coins: 0,             // coins grabbed this run (score bonus + game-over stat)
   gatesCleared: 0,      // RISK GATES threaded this run
+  daily: null,          // today's challenge + progress (refreshed on title / game over)
   shieldMsg: "",        // transient "SHIELD!" / "SAVED!" popup text
   shieldMsgTimer: 0,
   explosion: 0,         // seconds left on the barrel-impact explosion FX
@@ -503,7 +505,20 @@ function endRace(reason) {
   // ── Bank this run's coins ── Score dies with you; coins DON'T. Even a short
   // run pays into the wallet, so every attempt advances the next unlock. Any
   // car the new balance covers is claimed right here for a game-over payoff.
-  g.wallet = addCoins(g.coins || 0);
+  // ── DAILY CHALLENGE ── Folded in BEFORE the coins are banked, so a completion's
+  // reward rides the same deposit and can itself be what unlocks a car this run.
+  const dailyRes = applyDailyRun({
+    distance: Math.floor(g.player.z || 0),
+    coins: g.coins || 0,
+    passed: g.traffic ? g.traffic.passedCount : 0,
+    gates: g.gatesCleared || 0,
+    smashed: g.smashTotal || 0,
+    combo: g.comboBest || 0,
+    score: Math.floor(g.scoreState.score || 0),
+    time: Math.floor(g.raceTime || 0),
+  });
+  g.daily = Object.assign(getDaily(), { completedThisRun: dailyRes.completed });
+  g.wallet = addCoins((g.coins || 0) + (dailyRes.reward || 0));
   g.unlocked = claimUnlocks();          // [] unless this run crossed a price
   g.nextCar = nextLocked();             // null once everything is owned
   // Equip a freshly unlocked livery straight away — the reward should be visible
@@ -511,6 +526,7 @@ function endRace(reason) {
   if (g.unlocked.length) setSelectedId(g.unlocked[g.unlocked.length - 1].id);
   if (g.isNewHi) playFlourish();
   if (g.unlocked.length) playFlourish();
+  if (dailyRes.completed) playFlourish();
   // Submit to the global board; the response carries this run's rank + total so
   // the game-over screen can show a percentile ("TOP 14%  RANK 14/98").
   submitScore({
@@ -1180,6 +1196,9 @@ function syncOverlays() {
   if (onTitle) {
     refreshWorldHi();
     fetchTop().then(() => { if (g.state === STATES.TITLE) refreshWorldHi(); });
+    // Re-read the daily here rather than caching it: this also catches midnight
+    // rolling over while the app sat open, so tomorrow's goal shows up on its own.
+    g.daily = getDaily();
   }
   setInstallButtonVisible(onTitle);
   setLeaderboardButtonVisible(onTitle);
@@ -1218,7 +1237,7 @@ function render() {
   // Title screen also backs the name-entry and leaderboard modals.
   if (g.state === STATES.TITLE || g.state === STATES.NAME_ENTRY
       || g.state === STATES.LEADERBOARD || g.state === STATES.GARAGE) {
-    drawTitleScreen(ctx, bestEverScore(), g.world, g.playerName);
+    drawTitleScreen(ctx, bestEverScore(), g.world, g.playerName, g.daily);
     return;
   }
   if (g.state === STATES.MAP_SELECT) { drawMapSelect(ctx, g.mapIdx); return; }
@@ -1327,6 +1346,7 @@ function render() {
       wallet: g.wallet || 0,
       unlocked: g.unlocked || [],
       nextCar: g.nextCar || null,
+      daily: g.daily,
     });
     return;
   }

@@ -271,6 +271,16 @@ export const SCORE = {
   gateBonus: 300,
 };
 
+// DAILY CHALLENGE payout. Coins only — a daily grinder must never be able to buy
+// anything the leaderboard cares about (same rule as the garage). Sized against a
+// typical haul of ~40-60 coins a run, so completing the daily is worth roughly a
+// good run on top, and a maintained streak is worth about two.
+export const DAILY = {
+  baseCoins: 60,
+  streakBonus: 10,      // extra coins per consecutive day...
+  streakBonusCap: 5,    // ...for at most 5 extra days (day 6+ = 110, then flat)
+};
+
 // Game-over LETTER GRADE by final score — the instant "did I do well?" verdict
 // that triggers the retry reflex. Tuned to the rebuilt scoring (a strong ~2-min
 // run ≈ 100k): S is aspirational, C is the encouraging floor (never "fail").
