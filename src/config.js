@@ -75,15 +75,6 @@ export const PHYS = {
   // hard left/right and emergency reversals stay responsive. Higher = snappier.
   steerEase: 16,
   steerSpeedFactor: 0.65,
-  // ── DASH ── A committed sidestep: double-tap a side (or double-tap an arrow
-  // key) and the car snaps across roughly a lane. It's the game's SECOND VERB —
-  // steering is a continuous axis, this is a discrete, timed commitment. You
-  // cannot steer while dashing, so it's a real decision, not a free upgrade.
-  dashSpeed: 150,        // px/s lateral while dashing — covers ~1 lane in dashTime
-                         // (~2× normal steering, so it's worth using but never a teleport)
-  dashTime: 0.16,        // seconds the dash lasts
-  dashCooldown: 1.1,     // seconds before another dash is available
-  dashWindowMs: 320,     // max gap between the two taps to count as a double-tap
   carHalfWidth: 5,    // matches the smaller 10×15 player sprite (was 6)
   carHalfHeight: 7,   // was 8
   // Display: top speed shows as 200 KMH; 100 km/h marker used for ramp phase split.

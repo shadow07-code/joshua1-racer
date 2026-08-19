@@ -794,31 +794,6 @@ export function sfxEventStart() {
   });
 }
 
-// DASH — a short, sharp filtered-noise swipe with a rising tone: the sound of
-// the car snapping sideways. Punchier and drier than the near-miss whoosh so the
-// two never blur together.
-export function sfxDash() {
-  if (!ctx) return;
-  const t = ctx.currentTime;
-  const src = ctx.createBufferSource(); src.buffer = getNoiseBuf();
-  const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.Q.value = 2.2;
-  bp.frequency.setValueAtTime(900, t);
-  bp.frequency.exponentialRampToValueAtTime(3600, t + 0.10);
-  const g = ctx.createGain(); g.gain.value = 0;
-  g.gain.linearRampToValueAtTime(0.22, t + 0.008);
-  g.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
-  src.connect(bp); bp.connect(g); g.connect(sfxGain);
-  src.start(t); src.stop(t + 0.16);
-  const o = ctx.createOscillator(); o.type = "square";
-  o.frequency.setValueAtTime(520, t);
-  o.frequency.exponentialRampToValueAtTime(1200, t + 0.09);
-  const og = ctx.createGain(); og.gain.value = 0;
-  og.gain.linearRampToValueAtTime(0.09, t + 0.01);
-  og.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
-  o.connect(og); og.connect(sfxGain);
-  o.start(t); o.stop(t + 0.14);
-}
-
 // PERFECT shave — a tiny two-note crystal "ting" layered over the whoosh when a
 // pass is pixel-close. Short and high so it cuts through without clutter.
 export function sfxPerfect() {

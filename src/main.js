@@ -12,7 +12,7 @@ import {
   playFlourish,
   startEngine, setEngine, stopEngine, setEngineRampage, setEngineStrain, getEngineStyle, setEngineStyle,
   sfxAccelAccent, sfxBrake, sfxPickup, sfxCrash, sfxExplosion, sfxBump, sfxBarrelDrop, sfxCombo,
-  sfxWhoosh, sfxPerfect, sfxHeartbeat, sfxCoin, sfxHorn, sfxDash, sfxEventStart, sfxGate,
+  sfxWhoosh, sfxPerfect, sfxHeartbeat, sfxCoin, sfxHorn, sfxEventStart, sfxGate,
   sfxShieldUp, sfxShieldHit, sfxShockwave, sfxRampageCharge, sfxRampageReady, sfxNitrous,
   sfxMenuMove, sfxMenuSelect, sfxFinish, sfxCountdownBeep,
   startHeliSound, stopHeliSound,
@@ -20,7 +20,7 @@ import {
   getMusicTrack, setMusicTrack,
 } from "./audio.js";
 import { drawRoad, drawDistanceHaze, drawTimeOfDayTint, distToY, biomeAt } from "./road.js";
-import { makePlayer, updatePlayer, drawPlayer, playerBox, applyCollisionLoss, startDash } from "./entities/player.js";
+import { makePlayer, updatePlayer, drawPlayer, playerBox, applyCollisionLoss } from "./entities/player.js";
 import { makeTrafficSystem, updateTraffic, drawTraffic, drawCoins, checkCoinGrab, checkTrafficHit, prepopulateTraffic, smashCar, drawGates, checkGateHit } from "./entities/traffic.js";
 import { getDaily, applyRun as applyDailyRun } from "./daily.js";
 import { makeOilSystem, updateOil, drawOilSpills, checkOilHit } from "./entities/oilspills.js";
@@ -784,13 +784,6 @@ function updateRace(dt) {
   // fallback. There's no tap-zone fallback any more — the whole canvas steers.
   if (g.rampageArmed && g.player.rampage <= 0 && consumePress("Enter")) {
     unleashRampage();
-  }
-
-  // DASH — double-tapping a side queues DashL/DashR. Consume both every frame so
-  // a stale one can't fire later, but only act on the first.
-  const dashL = consumePress("DashL"), dashR = consumePress("DashR");
-  if (dashL || dashR) {
-    if (startDash(g.player, dashL ? -1 : 1)) sfxDash();
   }
 
   g.raceTime += dt;

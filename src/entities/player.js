@@ -31,9 +31,6 @@ export function makePlayer() {
     rampageClear: 0, // seconds of cleared-road grace after a rampage ends
     steerVis: 0,     // raw steer this frame (drives the lean sprite)
     steerEased: 0,   // eased effective steer (gentle from rest, snappy on release/reverse)
-    dash: 0,         // seconds of DASH left (committed sidestep; steering is locked out)
-    dashDir: 0,      // -1 / +1 direction of the active dash
-    dashCool: 0,     // seconds until another dash is available
     _wasBraking: false,
   };
 }
@@ -98,29 +95,17 @@ export function updatePlayer(p, dt, input, map, callbacks) {
   }
   p.steerVis = steer;   // raw direction drives the lean sprite (instant, crisp)
 
-  // ── DASH ── A committed sidestep. While it runs it OWNS lateral movement:
-  // steering input is ignored, so a dash is a decision you're locked into for
-  // its (short) duration rather than a free extra nudge.
-  if (p.dashCool > 0) p.dashCool = Math.max(0, p.dashCool - dt);
-  if (p.dash > 0) {
-    p.dash = Math.max(0, p.dash - dt);
-    p.x += p.dashDir * PHYS.dashSpeed * dt;
-    p.steerEased = 0;                 // no carried steer momentum when it ends
-    p.steerVis = p.dashDir;
-    // Fall through to the fence clamp below so a dash can't leave the road.
-  } else {
   // Ease the EFFECTIVE steer in from rest so a light touch makes a small, smooth
   // cut — but snap fast when releasing or flicking the other way so a deliberate
   // hard left/right (and emergency reversals) stay responsive. The top steer rate
   // itself is unchanged; only the from-rest onset is gentled.
-    const reversing = steer !== 0 && p.steerEased !== 0 && Math.sign(steer) !== Math.sign(p.steerEased);
-    const releasing = Math.abs(steer) < Math.abs(p.steerEased);
-    const easeRate = (reversing || releasing) ? PHYS.steerEase * 3.5 : PHYS.steerEase;
-    p.steerEased += (steer - p.steerEased) * Math.min(1, dt * easeRate);
-    const speedFrac = p.speed / PHYS.maxSpeed;
-    const steerScale = 1 - (1 - PHYS.steerSpeedFactor) * speedFrac;
-    p.x += p.steerEased * PHYS.steerSpeed * steerScale * dt;
-  }
+  const reversing = steer !== 0 && p.steerEased !== 0 && Math.sign(steer) !== Math.sign(p.steerEased);
+  const releasing = Math.abs(steer) < Math.abs(p.steerEased);
+  const easeRate = (reversing || releasing) ? PHYS.steerEase * 3.5 : PHYS.steerEase;
+  p.steerEased += (steer - p.steerEased) * Math.min(1, dt * easeRate);
+  const speedFrac = p.speed / PHYS.maxSpeed;
+  const steerScale = 1 - (1 - PHYS.steerSpeedFactor) * speedFrac;
+  p.x += p.steerEased * PHYS.steerSpeed * steerScale * dt;
 
   // Rubber-fence boundaries — the car can't leave the asphalt. Driving into an
   // edge pins it there and shaves a little speed (a one-time bump), then a rubber
@@ -162,17 +147,6 @@ export function updatePlayer(p, dt, input, map, callbacks) {
   if (p.invuln > 0) p.invuln = Math.max(0, p.invuln - dt);
 }
 
-// Fire a DASH in `dir` (-1 left / +1 right) if one is off cooldown and none is
-// already running. Returns true if it actually started (so the caller can play
-// the SFX only on a real dash).
-export function startDash(p, dir) {
-  if (!dir || p.dash > 0 || p.dashCool > 0) return false;
-  p.dash = PHYS.dashTime;
-  p.dashDir = dir > 0 ? 1 : -1;
-  p.dashCool = PHYS.dashCooldown;
-  return true;
-}
-
 // Apply a proportional speed loss for a collision. severity 0..1 (1 = drop to 0).
 // e.g., small obstacle severity 0.35; tiger/elephant severity 0.7.
 export function applyCollisionLoss(p, severity, invulnSeconds = 0.6) {
@@ -195,15 +169,6 @@ export function drawPlayer(ctx, p, map) {
   // Grounding shadow under the car, then the Ferrari sprite — always straight
   // (no steering lean).
   groundShadow(ctx, (cx + p.x) | 0, PLAYER_Y + halfH - 3, 5);
-  // DASH streaks — short speed lines trailing the side the car just left. Fixed
-  // length, drawn only for the dash's ~0.16s, so there's no ongoing optic flow.
-  if (p.dash > 0) {
-    const back = -p.dashDir;
-    for (let i = 0; i < 3; i++) {
-      const sx = (cxp + back * (halfW + 2 + i * 3)) | 0;
-      rect(ctx, sx, (PLAYER_Y - 4 + i) | 0, 2, 1, i === 0 ? 1 : 2);
-    }
-  }
   drawSpriteNN(ctx, selectedSprite(), cx + p.x - halfW + wobble, PLAYER_Y - halfH, PLAYER_SCALE);
   // (No combo glow around the car — the red/orange underglow + exhaust streaks
   // read as clutter against the sprite. The COMBO xN banner carries that
