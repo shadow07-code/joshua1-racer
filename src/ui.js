@@ -5,6 +5,7 @@
 
 import { sanitizeName, getPlayerName } from "./leaderboard.js";
 import { W, H, PALETTE } from "./config.js";
+import { TITLE_BAND } from "./hud.js";
 
 let el = {};            // cached elements
 let cb = {};            // callbacks supplied by main.js
@@ -16,6 +17,7 @@ export function initUI(callbacks) {
     btnName: document.getElementById("btn-name"),
     btnGarage: document.getElementById("btn-garage"),
     btnInstall: document.getElementById("btn-install"),
+    titleControls: document.getElementById("title-controls"),
     garagePanel: document.getElementById("garage"),
     garageList: document.getElementById("garage-list"),
     garageWallet: document.getElementById("garage-wallet"),
@@ -100,13 +102,10 @@ export function initUI(callbacks) {
   if (el.pauseRestart) el.pauseRestart.addEventListener("click", (e) => { e.stopPropagation(); cb.onPauseRestart && cb.onPauseRestart(); });
   if (el.pauseQuit) el.pauseQuit.addEventListener("click", (e) => { e.stopPropagation(); cb.onPauseQuit && cb.onPauseQuit(); });
 
-  // Keep the title buttons aligned when the viewport changes.
+  // Keep the control console aligned when the viewport changes (rotation,
+  // browser chrome collapsing, desktop resize).
   window.addEventListener("resize", () => {
-    if ((el.btnLeaderboard && el.btnLeaderboard.classList.contains("show")) ||
-        (el.btnName        && el.btnName.classList.contains("show")) ||
-        (el.soundControls  && el.soundControls.classList.contains("show"))) {
-      positionTitleUI();
-    }
+    if (el.titleControls && el.titleControls.classList.contains("show")) positionTitleUI();
   });
 }
 
@@ -125,37 +124,54 @@ function titleMetrics() {
   return { offY, scale: drawH / H };
 }
 
-// Stack the title control pills (sound → leaderboard → install) DOWNWARD from just
-// under the canvas YOU/WORLD chip (canvas y≈67), measuring each pill's real height
-// so they can never overlap the chip or each other on any screen size/aspect. The
-// canvas keeps that band clear (open sky), and the parked car/driver sit below.
+// Centre the ONE control console inside TITLE_BAND — the band hud.js paints on
+// the canvas for exactly this purpose. Because both sides read the same two
+// numbers, the controls can never land on top of canvas text the way the old
+// hard-coded y67 stack landed on the daily strip. If the console is taller than
+// the band (very short canvases), it top-aligns and is allowed to spill down
+// over the hero car rather than being clipped.
+// Resolved lazily: pwa.js can show the install button at import time, BEFORE
+// initUI() has cached any elements, and the console must still appear.
+function consoleNode() {
+  if (!el.titleControls) el.titleControls = document.getElementById("title-controls");
+  return el.titleControls;
+}
+
 export function positionTitleUI() {
+  const node = consoleNode();
+  if (!node || !node.classList.contains("show")) return;
   const m = titleMetrics();
-  const gap = Math.max(6, Math.min(14, Math.round(4 * m.scale)));
-  let top = Math.round(m.offY + 67 * m.scale);
-  // Install (the big glowing CTA) leads, then the utility pills, then the sound
-  // controls block. Hidden/removed nodes are skipped, so the stack stays tight.
-  for (const node of [el.btnInstall, el.btnLeaderboard, el.btnGarage, el.btnName, el.soundControls]) {
-    if (!node || !node.classList.contains("show")) continue;
-    node.style.bottom = "auto";
-    node.style.top = top + "px";
-    top += (node.offsetHeight || 40) + gap;
-  }
+  const bandTop = m.offY + TITLE_BAND.top * m.scale;
+  const bandH = (TITLE_BAND.bottom - TITLE_BAND.top) * m.scale;
+  const h = node.offsetHeight || 0;
+  node.style.top = Math.round(bandTop + Math.max(0, (bandH - h) / 2)) + "px";
+}
+
+// The console is shown whenever any of its controls is. EVERY setter routes
+// through here — including pwa.js's install toggle — so a control can never be
+// marked visible while the container that holds it is still display:none.
+export function syncTitleControls() {
+  const node = consoleNode();
+  if (!node) return;
+  const any = ["btn-install", "btn-leaderboard", "btn-garage", "btn-name", "sound-controls"]
+    .some(id => document.getElementById(id)?.classList.contains("show"));
+  node.classList.toggle("show", any);
+  if (any) positionTitleUI();
 }
 
 export function setLeaderboardButtonVisible(show) {
   toggle(el.btnLeaderboard, show);
-  if (show) positionTitleUI();
+  syncTitleControls();
 }
 
 export function setNameButtonVisible(show) {
   toggle(el.btnName, show);
-  if (show) positionTitleUI();
+  syncTitleControls();
 }
 
 export function setGarageButtonVisible(show) {
   toggle(el.btnGarage, show);
-  if (show) positionTitleUI();
+  syncTitleControls();
 }
 
 export function showGaragePanel(show) { toggle(el.garagePanel, show); }
@@ -226,7 +242,7 @@ export function renderGarage(data) {
 
 export function setSoundControlsVisible(show) {
   toggle(el.soundControls, show);
-  if (show) positionTitleUI();
+  syncTitleControls();
 }
 
 export function showNameEntry(show) {

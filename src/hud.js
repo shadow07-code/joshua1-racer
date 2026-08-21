@@ -99,14 +99,35 @@ export function drawHud(ctx, {
 }
 
 // ─── Title screen — layered synthwave sunset + receding road hero shot ─────────
-// Horizon sits low so the upper sky is a tall, open band — the HTML control pills
-// (sound / leaderboard / install, positioned by ui.js) live in that band under the
-// YOU/WORLD chip, with the parked hero car + driver in the road strip below.
-const TITLE_HORIZON = H - 100;
+// ── Title layout ──────────────────────────────────────────────────────────────
+// EVERY vertical position on the home screen comes from this block, and ui.js
+// centres the HTML control console inside TITLE_BAND. Canvas art and DOM
+// controls are therefore laid out from the SAME numbers and cannot drift apart
+// at any screen height — which is exactly how the old screen broke (the install
+// pill was hard-coded to canvas y67 and landed on top of the daily strip).
+const T_LOGO_Y  = 9;                 // "JOSHUA 1" at scale 3
+const T_SUB_Y   = 28;                // "RACING" at scale 2
+const T_CHIP_Y  = 44;                // best-score chip (2 rows)
+const T_CHIP_H  = 21;
+const T_DAILY_Y = T_CHIP_Y + T_CHIP_H + 4;   // 69 — daily strip, welded under the chip
+const T_DAILY_H = 20;
+const T_BAND_TOP = T_DAILY_Y + T_DAILY_H + 4;   // 93 — top of the control console
+const TITLE_HORIZON = Math.max(H - 100, T_BAND_TOP + 60);
+const T_BAND_BOT = TITLE_HORIZON - 4;
+// Shared with ui.js — the band the HTML control console is centred into.
+export const TITLE_BAND = { top: T_BAND_TOP, bottom: T_BAND_BOT };
+const T_HERO_Y  = TITLE_HORIZON + 6;
+const T_START_Y = H - 44;            // TAP TO START banner (16 tall)
+const T_HINT1_Y = H - 22;
+const T_HINT2_Y = H - 13;
 
-// Sunset gradient bands, top → horizon. [yStart, paletteIdx]
+// Sunset gradient bands as FRACTIONS of the sky's height, so the gradient spans
+// the whole sky at ANY canvas height. They used to be absolute pixel offsets
+// authored for a 140px sky; on a tall phone that left the final band as a flat
+// 144px slab of pale yellow instead of a sunset. [fraction, paletteIdx]
 const SKY_BANDS = [
-  [0, 23], [13, 16], [27, 12], [42, 15], [56, 6], [70, 9], [86, 5], [98, 21],
+  [0.00, 23], [0.09, 16], [0.19, 12], [0.30, 15],
+  [0.40, 6],  [0.50, 9],  [0.61, 5],  [0.70, 21],
 ];
 
 // Deterministic star field (upper sky only).
@@ -114,7 +135,11 @@ const TITLE_STARS = (() => {
   let s = 0x1a2b3c;
   const rnd = () => ((s = (s * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
   const out = [];
-  for (let i = 0; i < 30; i++) out.push({ x: (rnd() * W) | 0, y: (rnd() * 60) | 0, ph: (rnd() * 1000) | 0 });
+  // Spread over the upper 45% of the sky (was a fixed 0-60px band, which bunched
+  // them all behind the logo once the sky got taller).
+  for (let i = 0; i < 34; i++) {
+    out.push({ x: (rnd() * W) | 0, y: Math.round(rnd() * 0.45 * TITLE_HORIZON), ph: (rnd() * 1000) | 0 });
+  }
   return out;
 })();
 
@@ -133,10 +158,24 @@ const TITLE_BUILDINGS = (() => {
   return out;
 })();
 
+// A 25% black speckle — a QUARTER of the pixels in 2x2 blocks, offset row to row
+// so it reads as an even tint rather than stripes. (ditherRect() is fixed at 50%
+// coverage, which greys the sunset out.) Purely static screen-space fill.
+function tintBand(ctx, y0, h) {
+  for (let yy = 0; yy < h; yy += 2) {
+    const row = (yy / 2) | 0;
+    for (let xx = (row & 1) * 4; xx < W; xx += 8) {
+      rect(ctx, xx, y0 + yy, 2, Math.min(2, h - yy), 0);
+    }
+  }
+}
+
 function drawTitleSky(ctx) {
   for (let b = 0; b < SKY_BANDS.length; b++) {
-    const y0 = SKY_BANDS[b][0];
-    const y1 = b + 1 < SKY_BANDS.length ? SKY_BANDS[b + 1][0] : TITLE_HORIZON;
+    const y0 = Math.round(SKY_BANDS[b][0] * TITLE_HORIZON);
+    const y1 = b + 1 < SKY_BANDS.length
+      ? Math.round(SKY_BANDS[b + 1][0] * TITLE_HORIZON)
+      : TITLE_HORIZON;
     rect(ctx, 0, y0, W, y1 - y0, SKY_BANDS[b][1]);
   }
 }
@@ -150,15 +189,18 @@ function drawStars(ctx, t) {
 }
 
 function drawSun(ctx, t) {
-  const cx = 80, cy = 84;
-  // Outer halo + body (classic slatted synthwave sun).
-  disc(ctx, cx, cy, 19, 9);    // orange glow ring
-  disc(ctx, cx, cy, 16, 21);   // light-yellow body
-  disc(ctx, cx, cy, 13, 5);    // yellow core
+  // The sun straddles the horizon (setting behind the city) rather than sitting
+  // mid-sky: that keeps the whole middle of the screen clear for the control
+  // console, and it is where a synthwave sun belongs anyway. The road is drawn
+  // afterwards, so its lower half is naturally cut off by the horizon line.
+  const cx = 80, cy = TITLE_HORIZON - 6;
+  disc(ctx, cx, cy, 20, 9);    // orange glow ring
+  disc(ctx, cx, cy, 17, 21);   // light-yellow body
+  disc(ctx, cx, cy, 14, 5);    // yellow core
   // Horizontal slats over the lower half, colour matched to the bands behind.
-  rect(ctx, cx - 18, cy + 4,  36, 2, 9);
-  rect(ctx, cx - 18, cy + 8,  36, 2, 9);
-  rect(ctx, cx - 18, cy + 12, 36, 3, 9);
+  rect(ctx, cx - 19, cy + 4,  38, 2, 9);
+  rect(ctx, cx - 19, cy + 8,  38, 2, 9);
+  rect(ctx, cx - 19, cy + 12, 38, 3, 9);
 }
 
 function drawSkyline(ctx, t) {
@@ -259,21 +301,26 @@ function drawTitleDriver(ctx, t, carCx, carBaseY) {
 export function drawTitleScreen(ctx, allTimeBest, world, playerName, daily) {
   const t = performance.now();
 
-  // Hero shot anchored to the bottom so it fills any screen height.
-  const heroTopY = H - 94;
-
   // ── Scene ──
   drawTitleSky(ctx);
   drawStars(ctx, t);
   drawSun(ctx, t);
   drawSkyline(ctx, t);
   drawTitleRoad(ctx, t);
-  const carBaseY = drawHeroCar(ctx, t, heroTopY);
+  const carBaseY = drawHeroCar(ctx, t, T_HERO_Y);
   drawTitleDriver(ctx, t, 80, carBaseY);
 
+  // ── Control console backdrop ──
+  // A light tint over the band ui.js drops the HTML controls into, so the
+  // console reads as a deliberate panel and the buttons always have contrast,
+  // while the sunset still shows through it.
+  tintBand(ctx, T_BAND_TOP, T_BAND_BOT - T_BAND_TOP);
+  rect(ctx, 0, T_BAND_TOP, W, 1, 4);
+  rect(ctx, 0, T_BAND_BOT - 1, W, 1, 4);
+
   // ── Logo ──
-  textOutlinedCentered(ctx, "JOSHUA 1", 12, 5, 0, 3, 7);   // yellow on black, dk-red shadow
-  textOutlinedCentered(ctx, "RACING",   32, 6, 0, 2, 7);   // red on black
+  textOutlinedCentered(ctx, "JOSHUA 1", T_LOGO_Y, 5, 0, 3, 7);   // yellow on black, dk-red shadow
+  textOutlinedCentered(ctx, "RACING",   T_SUB_Y,  6, 0, 2, 7);   // red on black
   // Gloss sweep — every ~3.5s a narrow angled band of white slides across the
   // logo (the classic "premium metal" shine). Clipped redraw, so it costs
   // nothing while idle and never touches the rest of the frame.
@@ -283,75 +330,67 @@ export function drawTitleScreen(ctx, allTimeBest, world, playerName, daily) {
     ctx.save();
     ctx.beginPath();
     ctx.transform(1, 0, -0.35, 1, 0, 0);          // slight italic slant
-    ctx.rect(sx, 8, 9, 44);
+    ctx.rect(sx, T_LOGO_Y - 4, 9, 44);
     ctx.clip();
-    textOutlinedCentered(ctx, "JOSHUA 1", 12, 1, 0, 3);   // white where the band passes
-    textOutlinedCentered(ctx, "RACING",   32, 1, 0, 2);
+    textOutlinedCentered(ctx, "JOSHUA 1", T_LOGO_Y, 1, 0, 3);   // white where the band passes
+    textOutlinedCentered(ctx, "RACING",   T_SUB_Y,  1, 0, 2);
     ctx.restore();
   }
 
-  // ── Best-score chips — YOUR NAME + personal record vs WORLD (global #1) ──
-  // Two stacked rows so there's always a target on screen: your handle + personal
-  // best AND the current global #1 (name + score, from the cached leaderboard).
-  const chipW = 122, chipX = ((W - chipW) / 2) | 0, chipY = 44, rowH = 10;
-  rect(ctx, chipX, chipY, chipW, rowH * 2 + 1, 0);         // dark plate
-  rect(ctx, chipX, chipY, chipW, 1, 5);                    // gold top edge
-  rect(ctx, chipX, chipY + rowH, chipW, 1, 4);             // mid divider
-  rect(ctx, chipX, chipY + rowH * 2, chipW, 1, 9);         // orange base
-  // Row 1 — YOUR handle (top of screen) + personal best
-  drawSprite(ctx, ICN_TROPHY, chipX + 4, chipY + 2);
-  text(ctx, (playerName || "PLAYER1").slice(0, 11), chipX + 14, chipY + 3, 5, 1);
-  textRight(ctx, pad(allTimeBest, 6), chipX + chipW - 4, chipY + 3, 1, 1);
-  // Row 2 — WORLD (global #1). Tiny globe glyph, then holder name + score.
-  const wy = chipY + rowH + 2;
-  disc(ctx, chipX + 7, wy + 3, 3, 16);                     // blue globe
-  rect(ctx, chipX + 4, wy + 3, 7, 1, 17);                  // green equator
-  rect(ctx, chipX + 7, wy, 1, 7, 17);                      // green meridian
-  text(ctx, "WORLD", chipX + 14, wy + 1, 5, 1);
+  // ── Best-score chip — YOU vs WORLD, so there is always a target on screen ──
+  const chipW = 132, chipX = ((W - chipW) / 2) | 0, rowH = 10;
+  rect(ctx, chipX, T_CHIP_Y, chipW, T_CHIP_H, 0);            // dark plate
+  rect(ctx, chipX, T_CHIP_Y, chipW, 1, 5);                   // gold top edge
+  rect(ctx, chipX, T_CHIP_Y + rowH, chipW, 1, 4);            // mid divider
+  rect(ctx, chipX, T_CHIP_Y + T_CHIP_H - 1, chipW, 1, 9);    // orange base
+  // Row 1 — YOUR handle + personal best.
+  drawSprite(ctx, ICN_TROPHY, chipX + 3, T_CHIP_Y + 2);
+  text(ctx, (playerName || "PLAYER1").slice(0, 10), chipX + 13, T_CHIP_Y + 3, 5, 1);
+  textRight(ctx, pad(allTimeBest, 6), chipX + chipW - 4, T_CHIP_Y + 3, 1, 1);
+  // Row 2 — WORLD #1 (name + score, from the cached leaderboard).
+  const wy = T_CHIP_Y + rowH + 2;
+  disc(ctx, chipX + 6, wy + 3, 3, 16);                       // blue globe
+  rect(ctx, chipX + 3, wy + 3, 7, 1, 17);                    // green equator
+  rect(ctx, chipX + 6, wy, 1, 7, 17);                        // green meridian
+  text(ctx, "WORLD", chipX + 13, wy + 1, 5, 1);
   if (world && world.score > 0) {
-    text(ctx, (world.name || "???").slice(0, 8), chipX + 36, wy + 1, 13, 1);
+    text(ctx, (world.name || "???").slice(0, 7), chipX + 37, wy + 1, 13, 1);
     textRight(ctx, pad(world.score, 6), chipX + chipW - 4, wy + 1, 5, 1);
   } else {
     textRight(ctx, "------", chipX + chipW - 4, wy + 1, 4, 1);
   }
 
-  // ── DAILY CHALLENGE strip — bolted to the underside of the best-score chip so
-  // it reads as one info stack rather than another floating panel. Two text rows
-  // plus a progress bar: what today asks for, and how close you already are.
+  // ── DAILY CHALLENGE strip — welded to the underside of the chip so the two
+  // read as one info stack. Header + goal + progress bar. ──
   if (daily) {
-    const dY = chipY + rowH * 2 + 4, dH = 20;
+    const dY = T_DAILY_Y, dH = T_DAILY_H;
     rect(ctx, chipX, dY, chipW, dH, 0);
     rect(ctx, chipX, dY, chipW, 1, daily.done ? 17 : 5);
     rect(ctx, chipX, dY + dH - 1, chipW, 1, 4);
-    // Row 1 — the header, with the streak on the right once there is one.
     text(ctx, "DAILY", chipX + 4, dY + 3, daily.done ? 17 : 5, 1);
     if (daily.streak > 0) textRight(ctx, "STREAK " + daily.streak, chipX + chipW - 4, dY + 3, 9, 1);
-    // Row 2 — the goal itself, or the payout once it's in the bag.
     if (daily.done) {
-      textRight(ctx, "DONE  +" + daily.reward, chipX + chipW - 4, dY + 10, 17, 1);
       text(ctx, "COMPLETE", chipX + 4, dY + 10, 17, 1);
+      textRight(ctx, "+" + daily.reward, chipX + chipW - 4, dY + 10, 17, 1);
     } else {
-      text(ctx, daily.label.slice(0, 26), chipX + 4, dY + 10, 1, 1);
+      text(ctx, daily.label.slice(0, 28), chipX + 4, dY + 10, 1, 1);
     }
-    // Progress bar hugging the bottom edge of the plate.
     const frac = daily.target > 0 ? Math.min(1, daily.prog / daily.target) : 1;
     const barW = chipW - 8;
     rect(ctx, chipX + 4, dY + dH - 4, barW, 2, 4);
     rect(ctx, chipX + 4, dY + dH - 4, Math.max(1, (barW * frac) | 0), 2, daily.done ? 17 : 5);
   }
 
-  // ── "TAP TO START" — slim banner pinned just above the control hints ──
-  const bannerY = H - 46;
-  rect(ctx, 8, bannerY, W - 16, 16, 0);
-  rect(ctx, 8, bannerY, W - 16, 1, 5);
-  rect(ctx, 8, bannerY + 15, W - 16, 1, 9);
+  // ── "TAP TO START" — the primary action, pinned above the control hints ──
+  rect(ctx, 8, T_START_Y, W - 16, 16, 0);
+  rect(ctx, 8, T_START_Y, W - 16, 1, 5);
+  rect(ctx, 8, T_START_Y + 15, W - 16, 1, 9);
   const promptIdx = (Math.floor(t / 400) % 2 === 0) ? 5 : 1;
-  textOutlinedCentered(ctx, "TAP TO START", bannerY + 4, promptIdx, 0, 2);
+  textOutlinedCentered(ctx, "TAP TO START", T_START_Y + 4, promptIdx, 0, 2);
 
-  // ── Control hints (pinned to the bottom edge) ──
-  textCentered(ctx, "TAP SIDES OR ARROWS", H - 26, 1, 1);
-  textCentered(ctx, "AUTO GAS - NO BRAKE", H - 16, 5, 1);
-  textCentered(ctx, "3 LIVES  DODGE TRAFFIC", H - 8, 14, 1);
+  // ── Control hints — two tight lines (was three; the screen needed the room) ──
+  textCentered(ctx, "TAP SIDES OR ARROWS TO STEER", T_HINT1_Y, 1, 1);
+  textCentered(ctx, "AUTO GAS - NO BRAKE - 3 LIVES", T_HINT2_Y, 5, 1);
 }
 
 export function drawMapSelect(ctx, selected) {

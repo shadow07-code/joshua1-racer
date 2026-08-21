@@ -2,7 +2,7 @@
 // Network-first for the app shell (HTML/JS/manifest) so updates roll out the
 // moment the player is online; cache-first for static icons. Falls back to the
 // cache when offline so the installed PWA still launches.
-const VERSION = "joshua1-v41";
+const VERSION = "joshua1-v42";
 const ASSETS = [
   "./",
   "./index.html",
@@ -32,7 +32,6 @@ const ASSETS = [
   "./src/daily.js",
   "./src/entities/player.js",
   "./src/entities/traffic.js",
-  "./src/entities/oilspills.js",
   "./src/entities/pickups.js",
   "./src/entities/cops.js",
   "./src/entities/smoke.js"

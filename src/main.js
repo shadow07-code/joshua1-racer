@@ -11,7 +11,7 @@ import {
   initAudio, resumeAudio, suspendAudio, startMusic, stopMusic, setMusicIntensity, setMusicTempoFactor,
   playFlourish,
   startEngine, setEngine, stopEngine, setEngineRampage, setEngineStrain, getEngineStyle, setEngineStyle,
-  sfxAccelAccent, sfxBrake, sfxPickup, sfxCrash, sfxExplosion, sfxBump, sfxBarrelDrop, sfxCombo,
+  sfxAccelAccent, sfxPickup, sfxCrash, sfxExplosion, sfxBump, sfxBarrelDrop, sfxCombo,
   sfxWhoosh, sfxPerfect, sfxHeartbeat, sfxCoin, sfxHorn, sfxEventStart, sfxGate,
   sfxShieldUp, sfxShieldHit, sfxShockwave, sfxRampageCharge, sfxRampageReady, sfxNitrous,
   sfxMenuMove, sfxMenuSelect, sfxFinish, sfxCountdownBeep,
@@ -23,7 +23,6 @@ import { drawRoad, drawDistanceHaze, drawTimeOfDayTint, distToY, biomeAt } from 
 import { makePlayer, updatePlayer, drawPlayer, playerBox, applyCollisionLoss } from "./entities/player.js";
 import { makeTrafficSystem, updateTraffic, drawTraffic, drawCoins, checkCoinGrab, checkTrafficHit, prepopulateTraffic, smashCar, drawGates, checkGateHit } from "./entities/traffic.js";
 import { getDaily, applyRun as applyDailyRun } from "./daily.js";
-import { makeOilSystem, updateOil, drawOilSpills, checkOilHit } from "./entities/oilspills.js";
 import { makePickupSystem, updatePickups, drawPickups, checkPickup } from "./entities/pickups.js";
 import { makeCopsSystem, updateCops, drawCops, checkBarrelHit } from "./entities/cops.js";
 import { updateSmoke, drawSmoke } from "./entities/smoke.js";
@@ -101,7 +100,6 @@ const g = {
   player: null,
   traffic: null,
   scenery: null,
-  oils: null,
   pickups: null,
   scoreState: makeScoreState(),
   ghostRec: null,        // this run's recording (saved if it becomes the new best)
@@ -198,9 +196,37 @@ function refreshAudioButtons() {
   btnSfx.textContent = isSfxEnabled() ? "🔊" : "🔇";
   btnSfx.classList.toggle("off", !isSfxEnabled());
 }
+// ── Title-screen sound CYCLES ────────────────────────────────────────────────
+// One chip per setting; tapping advances it. The title used to carry three full
+// rows of explicit options (138px of permanent furniture that crowded the whole
+// home screen) — the PAUSE menu still shows those, so no option is lost, and
+// both routes share applySoundChoice() below.
+const CYCLE_ORDER = { sfx: [1, 0], music: [1, 2, 0], engine: [0, 1, 2] };
+const ENGINE_NAMES = ["SOFT", "DEEP", "RACE"];
+function cycleValue(kind) {
+  if (kind === "sfx") return isSfxEnabled() ? 1 : 0;
+  if (kind === "music") return isMusicEnabled() ? getMusicTrack() : 0;
+  return getEngineStyle();
+}
+function cycleLabel(kind, v) {
+  if (kind === "sfx") return "SOUND " + (v ? "ON" : "OFF");
+  if (kind === "music") return v === 0 ? "MUSIC OFF" : "MUSIC " + v;
+  return "ENG " + (ENGINE_NAMES[v] || "SOFT");
+}
+function refreshSoundCycles() {
+  if (!soundControls) return;
+  soundControls.querySelectorAll(".snd-cycle").forEach((btn) => {
+    const kind = btn.dataset.cycle;
+    const v = cycleValue(kind);
+    btn.textContent = cycleLabel(kind, v);
+    btn.classList.toggle("off", (kind === "sfx" && !v) || (kind === "music" && v === 0));
+  });
+}
+
 function refreshSoundControls() {
   const track = getMusicTrack();
   const sfx = isSfxEnabled();
+  refreshSoundCycles();
   for (const cont of [soundControls, pauseSound]) {
     if (!cont) continue;
     cont.querySelectorAll("[data-sfx]").forEach(btn => {
@@ -302,7 +328,19 @@ function applySoundChoice(btn) {
   refreshSoundControls();
 }
 const onSndClick = (e) => { const btn = e.target.closest(".snd-opt"); if (btn) applySoundChoice(btn); };
-soundControls.addEventListener("click", onSndClick);
+// A cycle chip advances its setting, then hands the new value to the SAME
+// applySoundChoice() the pause menu uses (it only ever reads btn.dataset).
+const onCycleClick = (e) => {
+  const btn = e.target.closest(".snd-cycle");
+  if (!btn) return;
+  const kind = btn.dataset.cycle;
+  const order = CYCLE_ORDER[kind];
+  if (!order) return;
+  const cur = cycleValue(kind);
+  const next = order[(Math.max(0, order.indexOf(cur)) + 1) % order.length];
+  applySoundChoice({ dataset: { [kind]: String(next) } });
+};
+soundControls.addEventListener("click", onCycleClick);
 if (pauseSound) pauseSound.addEventListener("click", onSndClick);
 
 function ensureAudio() { initAudio(); resumeAudio(); applyMix(); }
@@ -353,7 +391,6 @@ function newRaceSetup() {
   g.difficulty = DIFFICULTY_LIST[g.diffIdx];
   g.player = makePlayer();
   g.traffic = makeTrafficSystem({ rowGapZ: baseRowGapForMap(g.map) });
-  g.oils = makeOilSystem(g.map);
   g.pickups = makePickupSystem();
   g.cops = makeCopsSystem();
   // Ghost: record this run, and replay the personal best recorded for this map.
@@ -1041,14 +1078,10 @@ function updateRace(dt) {
   // Player exhaust smoke (no more AI smoke — AI gone).
   updateSmoke(g.player, dt);
 
-  // Endless non-lethal oil slicks — spawn ahead, cull behind.
-  updateOil(g.oils, g.player.z, g.map);
   // Occasional rampage booster pickups.
   // Boosters only start appearing once the player has genuinely hit 150 km/h.
   updatePickups(g.pickups, g.player.z, g.map, dt, g.topSpeedKmh >= 150);
 
-  // Decay player's oil-slip timer.
-  if (g.player.oilTimer > 0) g.player.oilTimer = Math.max(0, g.player.oilTimer - dt);
 
   // ── Collisions ──
   if (g.player.rampage > 0) {
@@ -1096,15 +1129,6 @@ function updateRace(dt) {
         applyCollisionLoss(g.player, 0.55, 1.5);
         if (takeHit(1.5)) return;
       }
-    }
-  }
-  // Oil spill — slip, not a crash. No life cost.
-  if (g.player.oilTimer <= 0) {
-    const oil = checkOilHit(g.oils, playerBox(g.player));
-    if (oil) {
-      g.player.oilTimer = 1.2;
-      g.player.speed = Math.max(PHYS.startSpeed, g.player.speed * 0.65);
-      sfxBrake();
     }
   }
   // Rampage BOOSTER pickup — grabbing one instantly fires a RAMPAGE (bypasses the
@@ -1161,7 +1185,6 @@ function drawWorld() {
   const biome = g.biome || biomeAt(g.raceTime);
   drawRoad(ctx, g.map, g.player.z, g.player.speed, biome, g.player.rampage > 0);
   drawScenery(ctx, g.scenery, g.map, g.player.z);
-  drawOilSpills(ctx, g.oils, g.map, g.player.z, g.player.x);
   drawSmoke(ctx, g.map, g.player.z, g.player.x, g.player);
   drawTraffic(ctx, g.traffic, g.map, g.player.z, g.player.x);
   drawGates(ctx, g.traffic, g.map, g.player.z, g.player.x);

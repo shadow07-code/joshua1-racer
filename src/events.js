@@ -74,6 +74,10 @@ export function updateEvents(dir, dt, raceTime, topSpeedKmh) {
   }
 
   if (raceTime < dir.nextAt) return null;
+  // Hard speed gate: nothing fires until the run is flat out. Re-armed a few
+  // seconds out so the first event lands just AFTER top speed rather than
+  // exactly on it — reaching 200 gets a beat to itself first.
+  if (topSpeedKmh < RACE.eventFromKmh) { dir.nextAt = raceTime + 4; return null; }
   const pool = EVENTS.filter(e => topSpeedKmh >= (e.minKmh || 0) && e.id !== dir.lastId);
   if (!pool.length) { dir.nextAt = raceTime + 6; return null; }   // retry shortly
   const ev = pool[Math.floor(Math.random() * pool.length)];

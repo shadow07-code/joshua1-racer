@@ -25,7 +25,6 @@ export function makePlayer() {
     lastSpeedTier: 0,
     invuln: 0,
     raceTime: 0,     // seconds since race started (drives the speed ramp)
-    oilTimer: 0,     // seconds the car is still affected by an oil spill
     lives: 3,        // endless survival — 3 hits and you're out
     rampage: 0,      // seconds of NITROUS RAMPAGE remaining (smash through traffic)
     rampageClear: 0, // seconds of cleared-road grace after a rampage ends
@@ -157,8 +156,8 @@ export function applyCollisionLoss(p, severity, invulnSeconds = 0.6) {
 export function drawPlayer(ctx, p, map) {
   if (p.invuln > 0 && (Math.floor(performance.now() / 60) % 2 === 0)) return;
   const cx = roadCenterX(map, p.z, p.x, 0);
-  // Slight wobble when slipping on oil or in legacy slip state.
-  const slipping = p.oilTimer > 0 || p.slip > 0;
+  // Slight wobble while in the legacy slip state.
+  const slipping = p.slip > 0;
   const wobble = slipping ? Math.sin(performance.now() / 28) * 1 : 0;
   // Drawn size of the 10×15 sprite at PLAYER_SCALE (centre-anchored on the car).
   const halfW = 10 * PLAYER_SCALE / 2;   // 5.25 at 1.05× (sprite blits ~11px wide)

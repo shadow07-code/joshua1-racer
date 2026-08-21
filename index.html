@@ -256,11 +256,28 @@
        centred in the title control band. Bigger + filled bright-green so it
        reads as the primary action and stands out from the dark sound/leaderboard
        pills. Bottom/top offset set dynamically by ui.js per canvas scale. */
-    #btn-install {
+    /* ── Title control console ─────────────────────────────────────────────
+       ONE fixed container. ui.js centres it inside the band the canvas paints
+       (see TITLE_BAND in hud.js), so canvas art and HTML controls are laid out
+       from the same numbers and cannot drift apart on any screen size. */
+    #title-controls {
       position: fixed;
       left: 50%;
       transform: translateX(-50%);
-      bottom: 50%;                     /* fallback; JS overrides per canvas scale */
+      top: 40%;                        /* fallback; JS overrides per canvas scale */
+      width: min(346px, 92vw);
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 9;
+      -webkit-tap-highlight-color: transparent;
+    }
+    #title-controls.show { display: flex; }
+    /* A row of equal-width controls — three fit across a 375px phone. */
+    .tc-row { display: flex; gap: 8px; }
+    .tc-row > * { flex: 1 1 0; min-width: 0; }
+
+    #btn-install {
       display: none;
       align-items: center;
       justify-content: center;
@@ -283,7 +300,7 @@
     #btn-install.show { display: inline-flex; }
     #btn-install:active {
       background: var(--dmg-lightest); color: #0f380f;
-      transform: translateX(-50%) translateY(3px);
+      transform: translateY(3px);
       box-shadow: 0 1px 0 rgba(0, 0, 0, 0.5) !important;
       animation: none;
     }
@@ -300,40 +317,42 @@
 
     /* Title LEADERBOARD + CHANGE NAME buttons — stacked pills in the title
        control band. Vertical position is set by ui.js per canvas scale. */
-    #btn-leaderboard, #btn-name, #btn-garage {
-      position: fixed;
-      left: 50%;
-      transform: translateX(-50%);
-      bottom: 56%;                     /* fallback; JS overrides */
+    /* Utility pills + sound cycles share one look and sit three-across. Letter
+       spacing and padding are tuned so the longest label ("ENG SOFT") still fits
+       a third of a 375px phone without wrapping or ellipsis. */
+    #btn-leaderboard, #btn-name, #btn-garage, .snd-cycle {
       display: none;
       align-items: center;
       justify-content: center;
-      gap: 6px;
+      gap: 4px;
       background: rgba(15, 56, 15, 0.85);
       color: var(--dmg-lightest);
       border: 2px solid var(--dmg-light);
       border-radius: 6px;
-      padding: 10px 18px;
+      padding: 11px 2px;
       font: inherit;
-      font-size: 13px;
+      font-size: 12px;
       font-weight: bold;
-      letter-spacing: 1.5px;
+      letter-spacing: 0.5px;
       white-space: nowrap;
+      overflow: hidden;
       cursor: pointer;
-      z-index: 9;
       -webkit-tap-highlight-color: transparent;
     }
+    .snd-cycle { display: inline-flex; }
     #btn-leaderboard.show, #btn-name.show, #btn-garage.show { display: inline-flex; }
-    #btn-leaderboard:active, #btn-name:active, #btn-garage:active {
+    #btn-leaderboard:active, #btn-name:active, #btn-garage:active, .snd-cycle:active {
       background: rgba(139, 172, 15, 0.9); color: #0f380f;
-      transform: translateX(-50%) translateY(2px);
+      transform: translateY(2px);
       box-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
     }
+    /* A muted cycle chip reads as "this is currently off". */
+    .snd-cycle.off { color: var(--dmg-dark); border-color: var(--dmg-dark); }
 
     /* Chunky arcade-cabinet shadow under every raised control — a single,
        static treatment that makes the whole UI read as physical buttons.
        (#btn-install sets its own, chunkier shadow above.) */
-    #btn-leaderboard, #btn-name, #btn-garage, .snd-row,
+    #btn-leaderboard, #btn-name, #btn-garage, .snd-cycle, .snd-row,
     #gameover-actions .btn-go, #gameover-actions .btn-ghost {
       box-shadow: 0 3px 0 rgba(0, 0, 0, 0.5);
     }
@@ -514,18 +533,6 @@
     /* Matches the existing #btn-install / #btn-leaderboard button style:
        dark-green pill with light-green border, bold spaced caps.
        Vertical position is set dynamically by ui.js per canvas scale. */
-    #sound-controls {
-      position: fixed;
-      left: 50%;
-      transform: translateX(-50%);
-      bottom: 60%;                     /* fallback; JS overrides */
-      display: none;
-      flex-direction: column;
-      gap: 6px;
-      z-index: 9;
-      -webkit-tap-highlight-color: transparent;
-    }
-    #sound-controls.show { display: flex; }
     .snd-row {
       display: flex;
       align-items: center;
@@ -676,10 +683,22 @@
     <button id="btn-steer-right" aria-label="Steer right">▶</button>
   </div>
 
-  <button id="btn-install" aria-label="Install game for offline play">📲 INSTALL APP</button>
-  <button id="btn-leaderboard" aria-label="View the leaderboard">🏆 LEADERBOARD</button>
-  <button id="btn-name" aria-label="Change your player name">✎ CHANGE NAME</button>
-  <button id="btn-garage" aria-label="Open the garage">🏁 GARAGE</button>
+  <!-- Title-screen controls. ONE positioned container (ui.js drops it into the
+       console band the canvas reserves) so every control is aligned by the same
+       number the canvas draws with — nothing floats independently any more. -->
+  <div id="title-controls">
+    <button id="btn-install" aria-label="Install game for offline play">📲 INSTALL APP</button>
+    <div class="tc-row">
+      <button id="btn-leaderboard" aria-label="View the leaderboard">🏆 BOARD</button>
+      <button id="btn-garage" aria-label="Open the garage">🏁 GARAGE</button>
+      <button id="btn-name" aria-label="Change your player name">✎ NAME</button>
+    </div>
+    <div class="tc-row" id="sound-controls">
+      <button class="snd-cycle" data-cycle="sfx" aria-label="Cycle sound effects">SOUND ON</button>
+      <button class="snd-cycle" data-cycle="music" aria-label="Cycle music track">MUSIC 1</button>
+      <button class="snd-cycle" data-cycle="engine" aria-label="Cycle engine voice">ENG SOFT</button>
+    </div>
+  </div>
 
   <div id="stage">
     <canvas id="game" width="160" height="240"></canvas>
@@ -743,26 +762,6 @@
     </div>
   </div>
 
-  <!-- Title-screen sound controls -->
-  <div id="sound-controls">
-    <div class="snd-row">
-      <span class="snd-label">SOUND</span>
-      <button class="snd-opt" data-sfx="1">ON</button>
-      <button class="snd-opt" data-sfx="0">OFF</button>
-    </div>
-    <div class="snd-row">
-      <span class="snd-label">MUSIC</span>
-      <button class="snd-opt" data-music="0">OFF</button>
-      <button class="snd-opt" data-music="1">1</button>
-      <button class="snd-opt" data-music="2">2</button>
-    </div>
-    <div class="snd-row">
-      <span class="snd-label">ENGINE</span>
-      <button class="snd-opt" data-engine="0">SOFT</button>
-      <button class="snd-opt" data-engine="1">DEEP</button>
-      <button class="snd-opt" data-engine="2">RACE</button>
-    </div>
-  </div>
 
   <!-- Game-over action bar -->
   <div id="gameover-actions">

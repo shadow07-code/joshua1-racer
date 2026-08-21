@@ -5,6 +5,7 @@
 // "Share → Add to Home Screen" instructions on iOS Safari (which has no prompt).
 // The bottom banner is reused as that instruction popup.
 import { H } from "./config.js";
+import { syncTitleControls } from "./ui.js";
 
 const IOS_DISMISS_KEY = "joshua1.iosBannerDismissed";
 const INSTALLED_KEY = "joshua1.installed";
@@ -87,6 +88,7 @@ async function doInstall() {
 
 function removeInstallButton() {
   if (_installBtn) { _installBtn.classList.remove("show"); _installBtn.remove(); _installBtn = null; }
+  syncTitleControls();   // the console is one row shorter now — re-centre it
 }
 
 export function initInstallBanner() {
@@ -145,29 +147,18 @@ export function initInstallButton() {
   if (!_installBtn) return;
   if (!shouldOfferInstall()) { removeInstallButton(); return; }
   _installBtn.addEventListener("click", (e) => { e.stopPropagation(); doInstall(); });
-  // Re-anchor on viewport changes (rotation, browser chrome) so it stays aligned
-  // with the canvas-space "TAP TO START" banner.
-  window.addEventListener("resize", () => {
-    if (_installBtn && _installBtn.classList.contains("show")) positionInstallButton();
-  });
   // The app boots on the title/home screen, so show it right away — don't wait
   // for the first render() tick (keeps it visible even if the canvas is slow).
   setInstallButtonVisible(true);
 }
 
-// Anchor the install button just above the canvas-space "TAP TO START" banner
-// (banner top = H-118). Canvas fills the viewport (object-fit: contain, matched
-// aspect), so screen-px-per-canvas-px = innerHeight / H.
-function positionInstallButton() {
-  if (!_installBtn) return;
-  _installBtn.style.bottom = (118 + 8) * (window.innerHeight / H) + "px";
-}
-
 // Show the button only where it makes sense (the title screen). main.js calls
-// this on state changes. When showing, position it just above the canvas-space
-// "TAP TO START" banner (which sits at y = H − 118, 18px tall).
+// this on state changes. The button is a flow child of #title-controls, so it
+// carries NO position of its own any more — ui.js places the whole console.
+// (It used to self-anchor to a "TAP TO START" banner position that had long
+// since moved, which is part of how the home screen drifted out of alignment.)
 export function setInstallButtonVisible(show) {
   if (!_installBtn) return;
   _installBtn.classList.toggle("show", !!show);
-  if (show) positionInstallButton();
+  syncTitleControls();
 }

@@ -145,9 +145,6 @@ export const RACE = {
   // ramped base on a densityWavePeriod-second cycle (surge → breather → surge).
   densityWaveAmp: 0.18,
   densityWavePeriod: 22,
-  // Endless non-lethal oil slicks — one every [min..max] metres of road.
-  oilSpacingMin: 260,
-  oilSpacingMax: 440,
   // Distance milestone banner cadence (metres). Speed milestones are fixed.
   milestoneEveryM: 1000,
   // RAMPAGE booster pickups — VERY rare, and only after the player has reached
@@ -203,7 +200,13 @@ export const RACE = {
   // WRONG WAY) that give a run an arc instead of a flat density ramp. Each
   // re-weights systems that already exist, announces itself, and pays out if
   // you get through it without crashing.
-  eventFirstAt: 32,      // seconds before the first event of a run
+  // Events do NOT run until the car is at full speed. Below it the player is
+  // still climbing the ramp and reading the road, and a set-piece stacked on top
+  // of that read as noise rather than an event. Once top speed lands (~108s at
+  // 190 km/h), events become the thing that keeps a maxed-out run varied — which
+  // is also where the run most needed something new to happen.
+  eventFromKmh: 190,     // 95% of the 200 km/h readout — "flat out"
+  eventFirstAt: 32,      // earliest an event may fire; the speed gate above usually dominates
   eventGapMin: 30,       // quiet stretch between events
   eventGapMax: 44,
   // Minimum gap between hit-stops. At speed, rows arrive every ~0.35s, so an
