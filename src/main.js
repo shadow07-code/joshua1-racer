@@ -115,9 +115,9 @@ const g = {
   // Endless mode tracking.
   raceTime: 0,
   hitTopSpeed: false,
-  densityMul: 1.0,
+  densityMul: 1.0,      // FINAL density = knee ramp x densityStack, capped
+  densityStack: 1.0,    // accumulated one-shot/step bumps (top-speed side only)
   densityTimer: 0,
-  density150: false,    // one-time +20% density once 150 km/h is crossed
   densityTopDone: false,// one-time +20% density 30s after top speed is reached
   topTime: 0,           // seconds since top speed reached (drives the 30s bump)
   topSpeedKmh: 0,
@@ -406,8 +406,8 @@ function newRaceSetup() {
   g.raceTime = 0;
   g.hitTopSpeed = false;
   g.densityMul = 1.0;
+  g.densityStack = 1.0;
   g.densityTimer = 0;
-  g.density150 = false;
   g.densityTopDone = false;
   g.topTime = 0;
   g.topSpeedKmh = 0;   // track highest speed reached (in km/h display units)
@@ -837,31 +837,43 @@ function updateRace(dt) {
   if (currentKmh > g.topSpeedKmh) g.topSpeedKmh = currentKmh;
 
   // ── Density scaling ──
-  // Staged escalation: a +20% bump once 150 km/h is crossed, a further +20% 30 s
-  // after the player organically reaches top speed, then a gentle continued ramp
-  // for the long endless game. Every row still leaves a gap lane open, so the
-  // road stays maneuverable/enjoyable at any density.
-  if (!g.density150 && currentKmh >= 150) {
-    g.densityMul = Math.min(RACE.densityMax, g.densityMul * RACE.density150Bump);
-    g.density150 = true;
-  }
+  // Two layers that MULTIPLY into the final densityMul:
+  //   1. KNEE RAMP — steps to RACE.densityRampFrom at the knee (150 km/h) and
+  //      then climbs continuously with speed to RACE.densityRampToTop at the
+  //      top. This is what stops the middle of a run being a flat line: the old
+  //      one-shot step at 150 left density unchanged for the ~80 s it takes to
+  //      grind from the knee to top speed.
+  //   2. densityStack — the discrete top-speed bumps (a +20% 30 s after top
+  //      speed, then +10% every densityStepSeconds for the long endless game).
+  // Every row still leaves a gap lane open, so the road stays threadable at any
+  // density, and densityMax caps the product exactly as before.
+  const kneeSpan = Math.max(1, PHYS.topSpeedKmh - PHYS.kneeKmh);
+  // Driven by topSpeedKmh (a high-water mark), so easing off never rewinds the
+  // difficulty the player has already earned their way into.
+  const kneeF = Math.max(0, Math.min(1, (g.topSpeedKmh - PHYS.kneeKmh) / kneeSpan));
+  // Below the knee the ramp is INERT (1.0) — the opening has to stay a clean
+  // weave. Clamping kneeF alone is not enough: it floors at 0, which would still
+  // apply densityRampFrom from the first second of the run.
+  const kneeRamp = g.topSpeedKmh < PHYS.kneeKmh
+    ? 1
+    : RACE.densityRampFrom + (RACE.densityRampToTop - RACE.densityRampFrom) * kneeF;
   if (!g.hitTopSpeed && g.player.speed >= PHYS.maxSpeed * RACE.topSpeedThreshold) {
     g.hitTopSpeed = true;
-    g.densityTimer = 0;
     g.topTime = 0;
   }
   if (g.hitTopSpeed) {
     g.topTime += dt;
     if (!g.densityTopDone && g.topTime >= RACE.densityTopBumpDelay) {
-      g.densityMul = Math.min(RACE.densityMax, g.densityMul * RACE.densityTopBump);
+      g.densityStack *= RACE.densityTopBump;
       g.densityTopDone = true;
     }
     g.densityTimer += dt;
     while (g.densityTimer >= RACE.densityStepSeconds) {
       g.densityTimer -= RACE.densityStepSeconds;
-      g.densityMul = Math.min(RACE.densityMax, g.densityMul * (1 + RACE.densityStepIncrement));
+      g.densityStack *= (1 + RACE.densityStepIncrement);
     }
   }
+  g.densityMul = Math.min(RACE.densityMax, kneeRamp * g.densityStack);
   // V2 tension/release: breathe the spacing ±densityWaveAmp around the ramped
   // base on a slow cycle (surge → breather → surge) so difficulty isn't monotonic.
   // (Doesn't touch the gap-lane logic, so every row stays threadable.)
@@ -1079,8 +1091,9 @@ function updateRace(dt) {
   updateSmoke(g.player, dt);
 
   // Occasional rampage booster pickups.
-  // Boosters only start appearing once the player has genuinely hit 150 km/h.
-  updatePickups(g.pickups, g.player.z, g.map, dt, g.topSpeedKmh >= 150);
+  // Boosters only start appearing once the player has genuinely hit 150 km/h —
+  // the same knee the density ramp starts from.
+  updatePickups(g.pickups, g.player.z, g.map, dt, g.topSpeedKmh >= PHYS.kneeKmh);
 
 
   // ── Collisions ──

@@ -22,7 +22,9 @@ export function makePickupSystem() {
 // `allowSpawn` gates new boosters (true once the player has reached 150 km/h).
 export function updatePickups(sys, playerZ, map, dt, allowSpawn) {
   if (allowSpawn) {
-    if (sys.nextZ == null) sys.nextZ = playerZ + gap();
+    // First one after the unlock comes in on a short gap so the mid-run reliably
+    // GETS a booster beat; the long spacing only applies from the second onward.
+    if (sys.nextZ == null) sys.nextZ = playerZ + RACE.boosterFirstGap;
     const ahead = playerZ + VIEW_AHEAD + 40;
     while (sys.nextZ < ahead) {
       const halfRoad = map.roadHalfWidth;

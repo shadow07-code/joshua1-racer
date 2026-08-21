@@ -98,10 +98,23 @@ export const RACE = {
   densityStepSeconds: 50,       // ramp bites a bit sooner
   densityStepIncrement: 0.10,   // traffic gets +10% denser each interval
   densityMax: 1.9,
-  // Two staged density bumps for escalation (the gap lane is still left open each
-  // row, so it stays maneuverable): at 150 km/h → +20%, and 30 s after the player
-  // organically reaches top speed → a further +20%.
-  density150Bump: 1.20,
+  // ── MID-RUN ESCALATION ──
+  // The old shape put a one-shot +20% step at 150 km/h and then held density DEAD
+  // FLAT until top speed — ~80 s (44 s → 124 s) in which nothing on the road got
+  // harder, which is most of a typical run. Density now climbs CONTINUOUSLY with
+  // speed across the knee window (PHYS.kneeKmh → PHYS.topSpeedKmh, i.e.
+  // 150 → 200 km/h), reaching `densityRampToTop` at top speed. Raise this to make
+  // the middle of a run build harder; it is THE mid-run difficulty lever.
+  // densityMax still caps the final product, so peak difficulty is unchanged —
+  // only the approach to it. The step ramp + top bump below layer on top of it.
+  // `densityRampFrom` is the step the road takes AT the knee, before the climb
+  // starts — it keeps 150 km/h feeling like a threshold rather than letting the
+  // ramp start from nothing (which would make the 40 s after the knee EASIER
+  // than the old one-shot +20%, the wrong trade in exactly the window this
+  // change exists to fix). It is deliberately below the old 1.20 so the knee no
+  // longer collides head-on with the helicopter arriving at the same moment.
+  densityRampFrom: 1.10,
+  densityRampToTop: 1.45,
   densityTopBump: 1.20,
   densityTopBumpDelay: 30,
   density2CarFrom: 1.12,        // above this density, some rows spawn a 2nd car
@@ -152,6 +165,12 @@ export const RACE = {
   // [min..max] metres of road — a long way apart so they're a treat, not a crutch.
   boosterSpacingMin: 1800,
   boosterSpacingMax: 3400,
+  // The FIRST booster after the 150 km/h unlock uses this much shorter gap. With
+  // the normal spacing the first canister landed 1800-3400 m later (~36-68 s), so
+  // a typical run saw one late or never — it was a mechanic most players never
+  // met. This makes it a dependable mid-run beat (~14 s after the unlock, ≈58 s
+  // into a run) without changing how often they come after that.
+  boosterFirstGap: 700,
   // Coins: ~this fraction of spawned rows also drops a short coin trail down the
   // OPEN gap lane (the ideal weaving line), coinsPerTrail coins spread in z.
   coinRowChance: 0.20,
