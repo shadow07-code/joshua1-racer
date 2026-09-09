@@ -137,11 +137,20 @@ function bindSteerButtons() {
     recompute();
   };
   // Pointer events cover both touch and mouse in one binding.
-  btnL.addEventListener("pointerdown", (e) => { e.preventDefault(); btnL.setPointerCapture(e.pointerId); press("L"); });
+  //
+  // Register the press FIRST, then attempt the capture, and never let a failed
+  // capture escape. setPointerCapture throws NotFoundError when the pointer id is
+  // not currently active — a very fast tap, or a pointer the browser has already
+  // released. With the capture call first that exception aborted the handler
+  // before press() ever ran, so the pad silently did nothing and the car did not
+  // turn. Steering is this game's ONLY control (auto gas, no brake); it must
+  // never depend on pointer capture succeeding.
+  const capture = (el, e) => { try { el.setPointerCapture(e.pointerId); } catch {} };
+  btnL.addEventListener("pointerdown", (e) => { e.preventDefault(); press("L"); capture(btnL, e); });
   btnL.addEventListener("pointerup",   (e) => { e.preventDefault(); release("L"); });
   btnL.addEventListener("pointercancel",(e)=> { release("L"); });
   btnL.addEventListener("pointerleave",(e) => { release("L"); });
-  btnR.addEventListener("pointerdown", (e) => { e.preventDefault(); btnR.setPointerCapture(e.pointerId); press("R"); });
+  btnR.addEventListener("pointerdown", (e) => { e.preventDefault(); press("R"); capture(btnR, e); });
   btnR.addEventListener("pointerup",   (e) => { e.preventDefault(); release("R"); });
   btnR.addEventListener("pointercancel",(e)=> { release("R"); });
   btnR.addEventListener("pointerleave",(e) => { release("R"); });
@@ -189,4 +198,23 @@ export function consumeAnyPress() {
 // sitting in the queue and instantly trigger the tap-to-retry.
 export function clearPresses() {
   state.pressed.clear();
+}
+
+// Drop every HELD input as well as the queued presses.
+//
+// clearPresses() only drains the edge-triggered queue — it does NOT touch
+// heldKeys / touchPoints / btnHeld, so `state.steer` stays latched. That matters
+// when the app is BACKGROUNDED: a phone call, a notification, or an app switch
+// takes the touch away without the browser ever delivering touchend (or keyup,
+// on an alt-tab). The held steer therefore survived the auto-pause, and the
+// player resumed with the car steering hard into the wall, nothing on screen.
+// Measured before this fix: steer stayed at 1 across a blur, for both a held key
+// and a held touch, and clearPresses() did not clear it.
+export function releaseAllInput() {
+  heldKeys.clear();
+  touchPoints.clear();
+  btnHeld.L = false;
+  btnHeld.R = false;
+  state.pressed.clear();
+  recompute();
 }

@@ -6,7 +6,9 @@
 import { W, H, PHYS, SPAWN, RACE, SCORE, PLAYER_Y } from "./config.js";
 import { getCtx, clear, rect } from "./render.js";
 import { MAPS, MAP_LIST, DIFFICULTY_LIST } from "./maps.js";
-import { initInput, getInput, consumePress, consumeAnyPress, clearPresses } from "./input.js";
+import {
+  initInput, getInput, consumePress, consumeAnyPress, clearPresses, releaseAllInput,
+} from "./input.js";
 import {
   initAudio, resumeAudio, suspendAudio, startMusic, stopMusic, setMusicIntensity, setMusicTempoFactor,
   playFlourish,
@@ -380,6 +382,12 @@ function resumeGame() {
 // the phone's BACK button is pressed. Music stops immediately (suspendAudio cuts
 // any scheduled chiptune notes). A race pauses; the player taps to resume.
 function autoPause() {
+  // Release everything HELD first. Backgrounding takes a touch or key away
+  // without the browser ever delivering touchend/keyup, so the steer stays
+  // latched and the player would resume with the car turning by itself.
+  // Unconditional on purpose: whatever the state, nothing can still legitimately
+  // be held once the app is in the background.
+  releaseAllInput();
   if (g.state === STATES.RACE) pauseGame();
   else { stopMusic(); stopAllLoopingSfx(); }
   suspendAudio();

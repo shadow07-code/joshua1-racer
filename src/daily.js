@@ -73,12 +73,31 @@ export function goalFor(day) {
 // { day, prog, done, reward, streak, lastDone }
 //   streak   — consecutive completed days ENDING at lastDone
 //   lastDone — the last day the goal was completed
+const FRESH = () => ({ day: "", prog: 0, done: false, reward: 0, streak: 0, lastDone: "" });
+const num = (v) => { const n = Math.floor(Number(v)); return Number.isFinite(n) && n >= 0 ? n : 0; };
+const str = (v) => (typeof v === "string" ? v : "");
+
 function load() {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) || "null");
-    if (raw && typeof raw === "object") return raw;
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+      // COERCE every field rather than trusting the blob. A stored entry whose
+      // `prog` is not a number poisons the arithmetic in applyRun() to NaN, and
+      // `NaN >= target` is never true — so that day's challenge can never be
+      // completed and its progress bar draws nothing, silently and forever.
+      // rollToToday() only rescues this when the DATE also differs, so a corrupt
+      // entry stamped with TODAY slips straight through.
+      return {
+        day: str(raw.day),
+        prog: num(raw.prog),
+        done: !!raw.done,
+        reward: num(raw.reward),
+        streak: num(raw.streak),
+        lastDone: str(raw.lastDone),
+      };
+    }
   } catch {}
-  return { day: "", prog: 0, done: false, reward: 0, streak: 0, lastDone: "" };
+  return FRESH();
 }
 function save(s) {
   try { localStorage.setItem(KEY, JSON.stringify(s)); } catch {}
