@@ -192,15 +192,25 @@ module.exports = async function handler(req, res) {
       // The player's standing after this submit, for the game-over verdict:
       // ZREVRANK is 0-based best-first (→ +1 for a human rank); ZCARD is the
       // total number of ranked players.
-      const [revrank, total] = await pipeline(cfg, [
+      const [revrank, total, storedScore] = await pipeline(cfg, [
         ["ZREVRANK", LB_KEY, name],
         ["ZCARD", LB_KEY],
+        ["ZSCORE", LB_KEY, name],
       ]);
       const rank = revrank == null ? null : toInt(revrank) + 1;
 
       // Took the crown? Their line becomes the ghost everyone else races.
       // Gated on the SERVER's own rank, never on a client claim.
-      if (rank === 1) {
+      //
+      // Rank alone is NOT enough. ZADD ... GT only ever raises a score, but
+      // ZREVRANK reports rank 1 for the reigning champion whatever they just
+      // scored -- so a champion having a bad run would otherwise overwrite the
+      // world ghost with a mediocre line, and everyone else would "beat the #1"
+      // while nowhere near their score. After the GT write the stored score is
+      // max(previous, this run), so score >= storedScore is true only when
+      // THIS run is the record-setting one.
+      const isRecordRun = score >= toInt(storedScore);
+      if (rank === 1 && isRecordRun) {
         const samples = sanitizeSamples(body.samples);
         if (samples) {
           try {
