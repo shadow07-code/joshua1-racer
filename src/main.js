@@ -14,7 +14,7 @@ import {
   playFlourish,
   startEngine, setEngine, stopEngine, setEngineRampage, setEngineStrain, getEngineStyle, setEngineStyle,
   sfxAccelAccent, sfxPickup, sfxCrash, sfxExplosion, sfxBump, sfxBarrelDrop, sfxCombo,
-  sfxWhoosh, sfxPerfect, sfxHeartbeat, sfxCoin, sfxHorn, sfxEventStart, sfxGate,
+  sfxWhoosh, sfxPerfect, sfxHeartbeat, sfxCoin, sfxHorn, sfxEventStart,
   sfxShieldUp, sfxShieldHit, sfxShockwave, sfxRampageCharge, sfxRampageReady, sfxNitrous,
   sfxMenuMove, sfxMenuSelect, sfxFinish, sfxCountdownBeep,
   startHeliSound, stopHeliSound,
@@ -23,7 +23,7 @@ import {
 } from "./audio.js";
 import { drawRoad, drawDistanceHaze, drawTimeOfDayTint, distToY, biomeAt } from "./road.js";
 import { makePlayer, updatePlayer, drawPlayer, playerBox, applyCollisionLoss } from "./entities/player.js";
-import { makeTrafficSystem, updateTraffic, drawTraffic, drawCoins, checkCoinGrab, checkTrafficHit, prepopulateTraffic, smashCar, drawGates, checkGateHit } from "./entities/traffic.js";
+import { makeTrafficSystem, updateTraffic, drawTraffic, drawCoins, checkCoinGrab, checkTrafficHit, prepopulateTraffic, smashCar } from "./entities/traffic.js";
 import { getDaily, applyRun as applyDailyRun } from "./daily.js";
 import { makePickupSystem, updatePickups, drawPickups, checkPickup } from "./entities/pickups.js";
 import { makeCopsSystem, updateCops, drawCops, checkBarrelHit } from "./entities/cops.js";
@@ -142,7 +142,6 @@ const g = {
   smashTotal: 0,        // cars smashed this run (game-over stat)
   rampagesUsed: 0,      // rampages triggered this run (game-over stat)
   coins: 0,             // coins grabbed this run (score bonus + game-over stat)
-  gatesCleared: 0,      // RISK GATES threaded this run
   daily: null,          // today's challenge + progress (refreshed on title / game over)
   shieldMsg: "",        // transient "SHIELD!" / "SAVED!" popup text
   shieldMsgTimer: 0,
@@ -448,7 +447,6 @@ function newRaceSetup() {
   g.smashTotal = 0;
   g.rampagesUsed = 0;
   g.coins = 0;
-  g.gatesCleared = 0;
   g.biome = biomeAt(0);            // start in CITY; no banner for the opening zone
   g.biomeName = g.biome.name;
   g.biomeBannerTimer = 0;
@@ -571,7 +569,6 @@ function endRace(reason) {
     distance: Math.floor(g.player.z || 0),
     coins: g.coins || 0,
     passed: g.traffic ? g.traffic.passedCount : 0,
-    gates: g.gatesCleared || 0,
     smashed: g.smashTotal || 0,
     combo: g.comboBest || 0,
     score: Math.floor(g.scoreState.score || 0),
@@ -932,9 +929,6 @@ function updateRace(dt) {
   const effDensity = g.densityMul * evDensity;
   g.traffic.rowGapZ = (baseRowGapForMap(g.map) / effDensity) * wave;
   g.traffic.densityMul = effDensity;
-  // RISK GATES join the phrase director once the run has some pace — the opening
-  // stays a clean weave, and the greed line arrives before wrong-way traffic does.
-  g.traffic.allowGates = g.topSpeedKmh >= RACE.gateFromKmh;
 
   // After a rampage, keep the near road ahead clear for a few seconds.
   const clearDist = g.player.rampageClear > 0 ? RACE.rampageClearDist : 0;
@@ -957,22 +951,6 @@ function updateRace(dt) {
       // Each pass burns down the post-rampage cooldown; once it's spent, the
       // rampage meter is armed and near misses bank toward the next one.
       if (g.rampageCooldown > 0) g.rampageCooldown -= 1;
-    },
-
-    // A RISK GATE threaded — the run's one voluntary risk, paid in the two
-    // currencies that can't corrupt the leaderboard: coins and combo.
-    onGate: () => {
-      g.gatesCleared += 1;
-      g.coins += RACE.gateCoins;
-      g.scoreState.score += Math.round(SCORE.gateBonus * comboMult());
-      // Scored like a sandwich: a flat bonus that also advances the streak, so a
-      // gate feeds the multiplier and the rampage chain instead of interrupting them.
-      g.combo += 1;
-      g.comboBest = Math.max(g.comboBest, g.combo);
-      g.comboTimer = RACE.comboWindow;
-      g.comboFlash = 0.18;
-      g.shieldMsg = "GATE +" + RACE.gateCoins; g.shieldMsgTimer = 1.3;
-      sfxGate();
     },
 
     onNearMiss: (tightness) => {
@@ -1133,11 +1111,6 @@ function updateRace(dt) {
       smashCar(t, g.player.x);
       registerSmash();
     }
-    // A gate post shatters under a rampage rather than standing untouched as the
-    // car ploughs through it. It stops paying out — smashing a gate isn't
-    // threading one — but driving the slot cleanly still counts.
-    const gt = checkGateHit(g.traffic, box);
-    if (gt) { gt.hit = true; sfxBump(); }
   } else if (g.player.invuln <= 0) {
     const box = playerBox(g.player);
     const t = checkTrafficHit(g.traffic, box);
@@ -1158,16 +1131,6 @@ function updateRace(dt) {
         sfxExplosion();                // (before takeHit so it sounds even on a fatal hit)
         applyCollisionLoss(g.player, 0.5, 1.2);
         if (takeHit(1.2)) return;
-      }
-    }
-    // RISK GATE post — the bill for a greed line taken at the wrong angle. Checked
-    // last and gated on invuln so a single frame can't charge two lives.
-    if (g.player.invuln <= 0) {
-      const gt = checkGateHit(g.traffic, box);
-      if (gt) {
-        gt.hit = true;                  // the gate wrecks (and can never pay out)
-        applyCollisionLoss(g.player, 0.55, 1.5);
-        if (takeHit(1.5)) return;
       }
     }
   }
@@ -1227,7 +1190,6 @@ function drawWorld() {
   drawScenery(ctx, g.scenery, g.map, g.player.z);
   drawSmoke(ctx, g.map, g.player.z, g.player.x, g.player);
   drawTraffic(ctx, g.traffic, g.map, g.player.z, g.player.x);
-  drawGates(ctx, g.traffic, g.map, g.player.z, g.player.x);
   // Two phantoms, each at the position its run held at this point in time: the
   // global #1 (gold) and your own personal best (your livery). Rival is drawn
   // FIRST so your own ghost wins the pixels wherever the two overlap.

@@ -28,7 +28,6 @@ const GOALS = [
   { id: "dist",  mode: "sum",  stat: "distance", tiers: [8000, 14000, 20000],   label: n => "DRIVE " + n + "M" },
   { id: "coins", mode: "sum",  stat: "coins",    tiers: [70, 110, 160],         label: n => "COLLECT " + n + " COINS" },
   { id: "pass",  mode: "sum",  stat: "passed",   tiers: [250, 450, 700],        label: n => "PASS " + n + " CARS" },
-  { id: "gates", mode: "sum",  stat: "gates",    tiers: [2, 3, 5],              label: n => "THREAD " + n + " GATES" },
   { id: "smash", mode: "sum",  stat: "smashed",  tiers: [12, 20, 30],           label: n => "SMASH " + n + " CARS" },
   { id: "combo", mode: "best", stat: "combo",    tiers: [15, 22, 30],           label: n => "REACH X" + n + " COMBO" },
   { id: "score", mode: "best", stat: "score",    tiers: [30000, 55000, 85000],  label: n => "SCORE " + n + " IN A RUN" },
@@ -151,7 +150,7 @@ export function getDaily() {
 
 // Fold one finished run into today's progress.
 //
-// `run` carries the run summary: { distance, coins, passed, gates, smashed,
+// `run` carries the run summary: { distance, coins, passed, smashed,
 // combo, score, time }. Returns { completed, reward, prog, target, label } —
 // `completed` is true ONLY on the run that crosses the line, so the caller can
 // fire the payout and the celebration exactly once.
