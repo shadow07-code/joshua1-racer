@@ -219,12 +219,23 @@ export const RACE = {
   // WRONG WAY) that give a run an arc instead of a flat density ramp. Each
   // re-weights systems that already exist, announces itself, and pays out if
   // you get through it without crashing.
-  // Events do NOT run until the car is at full speed. Below it the player is
+  // Events do NOT run until the car has real pace: below that the player is
   // still climbing the ramp and reading the road, and a set-piece stacked on top
-  // of that read as noise rather than an event. Once top speed lands (~108s at
-  // 190 km/h), events become the thing that keeps a maxed-out run varied — which
-  // is also where the run most needed something new to happen.
-  eventFromKmh: 190,     // 95% of the 200 km/h readout — "flat out"
+  // of that reads as noise rather than an event.
+  //
+  // This was 190 ("flat out"), which unlocked at ~108s — and MEASURED, that made
+  // all three set-pieces very nearly unreachable content: a strong ~120s run
+  // fired exactly ONE event, at 108s, and died at 120s BEFORE its 18-22s ran out.
+  // So it never paid out, never showed CLEARED, never resolved. A shorter run saw
+  // nothing at all. Three finished set-pieces that almost no run ever completed.
+  //
+  // 175 unlocks at ~84s. Measured: a 120s run now COMPLETES one event (84-104s,
+  // 16s of margin) and a 150s run starts a second (~143s).
+  // ⚠️ 84s is chosen against the HELICOPTER, not just the clock — sorties measured
+  // at 47s (single) then pairs at 71.5 / 97.9 / 124.3s. 170 would have unlocked at
+  // 76s, dropping the first event 4.5s on top of the pair at 71.5s. 175 clears it
+  // by 12.5s so each beat gets its own moment. Re-measure before retuning this.
+  eventFromKmh: 175,     // ~84s — one COMPLETED event inside a strong run
   eventFirstAt: 32,      // earliest an event may fire; the speed gate above usually dominates
   eventGapMin: 30,       // quiet stretch between events
   eventGapMax: 44,
