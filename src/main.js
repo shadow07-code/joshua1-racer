@@ -47,12 +47,15 @@ import {
 } from "./ui.js";
 import {
   getPlayerName, setPlayerName, submitScore, fetchTop, flushPending, cachedTop,
+  cachedChampion,
 } from "./leaderboard.js";
 import {
   CARS, addCoins, claimUnlocks, getWallet, nextLocked,
   getSelectedId, setSelectedId, ownedIds, carSprite,
 } from "./garage.js";
-import { makeGhostRecorder, recordGhost, saveGhost, loadGhost, drawGhost } from "./ghost.js";
+import {
+  makeGhostRecorder, recordGhost, saveGhost, loadGhost, drawGhost, drawRivalGhost,
+} from "./ghost.js";
 import { makeEventDirector, updateEvents, failEvent } from "./events.js";
 
 const canvas = document.getElementById("game");
@@ -104,6 +107,8 @@ const g = {
   scoreState: makeScoreState(),
   ghostRec: null,        // this run's recording (saved if it becomes the new best)
   ghost: null,           // the personal-best track being replayed, or null
+  rival: null,           // the global #1's track being replayed, or null
+  champion: null,        // cached {name,score,samples} for the global #1
   events: null,          // in-run EVENT director (RUSH HOUR / CONVOY / WRONG WAY)
   isNewHi: false,
   wallet: 0,             // banked coin balance after this run
@@ -164,6 +169,10 @@ function refreshWorldHi() {
   try {
     const top = cachedTop();
     if (top && top.length) g.world = { score: top[0].score || 0, name: top[0].name || "" };
+    // The champion's ghost is read HERE and nowhere else — the title draws every
+    // frame, so this must not become a per-frame localStorage hit. Race setup
+    // reuses whatever this last resolved.
+    g.champion = cachedChampion();
   } catch {}
 }
 
@@ -396,6 +405,12 @@ function newRaceSetup() {
   // Ghost: record this run, and replay the personal best recorded for this map.
   g.ghostRec = makeGhostRecorder();
   g.ghost = loadGhost(g.map.key, g.difficulty);
+  // RIVAL ghost: the global #1's line, so the leaderboard is a car on the road
+  // rather than a list read after dying. Skipped when the champion IS you — two
+  // ghosts running your own line would just be confusing.
+  const champ = g.champion;
+  const chasingSelf = !!(champ && champ.name && champ.name === g.playerName);
+  g.rival = (champ && !chasingSelf) ? champ.samples : null;
   g.events = makeEventDirector();
   g.scenery = makeScenerySystem();
   for (let i = 0; i < 25; i++) updateScenery(g.scenery, 0, g.map, 0.016, SPAWN.sceneryPerMeter);
@@ -572,6 +587,10 @@ function endRace(reason) {
     time: Math.floor(g.raceTime),
     passed: g.traffic ? g.traffic.passedCount : 0,
     topSpeed: g.topSpeedKmh || 0,
+    // This run's recorded line. Sent only when it could take the crown (the
+    // client checks the cached board first) and kept only if the server's own
+    // rank says #1 — then it becomes everyone else's rival ghost.
+    samples: g.ghostRec ? g.ghostRec.samples : null,
   }).then((res) => {
     if (g.state !== STATES.GAME_OVER) return;
     if (res && res.rank && res.total) g.rankInfo = { rank: res.rank, total: res.total };
@@ -1201,7 +1220,10 @@ function drawWorld() {
   drawSmoke(ctx, g.map, g.player.z, g.player.x, g.player);
   drawTraffic(ctx, g.traffic, g.map, g.player.z, g.player.x);
   drawGates(ctx, g.traffic, g.map, g.player.z, g.player.x);
-  // Your personal-best self, at the position it held at this point in the run.
+  // Two phantoms, each at the position its run held at this point in time: the
+  // global #1 (gold) and your own personal best (your livery). Rival is drawn
+  // FIRST so your own ghost wins the pixels wherever the two overlap.
+  if (g.rival) drawRivalGhost(ctx, g.rival, g.raceTime, g.map, g.player.z, g.player.x);
   if (g.ghost) drawGhost(ctx, g.ghost, g.raceTime, g.map, g.player.z, g.player.x);
   drawCoins(ctx, g.traffic, g.map, g.player.z, g.player.x);
   drawPickups(ctx, g.pickups, g.map, g.player.z, g.player.x);
@@ -1266,7 +1288,9 @@ function render() {
   // Title screen also backs the name-entry and leaderboard modals.
   if (g.state === STATES.TITLE || g.state === STATES.NAME_ENTRY
       || g.state === STATES.LEADERBOARD || g.state === STATES.GARAGE) {
-    drawTitleScreen(ctx, bestEverScore(), g.world, g.playerName, g.daily);
+    const champ = g.champion;
+    const rivalTag = (champ && champ.name && champ.name !== g.playerName) ? champ.name : null;
+    drawTitleScreen(ctx, bestEverScore(), g.world, g.playerName, g.daily, rivalTag);
     return;
   }
   if (g.state === STATES.MAP_SELECT) { drawMapSelect(ctx, g.mapIdx); return; }

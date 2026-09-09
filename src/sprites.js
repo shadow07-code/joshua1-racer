@@ -35,6 +35,21 @@ export function ghostSprite(spr) {
   return g;
 }
 
+// ── Helper: RIVAL ghost — the leaderboard champion's phantom ─────────────────
+// Distinct from YOUR ghost on two axes at once, so the two are never confused
+// whichever livery you have equipped: the caller paints it champion GOLD, and
+// this mask uses the OPPOSITE checkerboard parity to ghostSprite() above. At
+// 10×15 px a single cue is not enough — CHROME and PHANTOM liveries already sit
+// close to a plain grey phantom.
+const _rivalCache = new Map();
+export function rivalGhostSprite(spr) {
+  let g = _rivalCache.get(spr);
+  if (g) return g;
+  g = spr.map((row, y) => row.map((c, x) => ((x + y) & 1) ? c : -1));
+  _rivalCache.set(spr, g);
+  return g;
+}
+
 // ── Helper: 1px "lean" variants ───────────────────────────────────────────────
 // Shifts the nose rows one pixel toward the steer/drift direction (and tail
 // rows the opposite way) so a car visibly angles into its lateral movement.

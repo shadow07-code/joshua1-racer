@@ -298,7 +298,7 @@ function drawTitleDriver(ctx, t, carCx, carBaseY) {
   }
 }
 
-export function drawTitleScreen(ctx, allTimeBest, world, playerName, daily) {
+export function drawTitleScreen(ctx, allTimeBest, world, playerName, daily, rivalName) {
   const t = performance.now();
 
   // ── Scene ──
@@ -359,6 +359,12 @@ export function drawTitleScreen(ctx, allTimeBest, world, playerName, daily) {
   } else {
     textRight(ctx, "------", chipX + chipW - 4, wy + 1, 4, 1);
   }
+  // GHOST tag — the champion's recorded line is loaded and will be racing you
+  // this run. Gold, matching the phantom you'll actually see on the road, so the
+  // gold car has a name attached to it rather than appearing unexplained. Sits
+  // in the dead space between a 7-char name (ends chipX+65) and the right-
+  // aligned 6-digit score (starts chipX+104). Hidden when the champion is YOU.
+  if (rivalName) text(ctx, "GHOST", chipX + 70, wy + 1, 5, 1);
 
   // ── DAILY CHALLENGE strip — welded to the underside of the chip so the two
   // read as one info stack. Header + goal + progress bar. ──

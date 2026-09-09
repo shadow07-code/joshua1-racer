@@ -11,8 +11,12 @@
 // long run is a few KB of JSON in localStorage.
 import { project } from "./road.js";
 import { drawSpriteNN } from "./render.js";
-import { ghostSprite } from "./sprites.js";
+import { ghostSprite, rivalGhostSprite, recolorBody, SPR_FERRARI_BASE } from "./sprites.js";
 import { selectedSprite } from "./garage.js";
+
+// The rival wears a fixed champion GOLD rather than a livery, so it can never
+// collide with whatever the player has equipped. Built once at module load.
+const RIVAL_BODY = recolorBody(SPR_FERRARI_BASE, 7, 6, 8, 19, 5, 21);
 
 const SAMPLE_SEC = 0.4;                 // seconds between recorded samples
 const MAX_SAMPLES = 1500;               // ~10 minutes; guards runaway storage
@@ -73,4 +77,17 @@ export function drawGhost(ctx, samples, raceTime, map, playerZ, playerX) {
   const p = project(map, playerZ, playerX, g);
   if (!p) return;                                 // beyond the horizon / off-screen
   drawSpriteNN(ctx, ghostSprite(selectedSprite()), p.sx - 5, p.sy - 8, 1.05);
+}
+
+// The RIVAL ghost — the global #1's recorded line, replayed at the position that
+// player held at this moment of THEIR run. Same idea as the personal ghost, but
+// it turns the leaderboard from a list you read after dying into a car you can
+// see on the road. Purely visual: it has no collision and no effect on scoring,
+// so it cannot corrupt the board it comes from.
+export function drawRivalGhost(ctx, samples, raceTime, map, playerZ, playerX) {
+  const g = ghostAt(samples, raceTime);
+  if (!g) return;                                 // you have outlasted the champion
+  const p = project(map, playerZ, playerX, g);
+  if (!p) return;
+  drawSpriteNN(ctx, rivalGhostSprite(RIVAL_BODY), p.sx - 5, p.sy - 8, 1.05);
 }

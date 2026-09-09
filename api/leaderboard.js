@@ -17,7 +17,12 @@
 // no destructive delete needed; new honest scores compete on a fresh key.
 const LB_KEY = "joshua1:lb:v2";
 const META_KEY = "joshua1:lb:meta:v2";
+// The reigning champion's GHOST — their run recorded as [z, x] pairs, so every
+// other player can race the #1 line instead of only reading a number. Written
+// only by a submit that actually lands at rank 1; ~2-3 KB for a 2-minute run.
+const GHOST_KEY = "joshua1:lb:ghost:v2";
 const TOP_N = 20;
+const MAX_GHOST_SAMPLES = 1500;         // matches ghost.js's own cap
 
 // Validation bounds — lenient; only blocks absurd/forged values, not tight policing.
 const SCORE_CAP = 1_000_000_000;        // hard ceiling
@@ -65,6 +70,33 @@ function sanitizeName(raw) {
   s = s.replace(/\s+/g, " ").trim();      // collapse + trim whitespace
   s = s.slice(0, NAME_MAX).trim();
   return s || "AAA";
+}
+
+// Ghost samples arrive from an untrusted client, so validate hard: shape, length
+// and per-value bounds. Anything malformed drops the ghost (the score still
+// counts) rather than storing junk that every other player would then download.
+function sanitizeSamples(raw) {
+  if (!Array.isArray(raw) || raw.length < 3 || raw.length > MAX_GHOST_SAMPLES) return null;
+  const out = [];
+  for (const s of raw) {
+    if (!Array.isArray(s) || s.length < 2) return null;
+    const z = Math.round(Number(s[0]));
+    const x = Math.round(Number(s[1]));
+    if (!Number.isFinite(z) || !Number.isFinite(x)) return null;
+    if (z < 0 || z > 10000000 || x < -512 || x > 512) return null;
+    out.push([z, x]);
+  }
+  return out;
+}
+
+async function readChampion(cfg) {
+  try {
+    const raw = await redis(cfg, ["GET", GHOST_KEY]);
+    if (!raw) return null;
+    const j = typeof raw === "string" ? JSON.parse(raw) : raw;
+    if (!j || !Array.isArray(j.samples) || j.samples.length < 3) return null;
+    return { name: String(j.name || "AAA"), score: toInt(j.score), samples: j.samples };
+  } catch { return null; }
 }
 
 function toInt(v) {
@@ -118,8 +150,9 @@ module.exports = async function handler(req, res) {
   try {
     if (req.method === "GET") {
       const entries = await readTop(cfg);
+      const champion = await readChampion(cfg);
       res.setHeader("Cache-Control", "s-maxage=10, stale-while-revalidate=30");
-      res.status(200).json({ entries });
+      res.status(200).json({ entries, champion });
       return;
     }
 
@@ -164,6 +197,17 @@ module.exports = async function handler(req, res) {
         ["ZCARD", LB_KEY],
       ]);
       const rank = revrank == null ? null : toInt(revrank) + 1;
+
+      // Took the crown? Their line becomes the ghost everyone else races.
+      // Gated on the SERVER's own rank, never on a client claim.
+      if (rank === 1) {
+        const samples = sanitizeSamples(body.samples);
+        if (samples) {
+          try {
+            await redis(cfg, ["SET", GHOST_KEY, JSON.stringify({ name, score, samples })]);
+          } catch { /* the score still stands; the ghost is best-effort */ }
+        }
+      }
 
       const entries = await readTop(cfg);
       res.status(200).json({ ok: true, entries, rank, total: toInt(total) });

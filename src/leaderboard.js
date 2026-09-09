@@ -11,6 +11,9 @@ const DEFAULT_NAME = "PLAYER1";
 // inflated board + any stale pending submit from the old runaway-combo system).
 const CACHE_KEY = "joshua1.lb.cache.v2";
 const PENDING_KEY = "joshua1.lb.pending.v2";
+// The champion's ghost, cached so a race can start against it instantly and
+// still have a rival to chase when the player is offline.
+const CHAMP_KEY = "joshua1.lb.champion.v2";
 const TIMEOUT_MS = 6000;
 const NAME_MAX = 12;
 
@@ -47,6 +50,30 @@ function writeCache(entries) {
   try { localStorage.setItem(CACHE_KEY, JSON.stringify({ entries, ts: Date.now() })); } catch {}
 }
 
+function writeChampion(champ) {
+  try {
+    if (champ && Array.isArray(champ.samples) && champ.samples.length >= 3) {
+      localStorage.setItem(CHAMP_KEY, JSON.stringify(champ));
+    }
+  } catch {}
+}
+
+// The reigning #1's recorded line, or null. Read at race start.
+export function cachedChampion() {
+  try {
+    const raw = localStorage.getItem(CHAMP_KEY);
+    const j = raw ? JSON.parse(raw) : null;
+    return j && Array.isArray(j.samples) && j.samples.length >= 3 ? j : null;
+  } catch { return null; }
+}
+
+// Best score currently on the cached board — used to decide whether this run is
+// even a candidate for the crown before spending bandwidth on its ghost.
+function cachedWorldBest() {
+  const e = readCache();
+  return e.length ? Math.max(0, Math.floor(e[0].score || 0)) : 0;
+}
+
 async function request(method, body) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
@@ -71,7 +98,8 @@ export async function fetchTop() {
     const { ok, status, json } = await request("GET");
     if (ok && Array.isArray(json.entries)) {
       writeCache(json.entries);
-      return { entries: json.entries, offline: false };
+      writeChampion(json.champion);
+      return { entries: json.entries, offline: false, champion: json.champion || null };
     }
     if (status === 503) return { entries: readCache(), offline: false, unconfigured: true };
     return { entries: readCache(), offline: true };
@@ -89,6 +117,14 @@ export async function submitScore(run) {
     passed: Math.max(0, Math.floor(run.passed || 0)),
     topSpeed: Math.max(0, Math.floor(run.topSpeed || 0)),
   };
+  // Only ship the ghost when this run could actually take the crown — players
+  // die a lot, and 2-3 KB on every single death is bandwidth for nothing. The
+  // SERVER still decides whether to keep it (it stores only at rank 1); this is
+  // purely an early-out. An empty cache means we cannot tell, so we send.
+  if (Array.isArray(run.samples) && run.samples.length >= 3 &&
+      payload.score >= cachedWorldBest()) {
+    payload.samples = run.samples;
+  }
   try {
     const { ok, json } = await request("POST", payload);
     if (ok && Array.isArray(json.entries)) {
