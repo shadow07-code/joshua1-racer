@@ -20,14 +20,27 @@ const KEY = "joshua1.daily.v1";
 // `mode: 'sum'`  — every run of the day adds to the tally.
 // `mode: 'best'` — the day's single best run counts (a skill spike, not a grind).
 // `stat` names a field of the run summary passed to applyRun().
-// Tiers are calibrated against a MEASURED clean 2-minute run: ~6000 distance,
-// ~173 cars passed, ~40-60 coins. A daily should want 2-4 runs, so the 'sum'
+// Tiers are calibrated against a MEASURED clean 2-minute run. RE-MEASURED
+// 2026-09-11: ~6009 distance, ~232 cars passed, ~58 trail coins (+14 if the
+// run completes its event).
+//
+// `passed` jumped 173 -> 232 (+34%) when the mid-run density curve landed, which
+// quietly pulled the PASS tiers below the 1.3-run floor (250 was 1.4 runs at 173,
+// but only 1.1 at 232). Rescaled to [335, 600, 920] = 1.4 / 2.6 / 4.0 runs,
+// back inside the band (940 overshot it at 4.1). `passedCount` is driver-model INDEPENDENT
+// (verified: static, coin-chasing and weaving drivers all average 232), so that
+// figure is safe to calibrate against.
+//
+// `distance` was unaffected (6009 vs the ~6000 it was set against) and `coins`
+// still lands in its original 40-60 band for a realistic driver, so neither
+// moved. Only a perfect coin-chaser clears the 70 tier inside one run, and
+// rewarding perfect play there is fine. A daily should want 2-4 runs, so the 'sum'
 // targets sit above what any single good run delivers — otherwise the day's goal
 // falls out of the first attempt and stops being a reason to come back.
 const GOALS = [
   { id: "dist",  mode: "sum",  stat: "distance", tiers: [8000, 14000, 20000],   label: n => "DRIVE " + n + "M" },
   { id: "coins", mode: "sum",  stat: "coins",    tiers: [70, 110, 160],         label: n => "COLLECT " + n + " COINS" },
-  { id: "pass",  mode: "sum",  stat: "passed",   tiers: [250, 450, 700],        label: n => "PASS " + n + " CARS" },
+  { id: "pass",  mode: "sum",  stat: "passed",   tiers: [335, 600, 920],        label: n => "PASS " + n + " CARS" },
   { id: "smash", mode: "sum",  stat: "smashed",  tiers: [12, 20, 30],           label: n => "SMASH " + n + " CARS" },
   { id: "combo", mode: "best", stat: "combo",    tiers: [15, 22, 30],           label: n => "REACH X" + n + " COMBO" },
   { id: "score", mode: "best", stat: "score",    tiers: [30000, 55000, 85000],  label: n => "SCORE " + n + " IN A RUN" },
