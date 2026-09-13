@@ -478,6 +478,17 @@ export function drawTraffic(ctx, sys, map, playerZ, playerX) {
         rect(ctx, sx0 + 1, sy0 - 2, c.skin.w - 2, 1, 9);    // orange hazard flash
       }
     }
+    // ── BRAKE LIGHTS ── resolveTrafficSeparation() already makes a car ease off
+    // when it closes on the one ahead, and that was completely invisible: a car
+    // shedding speed in your lane closes on YOU much faster than one at cruise,
+    // and there was no way to see it coming. Now it lights up, day or night.
+    // Bright red (6) rather than the taillight orange (9) the sprite already
+    // carries, so "braking" is a different colour from "tail lamp on".
+    if (!c.smashed && !c.oncoming && c.cruise != null && c.speed < c.cruise * 0.90) {
+      const bx = Math.round(p.sx - hx), by = Math.round(p.sy - hz) + c.skin.tailRow;
+      rect(ctx, bx + 1, by, 2, 2, 6);
+      rect(ctx, bx + c.skin.w - 3, by, 2, 2, 6);
+    }
     // Turn-signal indicator — a bright amber corner light over the taillight on
     // the side the car is merging toward, blinking through the lead-in AND the
     // drift itself. Per-car phase offset so the road never flashes in unison.
@@ -493,6 +504,55 @@ export function drawTraffic(ctx, sys, map, playerZ, playerX) {
         const sx0 = Math.round(p.sx - hx), sy0 = Math.round(p.sy - hz);
         rect(ctx, sx0 + (sig > 0 ? c.skin.w - 3 : 1), sy0 + c.skin.tailRow, 2, 2, 5);
       }
+    }
+  }
+}
+
+// ── NIGHT LIGHTS ────────────────────────────────────────────────────────────
+// The run cycles through a real night (see drawTimeOfDayTint) and, until now,
+// not one vehicle turned its lights on — so night read as "somebody dimmed the
+// screen" rather than as night, and traffic got HARDER TO SEE for no reason the
+// player could act on.
+//
+// The whole trick is the draw ORDER: main.js calls this AFTER the time-of-day
+// tint, so these lamps punch THROUGH the darkness instead of being washed by
+// it. That one difference is what makes a flat colour wash read as headlights
+// in the dark. Everything here is paint on positions that already exist — no
+// new entity, no motion, no optic flow.
+export function drawNightLights(ctx, sys, map, playerZ, playerX, night) {
+  if (!(night > 0.25)) return;              // daylight / dusk — nothing lit yet
+  const bright = night > 0.6;               // properly dark: lamps bloom
+  for (const c of sys.list) {
+    if (c.smashed) continue;                // off the road, engine dead
+    const p = project(map, playerZ, playerX, c);
+    if (!p) continue;
+    const hx = skinHalfX(c.skin), hz = skinHalfZ(c.skin);
+    const sx0 = Math.round(p.sx - hx);
+    if (c.oncoming) {
+      // Wrong-way: full-beam headlights straight at the camera. Same anchor the
+      // day-time pair uses in drawTraffic, so they sit on the sprite's lights.
+      const ly = Math.round(p.sy + hz) - 2;
+      rect(ctx, sx0 + 1, ly, 2, 2, 1);                        // white cores
+      rect(ctx, sx0 + c.skin.w - 3, ly, 2, 2, 1);
+      if (bright) {                                           // warm spill either side
+        rect(ctx, sx0, ly, 1, 2, 5);
+        rect(ctx, sx0 + c.skin.w - 1, ly, 1, 2, 5);
+      }
+      continue;
+    }
+    // Everyone the player is overtaking shows tail lamps on their taillight row —
+    // in BRAKE red if they are shedding speed. This has to repeat drawTraffic's
+    // brake test rather than leave it to the day-time pass: these lamps are
+    // painted after the tint and would otherwise cover the brake lights with
+    // plain orange, putting the signal out exactly when it is hardest to see.
+    const braking = c.cruise != null && c.speed < c.cruise * 0.90;
+    const lampIdx = braking ? 6 : 9;
+    const ly = Math.round(p.sy - hz) + c.skin.tailRow;
+    rect(ctx, sx0 + 1, ly, 2, 2, lampIdx);
+    rect(ctx, sx0 + c.skin.w - 3, ly, 2, 2, lampIdx);
+    if (bright && !braking) {                                 // hot filament core
+      rect(ctx, sx0 + 1, ly, 1, 1, 5);
+      rect(ctx, sx0 + c.skin.w - 3, ly, 1, 1, 5);
     }
   }
 }

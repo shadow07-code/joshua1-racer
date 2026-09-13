@@ -15,15 +15,16 @@ import {
   startEngine, setEngine, stopEngine, setEngineRampage, setEngineStrain, getEngineStyle, setEngineStyle,
   sfxAccelAccent, sfxPickup, sfxCrash, sfxExplosion, sfxBump, sfxBarrelDrop, sfxCombo,
   sfxWhoosh, sfxPerfect, sfxHeartbeat, sfxCoin, sfxHorn, sfxEventStart,
+  sfxSandwich, sfxRampageWarn,
   sfxShieldUp, sfxShieldHit, sfxShockwave, sfxRampageCharge, sfxRampageReady, sfxNitrous,
   sfxMenuMove, sfxMenuSelect, sfxFinish, sfxCountdownBeep,
   startHeliSound, stopHeliSound,
   setMusicEnabled, setSfxEnabled, isMusicEnabled, isSfxEnabled, applyMix,
   getMusicTrack, setMusicTrack,
 } from "./audio.js";
-import { drawRoad, drawDistanceHaze, drawTimeOfDayTint, distToY, biomeAt } from "./road.js";
-import { makePlayer, updatePlayer, drawPlayer, playerBox, applyCollisionLoss } from "./entities/player.js";
-import { makeTrafficSystem, updateTraffic, drawTraffic, drawCoins, checkCoinGrab, checkTrafficHit, prepopulateTraffic, smashCar } from "./entities/traffic.js";
+import { drawRoad, drawDistanceHaze, drawTimeOfDayTint, distToY, biomeAt, nightFactor } from "./road.js";
+import { makePlayer, updatePlayer, drawPlayer, drawHeadlights, drawPlayerLights, playerBox, applyCollisionLoss } from "./entities/player.js";
+import { makeTrafficSystem, updateTraffic, drawTraffic, drawNightLights, drawCoins, checkCoinGrab, checkTrafficHit, prepopulateTraffic, smashCar } from "./entities/traffic.js";
 import { getDaily, applyRun as applyDailyRun } from "./daily.js";
 import { makePickupSystem, updatePickups, drawPickups, checkPickup } from "./entities/pickups.js";
 import { makeCopsSystem, updateCops, drawCops, checkBarrelHit } from "./entities/cops.js";
@@ -37,7 +38,8 @@ import {
   drawHud, drawTitleScreen, drawMapSelect, drawDifficultySelect,
   drawGameOver, drawPaused, drawCountdown, drawTutorialOverlay, drawSteerHints, drawCombo, drawShieldMsg,
   drawRampageMeter, drawSandwichCombo, drawShareCard, SHARE_CARD_W, SHARE_CARD_H,
-  drawExplosion, drawPerfect, drawLastLifePulse, drawBiomeBanner, drawZoneFlash,
+  drawExplosion, drawCrashImpact, drawCrashFlash, drawPerfect, drawLastLifePulse,
+  drawBiomeBanner, drawZoneFlash,
   drawEventBanner, drawEventTimer,
 } from "./hud.js";
 import { registerServiceWorker, initInstallBanner, initInstallButton, initInstallSplash, setInstallButtonVisible } from "./pwa.js";
@@ -454,6 +456,10 @@ function newRaceSetup() {
   g.shieldMsg = "";
   g.shieldMsgTimer = 0;
   g.explosion = 0;
+  g.crashFx = 0;            // metal-on-metal impact burst at the car
+  g.crashFlash = 0;         // the red screen pop that goes with it
+  g.crashX = 0;             // screen x the burst is pinned to
+  g.rampageWarned = false;  // fired the "about to end" cue for THIS rampage
   g.hitStop = 0;
   g.hitStopCool = 0;
   g.perfectTimer = 0;
@@ -477,6 +483,19 @@ function comboMult() {
 // and this is never called — see the collision handler.)
 function takeHit(_invulnSec) {
   sfxCrash();
+  // The crash BEAT — a red screen pop plus a shard burst pinned to the car, so
+  // losing a life finally reads as an impact instead of an invisible accounting
+  // change. The hit-stop is added by the caller only when the run continues: on
+  // a fatal hit the state is already GAME_OVER by the time the next frame
+  // renders, so a freeze there would just stall the game-over screen.
+  //
+  // A barrel hit already has its own fireball (set just before this call), and
+  // stacking a metal-shard burst inside a fireball is mush. The RED FLASH still
+  // fires either way — that is the "you lost a life" signal, and the
+  // explosion's own flash is white and lasts only its first 12%.
+  g.crashFx = g.explosion > 0 ? 0 : RACE.crashFxDur;
+  g.crashFlash = RACE.crashFlashDur;
+  g.crashX = (W / 2 + g.map.biasX + g.player.x) | 0;
   g.player.lives -= 1;
   g.combo = 0; g.comboTimer = 0;        // a real crash breaks the streak
   g.sandwichCombo = 0; g.sandwichComboTimer = 0;  // ...and the sandwich multiplier
@@ -502,6 +521,7 @@ function unleashRampage() {
   g.player.rampage = RACE.rampageDuration;
   g.player.boost = RACE.rampageDuration;
   g.rampagesUsed += 1;
+  g.rampageWarned = false;
   g.rampageFlash = 0.18;
   g.unleashFlash = 0.25;
   g.hitStop = Math.max(g.hitStop, 0.08);
@@ -946,7 +966,7 @@ function updateRace(dt) {
         g.combo += 1;
         g.comboBest = Math.max(g.comboBest, g.combo);
         g.comboTimer = RACE.comboWindow;
-        sfxPickup();
+        sfxSandwich();
       }
       // Each pass burns down the post-rampage cooldown; once it's spent, the
       // rampage meter is armed and near misses bank toward the next one.
@@ -1020,6 +1040,13 @@ function updateRace(dt) {
   // ── Rampage + post-rampage shockwave ──
   if (g.player.rampage > 0) {
     g.player.rampage = Math.max(0, g.player.rampage - dt);
+    // One warning cue as the nitrous runs down — paired with the meter's red
+    // strobe and the car's aura switching to a warning flash, so the player can
+    // choose a line to be mortal on instead of being handed one at random.
+    if (!g.rampageWarned && g.player.rampage > 0 && g.player.rampage <= RACE.rampageWarnSeconds) {
+      g.rampageWarned = true;
+      sfxRampageWarn();
+    }
     if (g.player.rampage === 0) {
       // Rampage just ended: an instantaneous shockwave from the player's car
       // kicks out only the NEXT TWO cars ahead — just enough room to maneuver
@@ -1054,6 +1081,8 @@ function updateRace(dt) {
   if (g.unleashFlash > 0) g.unleashFlash = Math.max(0, g.unleashFlash - dt);
   if (g.sandwichComboTimer > 0) g.sandwichComboTimer = Math.max(0, g.sandwichComboTimer - dt);
   if (g.explosion > 0) g.explosion = Math.max(0, g.explosion - dt);
+  if (g.crashFx > 0) g.crashFx = Math.max(0, g.crashFx - dt);
+  if (g.crashFlash > 0) g.crashFlash = Math.max(0, g.crashFlash - dt);
   if (g.perfectTimer > 0) g.perfectTimer = Math.max(0, g.perfectTimer - dt);
   if (g.hitStopCool > 0) g.hitStopCool = Math.max(0, g.hitStopCool - dt);
 
@@ -1120,6 +1149,7 @@ function updateRace(dt) {
       const push = g.player.x > t.x ? 9 : -9;
       g.player.x += push;
       if (takeHit(1.5)) return;
+      g.hitStop = Math.max(g.hitStop, RACE.crashHitStop);
     }
     // Flaming barrel from the chopper. Skipped if a traffic hit this frame
     // already granted invuln (avoids double-dipping).
@@ -1131,6 +1161,7 @@ function updateRace(dt) {
         sfxExplosion();                // (before takeHit so it sounds even on a fatal hit)
         applyCollisionLoss(g.player, 0.5, 1.2);
         if (takeHit(1.2)) return;
+        g.hitStop = Math.max(g.hitStop, RACE.crashHitStop);
       }
     }
   }
@@ -1144,6 +1175,7 @@ function updateRace(dt) {
     g.rampageMeter = 0;
     g.rampageArmed = false;                    // the canister IS the rampage — no double-dip
     g.rampageCooldown = 0;
+    g.rampageWarned = false;                   // a refresh re-arms the end-of-boost cue
     g.rampageFlash = 0.12;                      // feedback on every grab (incl. a refresh)
     g.shieldMsg = "RAMPAGE!"; g.shieldMsgTimer = 1.6;
     sfxNitrous();
@@ -1186,8 +1218,12 @@ function updateGameOver(dt) {
 // ─── Render ──────────────────────────────────────────────────────────────────
 function drawWorld() {
   const biome = g.biome || biomeAt(g.raceTime);
+  const night = nightFactor(g.raceTime);
   drawRoad(ctx, g.map, g.player.z, g.player.speed, biome, g.player.rampage > 0);
   drawScenery(ctx, g.scenery, g.map, g.player.z);
+  // Headlight pool goes down BEFORE the traffic — light falls on the asphalt and
+  // cars sit on top of it, so it can never speckle a vehicle you're reading.
+  drawHeadlights(ctx, g.player, g.map, night);
   drawSmoke(ctx, g.map, g.player.z, g.player.x, g.player);
   drawTraffic(ctx, g.traffic, g.map, g.player.z, g.player.x);
   // Two phantoms, each at the position its run held at this point in time: the
@@ -1203,6 +1239,11 @@ function drawWorld() {
   // Day → dusk → night → dawn colour wash (static screen-space, no optic flow).
   // Drawn LAST so the world is tinted but the HUD/banners (drawn after) stay clear.
   drawTimeOfDayTint(ctx, g.raceTime);
+  // ...except the lamps, which go on AFTER the tint on purpose: a light that the
+  // darkness dims isn't a light. This is the one thing that makes night read as
+  // night rather than as a dimmer screen.
+  drawNightLights(ctx, g.traffic, g.map, g.player.z, g.player.x, night);
+  drawPlayerLights(ctx, g.player, g.map, night);
 }
 
 // Toggle the HTML overlays once per state change, and kick off the leaderboard
@@ -1290,6 +1331,11 @@ function render() {
     if (g.explosion > 0) {
       drawExplosion(ctx, 1 - g.explosion / EXPLOSION_DUR, (W / 2 + g.map.biasX + g.player.x) | 0, PLAYER_Y);
     }
+    // Crash impact — the shard burst at the car, then the red screen pop over it.
+    if (g.crashFx > 0) {
+      drawCrashImpact(ctx, 1 - g.crashFx / RACE.crashFxDur, g.crashX, PLAYER_Y);
+    }
+    if (g.crashFlash > 0) drawCrashFlash(ctx, 1 - g.crashFlash / RACE.crashFlashDur);
     // Zone-change flash — a one-shot dither pop that masks the biome palette cut.
     if (g.biomeFlash > 0) drawZoneFlash(ctx, 1 - g.biomeFlash / 0.22);
     // Unleash flash — the same one-shot pop, fired the instant a rampage is tapped.
@@ -1319,6 +1365,8 @@ function render() {
       cooldown: g.rampageCooldown, cooldownMax: RACE.rampageCooldownPasses,
       active: g.player.rampage > 0,
       armed: g.rampageArmed,
+      activeFrac: g.player.rampage / RACE.rampageDuration,
+      activeLeft: g.player.rampage,
     });
     if (g.perfectTimer > 0) drawPerfect(ctx, g.perfectTimer, (W / 2 + g.map.biasX + g.player.x) | 0);
     if (g.biomeBannerTimer > 0) drawBiomeBanner(ctx, g.biomeName, g.biomeBannerTimer);

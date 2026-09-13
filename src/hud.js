@@ -637,13 +637,26 @@ export function drawSandwichCombo(ctx, count, timer) {
 // After a rampage the row goes muted blue-gray and refills as the cooldown
 // cars are passed — once spent, gold building resumes. Hidden while a rampage
 // is running and when there's nothing to show (clean screen by default).
-export function drawRampageMeter(ctx, { meter, max, cooldown, cooldownMax, active, armed }) {
-  if (active) return;
-  if (!armed && meter <= 0 && cooldown <= 0) return;
+export function drawRampageMeter(ctx, { meter, max, cooldown, cooldownMax, active, armed, activeFrac, activeLeft }) {
   const cellW = 3, cellH = 2, gap = 1;
   const wTot = max * (cellW + gap) - gap;
   const x0 = ((W - wTot) / 2) | 0;
   const y = 34;   // sits below the COMBO banner + the transient SANDWICH line
+  // ── RAMPAGE RUNNING ── The row becomes a draining TIMER instead of hiding.
+  // Invincibility used to simply evaporate, mid-traffic, with no tell — so the
+  // end of the game's best moment was decided by wherever you happened to be
+  // standing. Under RACE.rampageWarnSeconds the bar strobes red: get back on a
+  // clean line, you are about to be mortal again.
+  if (active) {
+    const f = Math.max(0, Math.min(1, activeFrac || 0));
+    const warn = (activeLeft || 0) <= (RACE.rampageWarnSeconds || 1.5);
+    const hot = Math.floor(performance.now() / (warn ? 60 : 130)) % 2 === 0;
+    rect(ctx, x0 - 2, y - 2, wTot + 4, cellH + 4, 0);        // dark plate
+    rect(ctx, x0, y, wTot, cellH, 4);                        // spent track
+    rect(ctx, x0, y, (wTot * f) | 0, cellH, warn ? (hot ? 6 : 1) : (hot ? 5 : 9));
+    return;
+  }
+  if (!armed && meter <= 0 && cooldown <= 0) return;
   rect(ctx, x0 - 2, y - 2, wTot + 4, cellH + 4, 0);          // dark plate
   // ARMED — the whole row strobes white/gold: it's full and waiting on YOUR tap.
   if (armed) {
@@ -863,6 +876,45 @@ export function drawExplosion(ctx, prog, cx, cy) {
       rect(ctx, (cx + Math.cos(a) * spread) | 0, (cy + Math.sin(a) * spread) | 0, 2, 2, (i & 1) ? 5 : 9);
     }
   }
+}
+
+// ── CRASH IMPACT ── The most important thing that happens in a run used to be
+// the QUIETEST thing on screen: a sound, a 55% speed cut, and a 1.5s blink that
+// reads as "something happened" rather than "you were hit". This is the
+// punctuation it earns — and it is deliberately NOT the barrel fireball, which
+// reads as an explosion. This reads as metal hitting metal: a white contact
+// flash, shards flung out of it, then a puff of smoke. Compact and pinned to
+// the car (the screen-wide half of the beat is drawCrashFlash below).
+export function drawCrashImpact(ctx, prog, cx, cy) {
+  if (prog <= 0 || prog >= 1) return;
+  if (prog < 0.16) {
+    disc(ctx, cx, cy, 7, 1);                                 // white contact flash
+    disc(ctx, cx, cy, 4, 5);
+  }
+  if (prog < 0.85) {
+    const spread = 5 + prog * 20;                            // shards fling outward
+    const sz = prog < 0.4 ? 2 : 1;
+    for (let i = 0; i < 8; i++) {
+      const a = i / 8 * Math.PI * 2 + 0.2;
+      const idx = prog < 0.35 ? ((i & 1) ? 5 : 1) : ((i & 1) ? 9 : 2);
+      rect(ctx, (cx + Math.cos(a) * spread) | 0, (cy + Math.sin(a) * spread) | 0, sz, sz, idx);
+    }
+  }
+  if (prog > 0.45) {                                         // smoke takes over
+    disc(ctx, cx, cy - 2, (3 + prog * 5) | 0, 4);
+    disc(ctx, cx - 5, cy + 1, (2 + prog * 3) | 0, 3);
+    disc(ctx, cx + 5, cy + 1, (2 + prog * 3) | 0, 3);
+  }
+}
+
+// CRASH FLASH — a one-shot RED dither pop over the play area the instant a life
+// is lost. Same family as the zone / rampage / explosion flashes (static
+// screen-space colour only, no motion), just red and short, so the hit lands
+// even when the player's eyes are on the far end of the road.
+export function drawCrashFlash(ctx, prog) {
+  if (prog <= 0 || prog >= 1) return;
+  const idx = prog < 0.45 ? 6 : 7;                           // bright red → dark red
+  ditherRect(ctx, 0, 9, W, H - 33, idx, (Math.floor(performance.now() / 30) & 1), 2);
 }
 
 // "PERFECT!" micro-pop — a small blinking word just above the car on a

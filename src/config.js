@@ -152,6 +152,11 @@ export const RACE = {
   // adds to the combo). When it ends, an instantaneous shockwave from the car
   // kicks out just the next 2 vehicles ahead — room to maneuver, no long clear.
   rampageDuration: 7,      // seconds of nitrous smashing
+  // The last stretch of a rampage, during which the HUD timer strobes red and
+  // the car's aura switches to a warning flash. Invincibility used to simply
+  // evaporate mid-traffic with no tell, which turned the game's best moment
+  // into a coin flip about where you happened to be standing when it ended.
+  rampageWarnSeconds: 1.5,
   rampageClearTime: 0,     // no clear-road grace — the exit shockwave is instantaneous
   rampageClearDist: 120,   // search range for the exit shockwave (next 2 cars within this)
   // Tension/release pacing: traffic spacing breathes ±densityWaveAmp around the
@@ -230,6 +235,20 @@ export const RACE = {
   // After a crash the next couple of spawned rows are forced open, so the player
   // isn't dropped straight back into the pattern that just killed them.
   crashBreatherRows: 2,
+  // ── CRASH IMPACT ── Losing a life is the single most important thing that
+  // happens in a run, and it used to be the QUIETEST: a sound, a 55% speed cut
+  // and a blink. These give it the punctuation it earns — a hit-stop (which
+  // REDUCES motion, so the dizzy rule is intact), a one-shot red screen pop and
+  // a shard burst pinned to the car. Longer than the near-miss freeze (0.06) so
+  // the two never read as the same beat.
+  crashHitStop: 0.13,
+  // Sized AGAINST the hit-stop, not on its own: frame() stops updating during a
+  // freeze but keeps rendering, so the flash is held at its first (brightest)
+  // frame for the whole 0.13 s before it starts decaying. 0.18 therefore reads
+  // as ~0.21 s of bright red then ~0.10 s of dark red — a hard impact, not a
+  // third of a second of red screen.
+  crashFlashDur: 0.18,
+  crashFxDur: 0.38,
 };
 
 // Spawn rates and traffic-row spacing.

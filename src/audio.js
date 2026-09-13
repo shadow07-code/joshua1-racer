@@ -658,6 +658,51 @@ export function sfxPickup() {
   });
 }
 
+// SANDWICH — splitting a tight two-car gap, the signature skill move of the
+// whole game. It used to share sfxPickup() with a slow-speed near miss and a
+// coin, so the best thing a player can do sounded like the most incidental.
+// This is its own cue: an air-rush swipe with a bright fifth cracking over it.
+export function sfxSandwich() {
+  if (!ctx || !throttle("sandwich", 120)) return;
+  const t = ctx.currentTime;
+  // The swipe — traffic ripping past on BOTH sides.
+  const src = ctx.createBufferSource(); src.buffer = getNoiseBuf();
+  const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.Q.value = 1.6;
+  bp.frequency.setValueAtTime(1100, t);
+  bp.frequency.exponentialRampToValueAtTime(3200, t + 0.06);
+  bp.frequency.exponentialRampToValueAtTime(700, t + 0.16);
+  const gn = ctx.createGain(); gn.gain.value = 0;
+  gn.gain.linearRampToValueAtTime(0.20, t + 0.012);
+  gn.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+  src.connect(bp); bp.connect(gn); gn.connect(sfxGain);
+  src.start(t); src.stop(t + 0.20);
+  // The crack — a rising fifth on top so it lands as an achievement, not a bump.
+  [[784, 0], [1175, 0.055]].forEach(([f, off]) => {
+    const o = ctx.createOscillator(); o.type = "square"; o.frequency.value = f;
+    const g = ctx.createGain(); g.gain.value = 0;
+    g.gain.linearRampToValueAtTime(0.15, t + off + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.001, t + off + 0.13);
+    o.connect(g); g.connect(sfxGain);
+    o.start(t + off); o.stop(t + off + 0.15);
+  });
+}
+
+// RAMPAGE ENDING — two urgent low ticks with RACE.rampageWarnSeconds left, the
+// audio half of the red strobe on the meter and the car's aura. Deliberately
+// dark and dry: this is a warning, not a reward.
+export function sfxRampageWarn() {
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  [0, 0.14].forEach((off) => {
+    const o = ctx.createOscillator(); o.type = "square"; o.frequency.value = 196;
+    const g = ctx.createGain(); g.gain.value = 0;
+    g.gain.linearRampToValueAtTime(0.15, t + off + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.001, t + off + 0.10);
+    o.connect(g); g.connect(sfxGain);
+    o.start(t + off); o.stop(t + off + 0.12);
+  });
+}
+
 // Near-miss combo blip — pitch climbs a semitone per combo step (caps ~1 octave)
 // with a sparkle harmonic, so a hot streak literally sounds like it's rising.
 export function sfxCombo(level) {

@@ -5,6 +5,10 @@ import { W, H, PLAYER_Y, PHYS, RACE } from "./config.js";
 import { rect } from "./render.js";
 
 const VIEW_AHEAD_METERS = 100;
+// Lane count used by the painted seams. Must stay in step with LANES in
+// entities/traffic.js — the seams are only honest if they sit on the boundaries
+// traffic actually spawns against.
+const LANES_DRAWN = 5;
 
 // ── Biomes ─────────────────────────────────────────────────────────────────────
 // The run cycles through scenes for freshness + landmarks. A biome only changes
@@ -112,21 +116,24 @@ export function drawRoad(ctx, map, playerZ, speed = 0, biome = null, rampageOn =
     }
   }
 
-  // ── Center line — faint, low-contrast dashes that shrink to nothing as speed
-  // rises. Gone by ~130 km/h (calm = 1), so the high-speed centre stays calm.
-  if (calm < 1) {
-    const pxPerMeter = PLAYER_Y / VIEW_AHEAD_METERS;
-    const scrollPx = playerZ * pxPerMeter;
-    const dashLen = 16, dashGap = 12, dashW = 3;
-    const effLen = Math.max(1, (dashLen * (1 - calm)) | 0);  // dashes shrink with speed
-    const period = dashLen + dashGap;
-    const offset = ((scrollPx) % period + period) % period;
-    for (let y = -dashLen; y < H; y += period) {
-      const top = (y + offset) | 0;
-      rect(ctx, (cx - dashW / 2) | 0, top, dashW, effLen, 2);   // light gray, no white/shadow
-    }
+  // ── LANE SEAMS — the road's actual five-lane structure ──
+  // Four SOLID 1px lines on the four real lane boundaries. A continuous line is
+  // invariant under forward motion, so unlike a dash it cannot strobe and
+  // produces ZERO optic flow at any speed — which is why these can stay on
+  // permanently instead of fading out with `calm`. That is the whole point:
+  // the asphalt used to become a blank grey slab above ~130 km/h, i.e. for most
+  // of a run, and a five-lane weaving game was being played on a road with no
+  // visible lanes.
+  //
+  // They also replace the old centre dash, which ran down the MIDDLE of the
+  // centre lane — it looked like a lane marking while sitting exactly where a
+  // car drives. These sit on the boundaries traffic is actually spawned
+  // against (lane centres are at ±0.5 and ±1.5 lane widths from them), so the
+  // gap lane can be read and pre-empted before its cars are even distinct.
+  const laneW = (halfW * 2) / LANES_DRAWN;
+  for (const k of [-1.5, -0.5, 0.5, 1.5]) {
+    rect(ctx, (cx + k * laneW) | 0, 0, 1, H, 2);       // worn-white, not glaring
   }
-
 }
 
 // ── Distance haze — a STATIC pale band fading down from the top edge (the
@@ -196,6 +203,17 @@ export function drawTimeOfDayTint(ctx, seconds) {
   if (c.al <= 0.003) return;            // day — nothing to draw
   ctx.fillStyle = `rgba(${c.r | 0},${c.g | 0},${c.bl | 0},${c.al.toFixed(3)})`;
   ctx.fillRect(0, 0, W, H);
+}
+
+// How dark it is right now, 0 (full day) → 1 (deepest night), derived from the
+// SAME curve that paints the tint so the two can never drift apart. Callers use
+// it to decide whether vehicles should have their lights on — see
+// drawNightLights() in entities/traffic.js, which draws them AFTER the tint so
+// they punch through the darkness instead of being dimmed by it.
+const TOD_PEAK_ALPHA = 0.32;            // the deepest alpha in TOD_KEYS
+export function nightFactor(seconds) {
+  const c = todColor(seconds || 0);
+  return Math.max(0, Math.min(1, c.al / TOD_PEAK_ALPHA));
 }
 
 export function project(map, playerZ, _x, entity) {

@@ -1,5 +1,5 @@
 // Player car — auto-accelerate with a start-of-race speed ramp, brake, steer, slip.
-import { PHYS, PLAYER_Y, W } from "../config.js";
+import { PHYS, RACE, PLAYER_Y, W } from "../config.js";
 import { drawSpriteNN, groundShadow, ring, disc, rect } from "../render.js";
 import { roadCenterX } from "../road.js";
 import { selectedSprite } from "../garage.js";
@@ -172,12 +172,100 @@ export function drawPlayer(ctx, p, map) {
   // (No combo glow around the car — the red/orange underglow + exhaust streaks
   // read as clutter against the sprite. The COMBO xN banner carries that
   // feedback instead. Rampage keeps its own flames + aura below.)
+  // Scraping the rubber fence throws sparks off the contact side — three
+  // flickering pixels, so pinning the car against the wall finally LOOKS like it
+  // costs something (it already costs speed).
+  if (p.edgeContact !== 0 && p.speed > PHYS.startSpeed) {
+    const t = performance.now();
+    // Anchor the spark column to the SPRITE's own blit rect, not to the car's
+    // centre: halfW is fractional (10 x 1.05 / 2 = 5.25), so `cxp + halfW | 0`
+    // landed ON the sprite's last pixel column instead of beside it, and the
+    // spark was painted over the car it was supposed to be flying off.
+    const spriteX = Math.round(cx + p.x - halfW + wobble);
+    const spriteW = Math.max(1, Math.round(halfW * 2));
+    // Straddle the car's own outline column and the first pixel beyond it. The
+    // biome edge strip a spark lands on can be cream, gold OR white (see
+    // BIOMES), so a 1px gold/white spark sitting purely outside the car is
+    // invisible in two biomes out of four; overlapping the black outline
+    // guarantees contrast everywhere.
+    const sx = p.edgeContact > 0 ? spriteX + spriteW - 1 : spriteX - 1;
+    for (let i = 0; i < 3; i++) {
+      if (((Math.floor(t / 45) + i * 5) % 3) === 0) continue;
+      const sy = (PLAYER_Y - 4 + ((Math.floor(t / 30) + i * 7) % 12)) | 0;
+      rect(ctx, sx, sy, 2, 1, (i & 1) ? 5 : 1);
+    }
+  }
   // RAMPAGE aura — a pulsing fiery ring around the car while nitrous is active.
+  // In the final `rampageWarnSeconds` it switches to a fast red/white WARNING
+  // strobe: invincibility used to just stop, mid-traffic, with no tell at all.
   if (p.rampage > 0) {
     const cyp = (PLAYER_Y) | 0;
-    const blink = Math.floor(performance.now() / 70) % 2 === 0;
-    ring(ctx, cxp, cyp, 10, blink ? 5 : 9);    // yellow / orange
-    ring(ctx, cxp, cyp, 11, blink ? 9 : 5);
+    const ending = p.rampage <= (RACE.rampageWarnSeconds || 1.5);
+    const blink = Math.floor(performance.now() / (ending ? 45 : 70)) % 2 === 0;
+    if (ending) {
+      ring(ctx, cxp, cyp, 10, blink ? 1 : 6);  // white / red — "it's about to go"
+      ring(ctx, cxp, cyp, 11, blink ? 6 : 1);
+    } else {
+      ring(ctx, cxp, cyp, 10, blink ? 5 : 9);  // yellow / orange
+      ring(ctx, cxp, cyp, 11, blink ? 9 : 5);
+    }
+  }
+}
+
+// ── The player's OWN tail lamps ────────────────────────────────────────────
+// Called after the time-of-day tint, alongside the traffic's lamps, so the car
+// the camera is actually looking at isn't the one unlit vehicle on the road.
+// Mirrors drawPlayer's invulnerability blink, or the lights would hover over a
+// car that isn't being drawn.
+export function drawPlayerLights(ctx, p, map, night) {
+  if (!(night > 0.25)) return;
+  if (p.invuln > 0 && (Math.floor(performance.now() / 60) % 2 === 0)) return;
+  const halfW = 10 * PLAYER_SCALE / 2, halfH = 15 * PLAYER_SCALE / 2;
+  const spriteX = Math.round(roadCenterX(map, p.z, p.x, 0) + p.x - halfW);
+  const spriteW = Math.max(1, Math.round(halfW * 2));
+  // Row 13 of the 15-row Ferrari is its quad taillights; scale to the blit.
+  const ly = Math.round(PLAYER_Y - halfH + 13 * PLAYER_SCALE);
+  rect(ctx, spriteX + 2, ly, 2, 2, 9);
+  rect(ctx, spriteX + spriteW - 4, ly, 2, 2, 9);
+  if (night > 0.6) {
+    rect(ctx, spriteX + 2, ly, 1, 1, 5);
+    rect(ctx, spriteX + spriteW - 4, ly, 1, 1, 5);
+  }
+}
+
+// ── HEADLIGHT POOL ──────────────────────────────────────────────────────────
+// At night the car throws a soft cone of light up the road in front of it.
+// Drawn as a sparse dither that thins with distance, so it reads as a glow
+// rather than a solid shape.
+//
+// Two deliberate choices:
+//  • It is anchored to the CAR, not the road, so it never moves relative to the
+//    player — zero optic flow, exactly like the static screen-space effects.
+//  • It is drawn BEFORE the traffic (light falls ON the asphalt; cars sit on top
+//    of it), so it can never speckle a vehicle the player is trying to read.
+//    That costs it the time-of-day tint, which only dims it ~30% — a fair trade
+//    for never obscuring the thing the whole game is about.
+export function drawHeadlights(ctx, p, map, night) {
+  if (!(night > 0.25)) return;
+  const cx = (roadCenterX(map, p.z, p.x, 0) + p.x) | 0;
+  const noseY = PLAYER_Y - Math.round(15 * PLAYER_SCALE / 2);
+  const rows = Math.round(20 + night * 14);          // 20..34 px of reach
+  for (let i = 0; i < rows; i++) {
+    const y = noseY - 2 - i;
+    if (y < 11) break;                               // never paint into the HUD strip
+    const f = i / rows;
+    // Thin the pool out with distance TWICE over — fewer lit rows as well as a
+    // wider gap between lit pixels within a row. One alone is not enough: the
+    // cone also widens as it throws, and a widening cone at constant density
+    // puts MORE light on the far end than the near end, which reads as a beam
+    // that gets brighter the further it goes.
+    if (f > 0.62) { if (i % 3) continue; }
+    else if (f > 0.34) { if (i % 2) continue; }
+    const half = Math.round(3 + f * 7);              // 3 → 10 px: about one lane
+    const step = 2 + Math.round(f * 3);              // 2 → 5 px between lit pixels
+    for (let x = -half + (i % step); x <= half; x += step) {
+      rect(ctx, cx + x, y, 1, 1, f < 0.35 ? 21 : 5); // pale near, gold far
+    }
   }
 }
 
