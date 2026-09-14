@@ -2,13 +2,17 @@
 // Network-first for the app shell (HTML/JS/manifest) so updates roll out the
 // moment the player is online; cache-first for static icons. Falls back to the
 // cache when offline so the installed PWA still launches.
-const VERSION = "joshua1-v44";
+const VERSION = "joshua1-v45";
 const ASSETS = [
   "./",
   "./index.html",
   "./manifest.webmanifest",
   "./icons/icon.svg",
   "./icons/icon-maskable.svg",
+  "./icons/icon-192.png",
+  "./icons/icon-512.png",
+  "./icons/icon-maskable-512.png",
+  "./icons/apple-touch-icon.png",
   "./audio/the-final-bend.mp3",
   "./src/main.js",
   "./src/config.js",

@@ -1,0 +1,30 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Keep the Android/TWA build out of the DEPLOYED site.
+#
+# Bubblewrap generates its Android project INTO this folder — the same folder
+# Vercel deploys as a static site. Without this file the very next deploy would
+# publish `android.keystore` at a public URL, and anyone who downloaded it could
+# sign an update that Android would accept as a genuine update to this app.
+# That key cannot be rotated for already-installed users.
+#
+# 🚫 NEVER add `.well-known/` here. `.well-known/assetlinks.json` MUST stay
+# public — it is how Android verifies the app owns this domain, and if it 404s
+# the TWA shows a browser address bar across the top of the game.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Signing keys — the critical one.
+*.keystore
+*.jks
+
+# Bubblewrap / Gradle project output
+app/
+.gradle/
+gradle/
+gradlew
+gradlew.bat
+*.gradle
+local.properties
+*.apk
+*.aab
+twa-manifest.json
+store_icon.png
