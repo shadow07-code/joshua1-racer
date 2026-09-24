@@ -5,3 +5,25 @@ node_modules/
 .claude/
 
 .vercel
+
+# ── Android / TWA build (Bubblewrap) ─────────────────────────────────────────
+# .vercelignore keeps these off the deployed SITE. This keeps them out of the
+# public GitHub repo, which is the other way the signing key could escape — and
+# the worse one, since git history is permanent.
+# 🚫 Never add .well-known/ here: assetlinks.json must be committed and public.
+*.keystore
+*.jks
+app/
+.gradle/
+gradle/
+gradlew
+gradlew.bat
+build.gradle
+settings.gradle
+gradle.properties
+local.properties
+*.apk
+*.aab
+twa-manifest.json
+store_icon.png
+manifest-checksum.txt
