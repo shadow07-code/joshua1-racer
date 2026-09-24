@@ -8,7 +8,7 @@
 import { PHYS, RACE } from "../config.js";
 import { project } from "../road.js";
 import { drawSpriteNN, groundShadow, rect } from "../render.js";
-import { TRAFFIC_SKINS, ONCOMING_SKINS, TRUCK_SKINS, oncomingSkin, SPR_COIN } from "../sprites.js";
+import { TRAFFIC_SKINS, ONCOMING_SKINS, oncomingSkin, SPR_COIN } from "../sprites.js";
 
 const LANES = 5;
 
@@ -28,8 +28,6 @@ export function makeTrafficSystem(opts = {}) {
     densityMul: 1.0,             // current difficulty density (set by main.js)
     passedCount: 0,
     rowsSpawned: 0,
-    event: null,                 // active in-run EVENT (set by main.js) — narrows
-                                 // the skin pool, forces a phrase, alters oncoming rate
     nextOncomingZ: null,         // z of the next wrong-way car (null until unlocked)
     oncomingNear: 0,             // metres to the nearest wrong-way car inside horn range (0 = none)
   };
@@ -40,10 +38,8 @@ function laneToX(laneIdx, halfRoad) {
   return -halfRoad + laneW * (laneIdx + 0.5);
 }
 
-// The active event can narrow the vehicle pool (CONVOY = trucks only).
-function pickSkin(sys) {
-  const pool = (sys && sys.event && sys.event.trucksOnly) ? TRUCK_SKINS : TRAFFIC_SKINS;
-  return pool[Math.floor(Math.random() * pool.length)];
+function pickSkin() {
+  return TRAFFIC_SKINS[Math.floor(Math.random() * TRAFFIC_SKINS.length)];
 }
 
 // PATTERN DIRECTOR — instead of memoryless rows, traffic comes in short PHRASES
@@ -80,10 +76,8 @@ function pickPhrase(sys) {
 // corridor) the player can thread, shaped by the current phrase.
 function spawnRow(sys, map) {
   const wide = sys.rowsSpawned < 4;
-  const forced = sys.event && sys.event.phrase;                  // e.g. CONVOY = pure slalom
   let ph = sys.phrase;
   if (wide) ph = { type: "breather", left: 1, dir: 1 };          // gentle opening
-  else if (forced) ph = { type: forced, left: 1, dir: sys.lastShift > 0 ? 1 : -1 };
   else if (!ph || ph.left <= 0) ph = pickPhrase(sys);
 
   // Per-phrase gap-lane shift.
@@ -146,7 +140,7 @@ function spawnRow(sys, map) {
   const gapX = laneToX(gap, map.roadHalfWidth);
 
   for (const lane of lanesToFill) {
-    const skin = pickSkin(sys);
+    const skin = pickSkin();
     const x = laneToX(lane, map.roadHalfWidth);
     const jitter = (Math.random() - 0.5) * 4; // small z stagger inside a row
     const speed = PHYS.cruiseSpeed * (skin.speedMul + (Math.random() * 0.08 - 0.02));
@@ -234,10 +228,8 @@ function spawnOncoming(sys, map, playerZ) {
     sigPhase: Math.random() * 560,
     closingVx: 0,
   });
-  // The WRONG WAY event tightens the spacing so they come thick and fast.
-  const spacingMul = (sys.event && sys.event.oncomingMul) || 1;
-  sys.nextOncomingZ += (RACE.oncomingSpacingMin +
-    Math.random() * (RACE.oncomingSpacingMax - RACE.oncomingSpacingMin)) * spacingMul;
+  sys.nextOncomingZ += RACE.oncomingSpacingMin +
+    Math.random() * (RACE.oncomingSpacingMax - RACE.oncomingSpacingMin);
 }
 
 // Initial wave so the road is busy at race start. Does NOT mark anything as passed.
@@ -509,21 +501,29 @@ export function drawTraffic(ctx, sys, map, playerZ, playerX) {
 }
 
 // ── NIGHT LIGHTS ────────────────────────────────────────────────────────────
-// The run cycles through a real night (see drawTimeOfDayTint) and, until now,
-// not one vehicle turned its lights on — so night read as "somebody dimmed the
-// screen" rather than as night, and traffic got HARDER TO SEE for no reason the
-// player could act on.
+// Drawn AFTER the night shade (see drawWorld), so lamps punch THROUGH the dark
+// instead of being dimmed by it — a light the darkness dims isn't a light.
 //
-// The whole trick is the draw ORDER: main.js calls this AFTER the time-of-day
-// tint, so these lamps punch THROUGH the darkness instead of being washed by
-// it. That one difference is what makes a flat colour wash read as headlights
-// in the dark. Everything here is paint on positions that already exist — no
-// new entity, no motion, no optic flow.
-export function drawNightLights(ctx, sys, map, playerZ, playerX, night) {
-  if (!(night > 0.25)) return;              // daylight / dusk — nothing lit yet
-  const bright = night > 0.6;               // properly dark: lamps bloom
+// Every car switches its lamps on at its OWN moment, spread over ~1 s after the
+// player's headlights click on (and off again the same way at dawn) — the road
+// comes alive light by light rather than flipping in unison. The delay is
+// derived from the car's existing random blinker phase, so it costs nothing.
+function lampDelay(c) { return 0.15 + ((c.sigPhase || 0) / 560) * 0.95; }
+function lampLit(ns, c) {
+  const d = lampDelay(c);
+  return ns.on ? ns.since >= d : ns.since < d;
+}
+export function drawNightLights(ctx, sys, map, playerZ, playerX, ns) {
+  if (!ns || !(ns.dark > 0.2)) return;       // not dark enough for lamps to show
+  const bright = ns.dark > 0.6;              // properly dark: lamps bloom
   for (const c of sys.list) {
-    if (c.smashed) continue;                // off the road, engine dead
+    if (c.smashed) continue;                 // off the road, engine dead
+    const lit = lampLit(ns, c);
+    // Brake lights work whether or not the lamps are on — and they are drawn
+    // here too, because this pass paints after the shade and would otherwise
+    // leave the day-time brake lights (drawn before it) dimmed to nothing.
+    const braking = !c.oncoming && c.cruise != null && c.speed < c.cruise * 0.90;
+    if (!lit && !braking) continue;
     const p = project(map, playerZ, playerX, c);
     if (!p) continue;
     const hx = skinHalfX(c.skin), hz = skinHalfZ(c.skin);
@@ -540,13 +540,7 @@ export function drawNightLights(ctx, sys, map, playerZ, playerX, night) {
       }
       continue;
     }
-    // Everyone the player is overtaking shows tail lamps on their taillight row —
-    // in BRAKE red if they are shedding speed. This has to repeat drawTraffic's
-    // brake test rather than leave it to the day-time pass: these lamps are
-    // painted after the tint and would otherwise cover the brake lights with
-    // plain orange, putting the signal out exactly when it is hardest to see.
-    const braking = c.cruise != null && c.speed < c.cruise * 0.90;
-    const lampIdx = braking ? 6 : 9;
+    const lampIdx = braking ? 6 : 9;                          // brake red / tail orange
     const ly = Math.round(p.sy - hz) + c.skin.tailRow;
     rect(ctx, sx0 + 1, ly, 2, 2, lampIdx);
     rect(ctx, sx0 + c.skin.w - 3, ly, 2, 2, lampIdx);

@@ -204,30 +204,6 @@ export const RACE = {
   closingRowChance: 0.16,
   closingTriggerZ: 58,       // metres ahead at which the squeeze engages
   closingRate: 7,            // px/s each flanker moves inward
-  // ── IN-RUN EVENTS ── Named, time-boxed set-pieces (RUSH HOUR / CONVOY /
-  // WRONG WAY) that give a run an arc instead of a flat density ramp. Each
-  // re-weights systems that already exist, announces itself, and pays out if
-  // you get through it without crashing.
-  // Events do NOT run until the car has real pace: below that the player is
-  // still climbing the ramp and reading the road, and a set-piece stacked on top
-  // of that reads as noise rather than an event.
-  //
-  // This was 190 ("flat out"), which unlocked at ~108s — and MEASURED, that made
-  // all three set-pieces very nearly unreachable content: a strong ~120s run
-  // fired exactly ONE event, at 108s, and died at 120s BEFORE its 18-22s ran out.
-  // So it never paid out, never showed CLEARED, never resolved. A shorter run saw
-  // nothing at all. Three finished set-pieces that almost no run ever completed.
-  //
-  // 175 unlocks at ~84s. Measured: a 120s run now COMPLETES one event (84-104s,
-  // 16s of margin) and a 150s run starts a second (~143s).
-  // ⚠️ 84s is chosen against the HELICOPTER, not just the clock — sorties measured
-  // at 47s (single) then pairs at 71.5 / 97.9 / 124.3s. 170 would have unlocked at
-  // 76s, dropping the first event 4.5s on top of the pair at 71.5s. 175 clears it
-  // by 12.5s so each beat gets its own moment. Re-measure before retuning this.
-  eventFromKmh: 175,     // ~84s — one COMPLETED event inside a strong run
-  eventFirstAt: 32,      // earliest an event may fire; the speed gate above usually dominates
-  eventGapMin: 30,       // quiet stretch between events
-  eventGapMax: 44,
   // Minimum gap between hit-stops. At speed, rows arrive every ~0.35s, so an
   // unthrottled 60ms freeze per tight shave reads as STUTTER instead of impact.
   // This keeps it a rare accent (the whoosh/PERFECT feedback still fires every time).
@@ -315,6 +291,30 @@ export const GRADES = [
   [30000,  "B", "SOLID",      13],   // light blue
   [0,      "C", "KEEP GOING", 2],    // light gray
 ];
+
+// ── DAY / NIGHT ──────────────────────────────────────────────────────────────
+// A run ALWAYS starts in full daylight, and the cycle then repeats:
+//   day (40 s) -> dusk (3 s) -> night (20 s) -> dawn (3 s) -> day ...
+// so nights land at 43-63 s, 109-129 s, 175-195 s ...
+//
+// The previous design was a 120 s colour wash that never got darker than a 32%
+// overlay, started tinting AMBER from the first second, and switched the lamps
+// on at 13.3 s while the screen was 8% tinted — lamps burned for 96 s of every
+// 120. The player read "night" as "the headlights came on for no reason". The
+// fix is ordering + contrast: a long unmistakable day, a short but properly
+// DARK night, and the lights only switching on once the dark has arrived.
+export const DAYNIGHT = {
+  daySeconds: 40,       // full daylight — nothing dimmed at all
+  duskSeconds: 3,       // dark falls: fast enough to read as a SWITCH, slow enough not to flash
+  nightSeconds: 20,     // full night
+  dawnSeconds: 3,       // light returns
+  lightsOnDelay: 0.5,   // the beat between full dark and the headlights clicking on
+  lightsOffAt: 0.5,     // fraction of the way through dawn at which the lights go off
+  shade: [6, 10, 38],   // colour of the dark — deep navy, so it reads as NIGHT, not dirt
+  shadeAlpha: 0.62,     // how dark full night is (was 0.32)
+  beamReach: 0.34,      // headlight throw, as a fraction of PLAYER_Y (~34 m of road)
+  beamWarm: 0.10,       // warm wash inside the beam, at the car
+};
 
 export const MUSIC = {
   cityBPM: 150,

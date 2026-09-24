@@ -1,7 +1,7 @@
 // Fixed straight multi-lane road, anchored to the screen.
 // Calm rendering tuned to avoid high-speed strobe / eye fatigue: solid grass,
 // static muted edge strips, and a faint center line that fades out with speed.
-import { W, H, PLAYER_Y, PHYS, RACE } from "./config.js";
+import { W, H, PLAYER_Y, PHYS, RACE, DAYNIGHT } from "./config.js";
 import { rect } from "./render.js";
 
 const VIEW_AHEAD_METERS = 100;
@@ -160,60 +160,105 @@ function hazeBand(ctx, y0, rows, idx, density) {
   }
 }
 
-// ── Time-of-day cycle ─────────────────────────────────────────────────────────
-// A slow colour wash over the WHOLE scene that cycles day → dusk → night → dawn
-// → day as the run goes on. It's a single flat translucent fill in screen space —
-// pure hue + brightness, with ZERO spatial motion — so it adds no optic flow and
-// fully respects the high-speed "no dizziness" rule (if anything, the darker
-// night phase calms the periphery further). Driven by race time so it pauses with
-// the game and is independent of speed.
-const TOD_CYCLE_SEC = 120;          // seconds for one full day→…→day loop
-// [cyclePos 0..1, r, g, b, alpha]
-const TOD_KEYS = [
-  [0.00,   0,   0,   0, 0.00],      // day — clear
-  [0.22, 255, 120,  24, 0.16],      // dusk — warm amber
-  [0.44,  16,  24,  92, 0.32],      // night — deep blue (peak)
-  [0.66,  16,  24,  92, 0.30],      // night — hold
-  [0.82, 150,  72, 132, 0.16],      // dawn — soft violet
-  [1.00,   0,   0,   0, 0.00],      // back to day
-];
-function todColor(seconds) {
-  let pos = (seconds % TOD_CYCLE_SEC) / TOD_CYCLE_SEC;
-  if (pos < 0) pos += 1;
-  let a = TOD_KEYS[0], b = TOD_KEYS[TOD_KEYS.length - 1];
-  for (let i = 0; i < TOD_KEYS.length - 1; i++) {
-    if (pos >= TOD_KEYS[i][0] && pos <= TOD_KEYS[i + 1][0]) { a = TOD_KEYS[i]; b = TOD_KEYS[i + 1]; break; }
-  }
-  const span = (b[0] - a[0]) || 1;
-  const f = (pos - a[0]) / span;
-  return {
-    r: a[1] + (b[1] - a[1]) * f,
-    g: a[2] + (b[2] - a[2]) * f,
-    bl: a[3] + (b[3] - a[3]) * f,
-    al: a[4] + (b[4] - a[4]) * f,
-  };
-}
-// Wash the play scene with the current time-of-day tint. Call LAST in drawWorld
-// (after the player) so the world is tinted but the HUD / combo banners — drawn
-// afterwards — stay full-brightness and readable. Uses a real translucent fill
-// (the one place we step outside the flat palette): a deliberate atmospheric
-// layer, still completely static.
-export function drawTimeOfDayTint(ctx, seconds) {
-  const c = todColor(seconds || 0);
-  if (c.al <= 0.003) return;            // day — nothing to draw
-  ctx.fillStyle = `rgba(${c.r | 0},${c.g | 0},${c.bl | 0},${c.al.toFixed(3)})`;
-  ctx.fillRect(0, 0, W, H);
+// ── DAY / NIGHT ───────────────────────────────────────────────────────────────
+// Timings live in config.DAYNIGHT. Everything here is screen-space colour — no
+// motion — so it cannot add optic flow. Driven by race time, so it pauses with
+// the game and a run always opens in daylight.
+const smoothstep = (x) => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
+
+// Where in the cycle are we?
+//   dark  — 0 (day) .. 1 (full night); eased through dusk and dawn
+//   on    — are vehicle lights switched on right now
+//   since — seconds since the lights last switched (either way). Drives the
+//           flicker as the headlights click on, and the per-car stagger.
+export function dayNight(seconds) {
+  const D = DAYNIGHT;
+  const duskAt = D.daySeconds;
+  const nightAt = duskAt + D.duskSeconds;
+  const dawnAt = nightAt + D.nightSeconds;
+  const cycle = dawnAt + D.dawnSeconds;
+  const t = Math.max(0, seconds || 0) % cycle;
+  let dark;
+  if (t < duskAt) dark = 0;
+  else if (t < nightAt) dark = smoothstep((t - duskAt) / D.duskSeconds);
+  else if (t < dawnAt) dark = 1;
+  else dark = 1 - smoothstep((t - dawnAt) / D.dawnSeconds);
+  // The lights come on only once it is ALREADY dark (plus a beat), and go off
+  // part-way through dawn. Before the first switch-on of a run, the previous
+  // switch-off is treated as a full cycle ago, so every lamp starts dark.
+  const onAt = nightAt + D.lightsOnDelay;
+  const offAt = dawnAt + D.dawnSeconds * D.lightsOffAt;
+  const on = t >= onAt && t < offAt;
+  const since = on ? t - onAt : (t >= offAt ? t - offAt : t + cycle - offAt);
+  return { dark, on, since };
 }
 
-// How dark it is right now, 0 (full day) → 1 (deepest night), derived from the
-// SAME curve that paints the tint so the two can never drift apart. Callers use
-// it to decide whether vehicles should have their lights on — see
-// drawNightLights() in entities/traffic.js, which draws them AFTER the tint so
-// they punch through the darkness instead of being dimmed by it.
-const TOD_PEAK_ALPHA = 0.32;            // the deepest alpha in TOD_KEYS
-export function nightFactor(seconds) {
-  const c = todColor(seconds || 0);
-  return Math.max(0, Math.min(1, c.al / TOD_PEAK_ALPHA));
+// The player's headlights: on with the lights, but they CLICK on with a quick
+// flicker (on, off, on) so the moment night properly arrives is unmistakable.
+export function headlightsLit(ns) {
+  return !!ns && ns.on && (ns.since < 0.05 || ns.since >= 0.13);
+}
+
+// Night darkness, with the player's headlight beam CARVED OUT of it.
+//
+// The beam is not painted on top of the scene — it is a region where the
+// darkness is lifted (plus a faint warm wash), so the road and every car in it
+// show in their true colours: your headlights genuinely light the traffic ahead.
+// Built from 1px rows, so its edge is a clean pixel-art stair-step with a 1px
+// soft rim. Anchored to the car, so it adds no optic flow.
+//
+// `beam` = { cx, noseY, rearY } in screen px, or null when the lights are off.
+const _rgba = new Map();
+function rgba(r, g, b, a) {
+  const q = Math.round(Math.max(0, Math.min(1, a)) * 255);
+  const k = (r << 24) ^ (g << 16) ^ (b << 8) ^ q;
+  let s = _rgba.get(k);
+  if (!s) { s = `rgba(${r},${g},${b},${(q / 255).toFixed(3)})`; _rgba.set(k, s); }
+  return s;
+}
+function shadeRect(ctx, x, y, w, h, style) {
+  if (w <= 0 || h <= 0) return;            // a negative width would paint the WRONG side
+  ctx.fillStyle = style;
+  ctx.fillRect(x, y, w, h);
+}
+export function drawNightShade(ctx, ns, beam) {
+  if (!ns || !(ns.dark > 0.002)) return;   // daylight — draw nothing at all
+  const D = DAYNIGHT;
+  const [r, g, b] = D.shade;
+  const full = D.shadeAlpha * ns.dark;
+  const dark = rgba(r, g, b, full);
+  if (!beam) { shadeRect(ctx, 0, 0, W, H, dark); return; }
+
+  const reach = Math.round(PLAYER_Y * D.beamReach);
+  const top = Math.max(0, beam.noseY - reach);
+  const spill = beam.rearY + 5 - beam.noseY;          // rows of light around the car
+  const bottom = Math.min(H, beam.noseY + spill);
+  shadeRect(ctx, 0, 0, W, top, dark);                 // everything beyond the throw
+  shadeRect(ctx, 0, bottom, W, H - bottom, dark);     // everything behind the car
+  for (let y = top; y < bottom; y++) {
+    let half, lit;
+    if (y >= beam.noseY) {
+      // Light spilling round the car: a soft teardrop that narrows and fades
+      // toward the rear. A constant-width block here read as a hard lit BOX
+      // with a flat bottom edge — a selection rectangle, not a glow.
+      const g = (y - beam.noseY) / spill;            // 0 at the bumper -> 1 behind the car
+      half = Math.round(7 - g * 2.5);
+      lit = 1 - 0.85 * Math.pow(g, 1.5);
+    } else {
+      const f = (beam.noseY - y) / reach;            // 0 at the bumper -> 1 at full throw
+      half = Math.round(6 + f * 13);                 // the cone widens as it throws...
+      lit = Math.pow(1 - f, 1.4);                    // ...and fades out to full dark
+    }
+    const x0 = beam.cx - half, x1 = beam.cx + half + 1;
+    const inA = full * (1 - 0.9 * lit);              // darkness left inside the beam
+    const rim = rgba(r, g, b, (inA + full) / 2);     // 1px soft edge
+    shadeRect(ctx, 0, y, x0 - 1, 1, dark);
+    shadeRect(ctx, x0 - 1, y, 1, 1, rim);
+    shadeRect(ctx, x0, y, x1 - x0, 1, rgba(r, g, b, inA));
+    shadeRect(ctx, x1, y, 1, 1, rim);
+    shadeRect(ctx, x1 + 1, y, W - x1 - 1, 1, dark);
+    if (lit > 0.05) shadeRect(ctx, x0, y, x1 - x0, 1, rgba(255, 226, 150, D.beamWarm * lit * ns.dark));
+  }
 }
 
 export function project(map, playerZ, _x, entity) {

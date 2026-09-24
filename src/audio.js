@@ -806,20 +806,19 @@ export function sfxCoin() {
   });
 }
 
-// EVENT START — a two-tone klaxon alert: something is about to change. Lower and
-// more "announcement" than the combo blips so it cuts through without alarming.
-export function sfxEventStart() {
+// HEADLIGHTS ON — two tiny dry ticks, a switch and its relay. Deliberately quiet:
+// it marks the moment night properly arrives without sounding like an alert.
+export function sfxLightsOn() {
   if (!ctx) return;
   const t = ctx.currentTime;
-  [[440, 0], [587, 0.16], [440, 0.32]].forEach(([f, off]) => {
-    const o = ctx.createOscillator(); o.type = "square"; o.frequency.value = f;
+  [[0, 1800], [0.07, 2600]].forEach(([off, f]) => {
+    const src = ctx.createBufferSource(); src.buffer = getNoiseBuf();
+    const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = f; bp.Q.value = 4;
     const g = ctx.createGain(); g.gain.value = 0;
-    g.gain.linearRampToValueAtTime(0.16, t + off + 0.02);
-    g.gain.setValueAtTime(0.16, t + off + 0.11);
-    g.gain.exponentialRampToValueAtTime(0.001, t + off + 0.15);
-    const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 1800;
-    o.connect(lp); lp.connect(g); g.connect(sfxGain);
-    o.start(t + off); o.stop(t + off + 0.17);
+    g.gain.linearRampToValueAtTime(0.22, t + off + 0.002);
+    g.gain.exponentialRampToValueAtTime(0.001, t + off + 0.03);
+    src.connect(bp); bp.connect(g); g.connect(sfxGain);
+    src.start(t + off); src.stop(t + off + 0.04);
   });
 }
 
@@ -974,19 +973,6 @@ export function sfxMenuSelect() {
     g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.05 + 0.10);
     o.connect(g); g.connect(sfxGain);
     o.start(t + i * 0.05); o.stop(t + i * 0.05 + 0.12);
-  });
-}
-
-export function sfxFinish() {
-  if (!ctx) return;
-  const t = ctx.currentTime;
-  [["C",5,0],["E",5,0.10],["G",5,0.20],["C",6,0.30]].forEach(([n,o,off]) => {
-    const osc = ctx.createOscillator(); osc.type = "square"; osc.frequency.value = noteHz(n,o);
-    const g = ctx.createGain(); g.gain.value = 0;
-    g.gain.linearRampToValueAtTime(0.24, t + off + 0.01);
-    g.gain.exponentialRampToValueAtTime(0.001, t + off + 0.35);
-    osc.connect(g); g.connect(sfxGain);
-    osc.start(t + off); osc.stop(t + off + 0.4);
   });
 }
 

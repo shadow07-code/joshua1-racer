@@ -14,16 +14,16 @@ import {
   playFlourish,
   startEngine, setEngine, stopEngine, setEngineRampage, setEngineStrain, getEngineStyle, setEngineStyle,
   sfxAccelAccent, sfxPickup, sfxCrash, sfxExplosion, sfxBump, sfxBarrelDrop, sfxCombo,
-  sfxWhoosh, sfxPerfect, sfxHeartbeat, sfxCoin, sfxHorn, sfxEventStart,
+  sfxWhoosh, sfxPerfect, sfxHeartbeat, sfxCoin, sfxHorn, sfxLightsOn,
   sfxSandwich, sfxRampageWarn,
   sfxShieldUp, sfxShieldHit, sfxShockwave, sfxRampageCharge, sfxRampageReady, sfxNitrous,
-  sfxMenuMove, sfxMenuSelect, sfxFinish, sfxCountdownBeep,
+  sfxMenuMove, sfxMenuSelect, sfxCountdownBeep,
   startHeliSound, stopHeliSound,
   setMusicEnabled, setSfxEnabled, isMusicEnabled, isSfxEnabled, applyMix,
   getMusicTrack, setMusicTrack,
 } from "./audio.js";
-import { drawRoad, drawDistanceHaze, drawTimeOfDayTint, distToY, biomeAt, nightFactor } from "./road.js";
-import { makePlayer, updatePlayer, drawPlayer, drawHeadlights, drawPlayerLights, playerBox, applyCollisionLoss } from "./entities/player.js";
+import { drawRoad, drawDistanceHaze, drawNightShade, dayNight, distToY, biomeAt } from "./road.js";
+import { makePlayer, updatePlayer, drawPlayer, drawPlayerLights, beamAnchor, playerBox, applyCollisionLoss } from "./entities/player.js";
 import { makeTrafficSystem, updateTraffic, drawTraffic, drawNightLights, drawCoins, checkCoinGrab, checkTrafficHit, prepopulateTraffic, smashCar } from "./entities/traffic.js";
 import { getDaily, applyRun as applyDailyRun } from "./daily.js";
 import { makePickupSystem, updatePickups, drawPickups, checkPickup } from "./entities/pickups.js";
@@ -40,7 +40,6 @@ import {
   drawRampageMeter, drawSandwichCombo, drawShareCard, SHARE_CARD_W, SHARE_CARD_H,
   drawExplosion, drawCrashImpact, drawCrashFlash, drawPerfect, drawLastLifePulse,
   drawBiomeBanner, drawZoneFlash,
-  drawEventBanner, drawEventTimer,
 } from "./hud.js";
 import { registerServiceWorker, initInstallBanner, initInstallButton, initInstallSplash, setInstallButtonVisible } from "./pwa.js";
 import {
@@ -60,7 +59,6 @@ import {
 import {
   makeGhostRecorder, recordGhost, saveGhost, loadGhost, drawGhost, drawRivalGhost,
 } from "./ghost.js";
-import { makeEventDirector, updateEvents, failEvent } from "./events.js";
 
 const canvas = document.getElementById("game");
 const ctx = getCtx(canvas);
@@ -113,7 +111,6 @@ const g = {
   ghost: null,           // the personal-best track being replayed, or null
   rival: null,           // the global #1's track being replayed, or null
   champion: null,        // cached {name,score,samples} for the global #1
-  events: null,          // in-run EVENT director (RUSH HOUR / CONVOY / WRONG WAY)
   isNewHi: false,
   wallet: 0,             // banked coin balance after this run
   unlocked: [],          // cars this run's coins just unlocked (game-over celebration)
@@ -420,7 +417,6 @@ function newRaceSetup() {
   const champ = g.champion;
   const chasingSelf = !!(champ && champ.name && champ.name === g.playerName);
   g.rival = (champ && !chasingSelf) ? champ.samples : null;
-  g.events = makeEventDirector();
   g.scenery = makeScenerySystem();
   for (let i = 0; i < 25; i++) updateScenery(g.scenery, 0, g.map, 0.016, SPAWN.sceneryPerMeter);
   prepopulateTraffic(g.traffic, g.map, 500);
@@ -460,6 +456,7 @@ function newRaceSetup() {
   g.crashFlash = 0;         // the red screen pop that goes with it
   g.crashX = 0;             // screen x the burst is pinned to
   g.rampageWarned = false;  // fired the "about to end" cue for THIS rampage
+  g.lightsOn = false;       // headlights state last frame (fires the click once)
   g.hitStop = 0;
   g.hitStopCool = 0;
   g.perfectTimer = 0;
@@ -507,7 +504,6 @@ function takeHit(_invulnSec) {
   if (g.traffic) {
     g.traffic.phrase = { type: "breather", left: RACE.crashBreatherRows, dir: 1 };
   }
-  failEvent(g.events);                  // crashing forfeits the current event's payout
   if (g.player.lives <= 0) { endRace("GAME OVER"); return true; }
   return false;
 }
@@ -923,32 +919,8 @@ function updateRace(dt) {
   // (Doesn't touch the gap-lane logic, so every row stays threadable.)
   const wave = 1 + RACE.densityWaveAmp * Math.sin(g.raceTime * (2 * Math.PI / RACE.densityWavePeriod));
 
-  // ── IN-RUN EVENTS ── Fire / expire the current set-piece, then let it
-  // re-weight the systems below (density, traffic pool, oncoming rate).
-  const sig = updateEvents(g.events, dt, g.raceTime, g.topSpeedKmh);
-  if (sig && sig.started) {
-    sfxEventStart();
-  } else if (sig && sig.ended) {
-    const ev = sig.ended;
-    if (sig.failed) {
-      // Crashed during it — the payout is for getting through CLEAN.
-      g.events.clearMsg = "EVENT FAILED";
-      g.events.clearIdx = 7;
-    } else {
-      g.scoreState.score += ev.score;
-      g.coins += ev.coins;
-      g.events.clearMsg = "CLEARED +" + ev.score;
-      g.events.clearIdx = 5;
-      sfxFinish();
-    }
-    g.events.clearT = 1.8;
-  }
-  const ev = g.events.active;
-  g.traffic.event = ev;                          // traffic reads pool / phrase / oncoming rate
-  const evDensity = (ev && ev.density) || 1;     // RUSH HOUR packs the road
-  const effDensity = g.densityMul * evDensity;
-  g.traffic.rowGapZ = (baseRowGapForMap(g.map) / effDensity) * wave;
-  g.traffic.densityMul = effDensity;
+  g.traffic.rowGapZ = (baseRowGapForMap(g.map) / g.densityMul) * wave;
+  g.traffic.densityMul = g.densityMul;
 
   // After a rampage, keep the near road ahead clear for a few seconds.
   const clearDist = g.player.rampageClear > 0 ? RACE.rampageClearDist : 0;
@@ -1068,10 +1040,7 @@ function updateRace(dt) {
 
   // Combo decay — lapse the streak if you go too long without a near-miss.
   // A lapsed chain also dumps the banked rampage meter (it rewards UNBROKEN runs).
-  // CONVOY holds your streak open (its reward for a pure-slalom stretch), so the
-  // timer only drains outside a combo-safe event.
-  const comboSafe = !!(g.events.active && g.events.active.comboSafe);
-  if (g.comboTimer > 0 && !comboSafe) {
+  if (g.comboTimer > 0) {
     g.comboTimer -= dt;
     if (g.comboTimer <= 0) { g.combo = 0; g.rampageMeter = 0; g.sandwichCombo = 0; }
   }
@@ -1105,6 +1074,11 @@ function updateRace(dt) {
   const helisOnScreen = g.cops.active && g.cops.helis.length > 0;
   if (helisOnScreen && !g._heliSoundOn) { startHeliSound(); g._heliSoundOn = true; }
   else if (!helisOnScreen && g._heliSoundOn) { stopHeliSound(); g._heliSoundOn = false; }
+  // ── Night falls ── The headlights click on once it is properly dark (see
+  // config.DAYNIGHT); give that moment its sound. Edge-triggered.
+  const lightsNow = dayNight(g.raceTime).on;
+  if (lightsNow && !g.lightsOn) sfxLightsOn();
+  g.lightsOn = lightsNow;
   // ── Biome cycling ── City → tunnel → coast → bridge every RACE.biomePeriodSec.
   // On a change: announce the new zone (landmark banner) + a brief flash that
   // masks the palette cut. The scenery set follows the biome (new spawns only).
@@ -1218,12 +1192,9 @@ function updateGameOver(dt) {
 // ─── Render ──────────────────────────────────────────────────────────────────
 function drawWorld() {
   const biome = g.biome || biomeAt(g.raceTime);
-  const night = nightFactor(g.raceTime);
+  const ns = dayNight(g.raceTime);
   drawRoad(ctx, g.map, g.player.z, g.player.speed, biome, g.player.rampage > 0);
   drawScenery(ctx, g.scenery, g.map, g.player.z);
-  // Headlight pool goes down BEFORE the traffic — light falls on the asphalt and
-  // cars sit on top of it, so it can never speckle a vehicle you're reading.
-  drawHeadlights(ctx, g.player, g.map, night);
   drawSmoke(ctx, g.map, g.player.z, g.player.x, g.player);
   drawTraffic(ctx, g.traffic, g.map, g.player.z, g.player.x);
   // Two phantoms, each at the position its run held at this point in time: the
@@ -1232,18 +1203,20 @@ function drawWorld() {
   if (g.rival) drawRivalGhost(ctx, g.rival, g.raceTime, g.map, g.player.z, g.player.x);
   if (g.ghost) drawGhost(ctx, g.ghost, g.raceTime, g.map, g.player.z, g.player.x);
   drawCoins(ctx, g.traffic, g.map, g.player.z, g.player.x);
+  drawDistanceHaze(ctx, biome);   // atmosphere over the far field — cars emerge from it
+  // ── NIGHT ── Everything above is darkened; the headlight beam is carved out of
+  // that darkness, so the road and cars ahead show in true colour inside it.
+  // Nothing is drawn at all in daylight.
+  drawNightShade(ctx, ns, beamAnchor(g.player, g.map, ns));
+  // Everything below is drawn AFTER the dark on purpose — it glows or must stay
+  // readable: vehicle lamps, the booster canister, the helicopter's flaming
+  // barrels and target reticles (a threat you can't see at night is a cheap
+  // death), and your own car. In daylight this order changes nothing visible.
+  drawNightLights(ctx, g.traffic, g.map, g.player.z, g.player.x, ns);
   drawPickups(ctx, g.pickups, g.map, g.player.z, g.player.x);
   drawCops(ctx, g.cops, g.map, g.player.z, g.player.x);
-  drawDistanceHaze(ctx, biome);   // atmosphere over the far field — cars emerge from it
   drawPlayer(ctx, g.player, g.map);
-  // Day → dusk → night → dawn colour wash (static screen-space, no optic flow).
-  // Drawn LAST so the world is tinted but the HUD/banners (drawn after) stay clear.
-  drawTimeOfDayTint(ctx, g.raceTime);
-  // ...except the lamps, which go on AFTER the tint on purpose: a light that the
-  // darkness dims isn't a light. This is the one thing that makes night read as
-  // night rather than as a dimmer screen.
-  drawNightLights(ctx, g.traffic, g.map, g.player.z, g.player.x, night);
-  drawPlayerLights(ctx, g.player, g.map, night);
+  drawPlayerLights(ctx, g.player, g.map, ns);
 }
 
 // Toggle the HTML overlays once per state change, and kick off the leaderboard
@@ -1370,15 +1343,6 @@ function render() {
     });
     if (g.perfectTimer > 0) drawPerfect(ctx, g.perfectTimer, (W / 2 + g.map.biasX + g.player.x) | 0);
     if (g.biomeBannerTimer > 0) drawBiomeBanner(ctx, g.biomeName, g.biomeBannerTimer);
-    // Event call-out, payout line, and the draining progress bar while one runs.
-    if (g.events.bannerT > 0 && g.events.active) {
-      drawEventBanner(ctx, g.events.active.name, g.events.bannerT, g.events.active.idx);
-    } else if (g.events.clearT > 0) {
-      drawEventBanner(ctx, g.events.clearMsg, g.events.clearT, g.events.clearIdx);
-    }
-    if (g.events.active) {
-      drawEventTimer(ctx, g.events.timeLeft / g.events.total, g.events.active.idx);
-    }
     if (g.shieldMsgTimer > 0) drawShieldMsg(ctx, g.shieldMsg);
     drawHud(ctx, {
       score: g.scoreState.score,

@@ -1,7 +1,7 @@
 // Player car — auto-accelerate with a start-of-race speed ramp, brake, steer, slip.
 import { PHYS, RACE, PLAYER_Y, W } from "../config.js";
 import { drawSpriteNN, groundShadow, ring, disc, rect } from "../render.js";
-import { roadCenterX } from "../road.js";
+import { roadCenterX, headlightsLit } from "../road.js";
 import { selectedSprite } from "../garage.js";
 
 // Player car scale. Nudged to 1.05 (+5%) per request so the Ferrari reads a
@@ -213,12 +213,11 @@ export function drawPlayer(ctx, p, map) {
 }
 
 // ── The player's OWN tail lamps ────────────────────────────────────────────
-// Called after the time-of-day tint, alongside the traffic's lamps, so the car
-// the camera is actually looking at isn't the one unlit vehicle on the road.
-// Mirrors drawPlayer's invulnerability blink, or the lights would hover over a
-// car that isn't being drawn.
-export function drawPlayerLights(ctx, p, map, night) {
-  if (!(night > 0.25)) return;
+// Lit with the headlights (same click-on flicker), drawn after the night shade
+// so they glow. Mirrors drawPlayer's invulnerability blink, or the lamps would
+// hover over a car that isn't being drawn.
+export function drawPlayerLights(ctx, p, map, ns) {
+  if (!headlightsLit(ns)) return;
   if (p.invuln > 0 && (Math.floor(performance.now() / 60) % 2 === 0)) return;
   const halfW = 10 * PLAYER_SCALE / 2, halfH = 15 * PLAYER_SCALE / 2;
   const spriteX = Math.round(roadCenterX(map, p.z, p.x, 0) + p.x - halfW);
@@ -227,46 +226,22 @@ export function drawPlayerLights(ctx, p, map, night) {
   const ly = Math.round(PLAYER_Y - halfH + 13 * PLAYER_SCALE);
   rect(ctx, spriteX + 2, ly, 2, 2, 9);
   rect(ctx, spriteX + spriteW - 4, ly, 2, 2, 9);
-  if (night > 0.6) {
-    rect(ctx, spriteX + 2, ly, 1, 1, 5);
-    rect(ctx, spriteX + spriteW - 4, ly, 1, 1, 5);
-  }
+  rect(ctx, spriteX + 2, ly, 1, 1, 5);               // hot filament core
+  rect(ctx, spriteX + spriteW - 4, ly, 1, 1, 5);
 }
 
-// ── HEADLIGHT POOL ──────────────────────────────────────────────────────────
-// At night the car throws a soft cone of light up the road in front of it.
-// Drawn as a sparse dither that thins with distance, so it reads as a glow
-// rather than a solid shape.
-//
-// Two deliberate choices:
-//  • It is anchored to the CAR, not the road, so it never moves relative to the
-//    player — zero optic flow, exactly like the static screen-space effects.
-//  • It is drawn BEFORE the traffic (light falls ON the asphalt; cars sit on top
-//    of it), so it can never speckle a vehicle the player is trying to read.
-//    That costs it the time-of-day tint, which only dims it ~30% — a fair trade
-//    for never obscuring the thing the whole game is about.
-export function drawHeadlights(ctx, p, map, night) {
-  if (!(night > 0.25)) return;
-  const cx = (roadCenterX(map, p.z, p.x, 0) + p.x) | 0;
-  const noseY = PLAYER_Y - Math.round(15 * PLAYER_SCALE / 2);
-  const rows = Math.round(20 + night * 14);          // 20..34 px of reach
-  for (let i = 0; i < rows; i++) {
-    const y = noseY - 2 - i;
-    if (y < 11) break;                               // never paint into the HUD strip
-    const f = i / rows;
-    // Thin the pool out with distance TWICE over — fewer lit rows as well as a
-    // wider gap between lit pixels within a row. One alone is not enough: the
-    // cone also widens as it throws, and a widening cone at constant density
-    // puts MORE light on the far end than the near end, which reads as a beam
-    // that gets brighter the further it goes.
-    if (f > 0.62) { if (i % 3) continue; }
-    else if (f > 0.34) { if (i % 2) continue; }
-    const half = Math.round(3 + f * 7);              // 3 → 10 px: about one lane
-    const step = 2 + Math.round(f * 3);              // 2 → 5 px between lit pixels
-    for (let x = -half + (i % step); x <= half; x += step) {
-      rect(ctx, cx + x, y, 1, 1, f < 0.35 ? 21 : 5); // pale near, gold far
-    }
-  }
+// Where the headlight beam starts, in screen px — or null when the lights are
+// off. drawNightShade() carves the beam out of the darkness from here. Kept
+// steady through the invulnerability blink: a strobing pool of light would be
+// far worse than a strobing car.
+export function beamAnchor(p, map, ns) {
+  if (!headlightsLit(ns)) return null;
+  const halfH = Math.round(15 * PLAYER_SCALE / 2);
+  return {
+    cx: (roadCenterX(map, p.z, p.x, 0) + p.x) | 0,
+    noseY: PLAYER_Y - halfH,
+    rearY: PLAYER_Y + halfH,
+  };
 }
 
 // Twin nitrous flames out the back of the car — flickering orange/yellow tongues.

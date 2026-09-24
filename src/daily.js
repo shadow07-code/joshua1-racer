@@ -21,8 +21,8 @@ const KEY = "joshua1.daily.v1";
 // `mode: 'best'` — the day's single best run counts (a skill spike, not a grind).
 // `stat` names a field of the run summary passed to applyRun().
 // Tiers are calibrated against a MEASURED clean 2-minute run. RE-MEASURED
-// 2026-09-11: ~6009 distance, ~232 cars passed, ~58 trail coins (+14 if the
-// run completes its event).
+// 2026-09-11: ~6009 distance, ~232 cars passed, ~58 trail coins. (In-run
+// events, which paid up to ~14 more coins, were removed 2026-09-24.)
 //
 // `passed` jumped 173 -> 232 (+34%) when the mid-run density curve landed, which
 // quietly pulled the PASS tiers below the 1.3-run floor (250 was 1.4 runs at 173,
