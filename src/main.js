@@ -359,6 +359,10 @@ function stopAllLoopingSfx() { stopEngine(); stopHeliSound(); g._heliSoundOn = f
 // context) so sound stops IMMEDIATELY, even mid-note. Resuming restarts both.
 function pauseGame() {
   if (g.state !== STATES.RACE) return;
+  // Mid-wreck the run is already over: finish it now (bank the coins, submit
+  // the score) instead of pausing a dead run that RESTART or QUIT would then
+  // throw away. Covers the auto-pause too — a phone locking during the wreck.
+  if (g.wreck > 0) { g.wreck = 0; endRace("GAME OVER"); return; }
   g.prevState = g.state;
   g.state = STATES.PAUSED;
   clearPresses();          // don't let race input leak in and instantly resume
@@ -369,8 +373,7 @@ function pauseGame() {
 function resumeGame() {
   if (g.state !== STATES.PAUSED) return;
   g.state = g.prevState || STATES.RACE;
-  // (Not mid-wreck: the run is already over, the music already tape-stopped.)
-  if (g.state === STATES.RACE && !(g.wreck > 0)) {
+  if (g.state === STATES.RACE) {
     startMusic(g.map.music);
     setMusicIntensity(0);
     startEngine();
@@ -932,11 +935,13 @@ function updateCountdown(dt) {
 function updateRace(dt) {
   const input = getInput();
 
+  // The run is over — play out the wreck (see beginWreck) instead of racing.
+  // Ahead of the key shortcuts on purpose: Escape must not quit a dead run
+  // before it is banked (endRace clears whatever was pressed meanwhile).
+  if (g.wreck > 0) { updateWreck(dt); return; }
   if (consumePress("p", "P")) { pauseGame(); return; }
   if (consumePress("m", "M")) { toggleMusic(); }
   if (consumePress("Escape")) { stopMusic(); stopAllLoopingSfx(); g.state = STATES.TITLE; return; }
-  // The run is over — play out the wreck (see beginWreck) instead of racing.
-  if (g.wreck > 0) { updateWreck(dt); return; }
   // UNLEASH an armed rampage. The control is the big red 🔥 button at the bottom
   // centre (pointerdown, wired near the toolbar buttons); Enter is the desktop
   // fallback. There's no tap-zone fallback any more — the whole canvas steers.
