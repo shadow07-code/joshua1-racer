@@ -226,6 +226,15 @@ export const RACE = {
   // After a crash the next couple of spawned rows are forced open, so the player
   // isn't dropped straight back into the pattern that just killed them.
   crashBreatherRows: 2,
+  // ── CONTACT ── A crash is two bodies meeting, so both react. You are SHOVED
+  // clear on the fence's own spring (eased over ~0.25 s — it used to be a 9 px
+  // teleport in one frame), and the car you hit is jolted the other way, small
+  // enough to stay inside its own lane (5 px of 6.7 spare). If you rear-ended
+  // it, it is also punted ahead and eases back to its cruise at 4 m/s^2. It used
+  // to carry on as if nothing had touched it, like hitting a ghost.
+  crashShovePx: 9,
+  crashKnockPx: 5,
+  crashKnockSpeed: 6,
   // ── CRASH IMPACT ── Losing a life is the single most important thing that
   // happens in a run, and it used to be the QUIETEST: a sound, a 55% speed cut
   // and a blink. These give it the punctuation it earns — a hit-stop (which

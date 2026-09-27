@@ -24,7 +24,7 @@ import {
 } from "./audio.js";
 import { drawRoad, drawDistanceHaze, drawNightShade, dayNight, distToY, biomeAt, project } from "./road.js";
 import { makePlayer, updatePlayer, drawPlayer, drawPlayerLights, beamAnchor, playerBox, applyCollisionLoss } from "./entities/player.js";
-import { makeTrafficSystem, updateTraffic, drawTraffic, drawNightLights, drawCoins, checkCoinGrab, checkTrafficHit, prepopulateTraffic, smashCar } from "./entities/traffic.js";
+import { makeTrafficSystem, updateTraffic, drawTraffic, drawNightLights, drawCoins, checkCoinGrab, checkTrafficHit, prepopulateTraffic, smashCar, knockCar } from "./entities/traffic.js";
 import { getDaily, applyRun as applyDailyRun } from "./daily.js";
 import { makePickupSystem, updatePickups, drawPickups, checkPickup } from "./entities/pickups.js";
 import { makeCopsSystem, updateCops, drawCops, checkBarrelHit } from "./entities/cops.js";
@@ -567,6 +567,14 @@ function updateWreck(dt) {
   // The car coasts to a stop; everything else carries on in slow motion.
   p.speed = Math.max(0, p.speed * (1 - Math.min(1, dt * 3)));
   p.z += p.speed * sdt;
+  // The crash shove plays out too, in slow motion (updatePlayer isn't running).
+  if (p.bounce) {
+    const step = p.bounce * Math.min(1, sdt * 12);
+    const bound = g.map.roadHalfWidth - PHYS.carHalfWidth;
+    p.x = Math.max(-bound, Math.min(bound, p.x + step));
+    p.bounce -= step;
+    if (Math.abs(p.bounce) < 0.1) p.bounce = 0;
+  }
   updateTraffic(g.traffic, sdt, p.z, g.map, { playerX: p.x }, 0, false);
   g.traffic.passedCount = g.deathPassed;     // nothing counts once the run is over
   updateCops(g.cops, sdt, p.z, p.x, p.speed, g.map, {});
@@ -1208,9 +1216,13 @@ function updateRace(dt) {
     const t = checkTrafficHit(g.traffic, box);
     if (t) {
       applyCollisionLoss(g.player, 0.55, 1.5);
-      // Push the player away laterally so they're not stuck inside the car.
-      const push = g.player.x > t.x ? 9 : -9;
-      g.player.x += push;
+      // CONTACT — both bodies react. You are shoved clear on the fence's own
+      // spring (eased, where it used to teleport 9 px in one frame), and the car
+      // you hit is jolted the other way — and punted ahead if you rear-ended it.
+      // The impact freeze holds the moment of contact; the shove plays after it.
+      const side = g.player.x > t.x ? 1 : -1;
+      g.player.bounce = side * RACE.crashShovePx;
+      knockCar(t, -side, g.player.z < t.z);
       if (takeHit(1.5)) return;
       g.hitStop = Math.max(g.hitStop, RACE.crashHitStop);
     }

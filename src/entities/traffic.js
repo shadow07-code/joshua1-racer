@@ -269,6 +269,17 @@ export function smashCar(c, fromX = 0) {
   c.vz = -(20 + Math.random() * 25);
 }
 
+// CONTACT — the civilian the player crashes into reacts instead of shrugging
+// the hit off: it is jolted sideways AWAY from the player (`dir`), eased out in
+// updateTraffic like the player's own shove, and — when rear-ended — punted
+// forward, easing back to cruise (resolveTrafficSeparation). A wrong-way car
+// hit head-on only takes the sideways jolt.
+export function knockCar(c, dir, fromBehind) {
+  if (!c || c.smashed) return;
+  c.knock = dir * RACE.crashKnockPx;
+  if (fromBehind && !c.oncoming) c.speed += RACE.crashKnockSpeed;
+}
+
 export function updateTraffic(sys, dt, playerZ, map, cbs, clearAheadDist = 0, allowOncoming = false) {
   // Spawn ahead so the road is always populated up to ~220m ahead. During the
   // post-rampage grace window, push the spawn cursor past the cleared zone so no
@@ -317,6 +328,14 @@ export function updateTraffic(sys, dt, playerZ, map, cbs, clearAheadDist = 0, al
       continue;
     }
     c.z += c.speed * dt;
+
+    // CONTACT jolt (see knockCar) — eased out, never off the tarmac.
+    if (c.knock) {
+      const step = c.knock * Math.min(1, dt * 12);
+      c.x = Math.max(-(halfRoad - 6), Math.min(halfRoad - 6, c.x + step));
+      c.knock -= step;
+      if (Math.abs(c.knock) < 0.05) c.knock = 0;
+    }
 
     // Wrong-way car: note the nearest one still ahead and inside horn range, so
     // main.js can blare the horn once as it bears down (no HUD warning at all —
@@ -458,6 +477,8 @@ function resolveTrafficSeparation(sys, dt) {
       }
     } else if (c.cruise != null && c.speed < c.cruise) {
       c.speed = Math.min(c.cruise, c.speed + 6 * dt);       // lane clear — pick back up
+    } else if (c.cruise != null && c.speed > c.cruise) {
+      c.speed = Math.max(c.cruise, c.speed - 4 * dt);       // punted by a crash — settle back
     }
   }
 }
