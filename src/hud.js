@@ -619,6 +619,29 @@ export function drawCombo(ctx, combo, comboTimer, comboWindow) {
   rect(ctx, x - 4, y + 9, ((w + 8) * frac) | 0, 1, hot ? 9 : 17);
 }
 
+// CHAIN BANKED — when a near-miss chain lapses, its receipt: how long it ran and
+// what it earned, in the COMBO banner's own spot (the banner has just gone, so
+// this adds nothing new to the screen). The points were already scored live;
+// this only makes them LEGIBLE, so a chain ends with a payoff instead of simply
+// vanishing — and the player learns what a long chain is worth. Stamps in gold
+// for its first beat, then settles; blinks out over its last 0.4 s.
+export function drawChainTally(ctx, n, pts, timer, total) {
+  if (!(timer > 0) || !(n > 0)) return;
+  if (timer < 0.4 && Math.floor(performance.now() / 90) % 2 === 0) return;
+  const stamp = total - timer < 0.12;               // the first beat
+  const y = 13;
+  const a = "CHAIN X" + n + "  ";
+  const b = "+" + Math.max(0, Math.floor(pts));
+  const wa = a.length * 4, wb = b.length * 4 - 1;
+  const w = wa + wb;
+  const x = ((W - w) / 2) | 0;
+  rect(ctx, x - 4, y - 2, w + 8, 11, stamp ? 5 : 0);          // plate
+  rect(ctx, x - 4, y - 2, w + 8, 1, stamp ? 1 : 17);          // emerald trim = banked
+  rect(ctx, x - 4, y + 8, w + 8, 1, stamp ? 1 : 17);
+  text(ctx, a, x, y + 1, stamp ? 0 : 5);
+  text(ctx, b, x + wa, y + 1, stamp ? 0 : 1);
+}
+
 // SANDWICH combo — a TRANSIENT line just below the COMBO banner. Shows for ~1.6s
 // on each sandwich pass then blinks off; the count keeps climbing and only resets
 // when the main combo breaks. Emerald, to set it apart from the gold combo.

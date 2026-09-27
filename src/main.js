@@ -15,7 +15,7 @@ import {
   startEngine, setEngine, stopEngine, setEngineRampage, setEngineStrain, getEngineStyle, setEngineStyle,
   sfxAccelAccent, sfxPickup, sfxCrash, sfxExplosion, sfxBump, sfxBarrelDrop, sfxCombo,
   sfxWhoosh, sfxPerfect, sfxHeartbeat, sfxCoin, sfxHorn, sfxLightsOn,
-  sfxSandwich, sfxRampageWarn, sfxSmash,
+  sfxSandwich, sfxRampageWarn, sfxSmash, sfxChainBank,
   sfxShieldUp, sfxShieldHit, sfxShockwave, sfxRampageCharge, sfxRampageReady, sfxNitrous,
   sfxMenuMove, sfxMenuSelect, sfxCountdownBeep,
   startHeliSound, stopHeliSound,
@@ -36,7 +36,7 @@ import {
 } from "./scoring.js";
 import {
   drawHud, drawTitleScreen, drawMapSelect, drawDifficultySelect,
-  drawGameOver, drawPaused, drawCountdown, drawTutorialOverlay, drawSteerHints, drawCombo, drawShieldMsg,
+  drawGameOver, drawPaused, drawCountdown, drawTutorialOverlay, drawSteerHints, drawCombo, drawChainTally, drawShieldMsg,
   drawRampageMeter, drawSandwichCombo, drawShareCard, SHARE_CARD_W, SHARE_CARD_H,
   drawExplosion, drawCrashImpact, drawCrashFlash, drawSmashBurst, drawPerfect, drawLastLifePulse,
   drawBiomeBanner, drawZoneFlash,
@@ -437,6 +437,10 @@ function newRaceSetup() {
   g.comboBest = 0;
   g.sandwichCombo = 0;
   g.sandwichComboTimer = 0;
+  g.chainPts = 0;           // points the current near-miss chain has earned so far
+  g.tallyN = 0;             // the CHAIN BANKED receipt: chain length...
+  g.tallyPts = 0;           // ...what it earned...
+  g.tallyTimer = 0;         // ...and how long it has left on screen
   g.rampageMeter = 0;
   g.rampageArmed = false;
   g.rampageCooldown = 0;
@@ -496,6 +500,7 @@ function takeHit(_invulnSec) {
   g.crashX = (W / 2 + g.map.biasX + g.player.x) | 0;
   g.player.lives -= 1;
   g.combo = 0; g.comboTimer = 0;        // a real crash breaks the streak
+  g.chainPts = 0;                       // ...with no receipt: it didn't end well
   g.sandwichCombo = 0; g.sandwichComboTimer = 0;  // ...and the sandwich multiplier
   g.rampageMeter = 0;                   // ...and dumps the banked rampage meter
   g.rampageArmed = false;               // ...including an ARMED one (crash = lost)
@@ -549,6 +554,7 @@ function registerSmash(c) {
   g.comboFlash = 0.18;
   const gain = SCORE.smashBonus * comboMult();
   g.scoreState.score += gain;
+  g.chainPts += gain;
   g.smashTotal += 1;
   // No per-smash popup — the COMBO banner already climbs fast during a rampage.
   sfxCombo(g.combo);
@@ -948,6 +954,7 @@ function updateRace(dt) {
         g.sandwichCombo += 1;
         g.sandwichComboTimer = 1.6;     // transient banner — shows then blinks off
         g.scoreState.score += SCORE.sandwichBonus;
+        g.chainPts += SCORE.sandwichBonus;
         g.combo += 1;
         g.comboBest = Math.max(g.comboBest, g.combo);
         g.comboTimer = RACE.comboWindow;
@@ -991,6 +998,7 @@ function updateRace(dt) {
         g.comboFlash = 0.18;
         const gain = Math.round(SCORE.nearMissBonus * comboMult() * precision);
         g.scoreState.score += gain;
+        g.chainPts += gain;
         sfxCombo(g.combo);
         // Risk → reward: an unbroken chain of `rampageNearMisses` shaves fills
         // the meter and ARMS the nitrous — the player then unleashes it with a
@@ -1055,8 +1063,19 @@ function updateRace(dt) {
   // A lapsed chain also dumps the banked rampage meter (it rewards UNBROKEN runs).
   if (g.comboTimer > 0) {
     g.comboTimer -= dt;
-    if (g.comboTimer <= 0) { g.combo = 0; g.rampageMeter = 0; g.sandwichCombo = 0; }
+    if (g.comboTimer <= 0) {
+      // CHAIN BANKED — a chain that reached the x2 banner ends with a receipt
+      // (length + what it earned) and a ka-ching, instead of just vanishing.
+      if (comboMult() >= 2) {
+        g.tallyN = g.combo;
+        g.tallyPts = g.chainPts;
+        g.tallyTimer = RACE.chainTallySeconds;
+        sfxChainBank(comboMult());
+      }
+      g.combo = 0; g.rampageMeter = 0; g.sandwichCombo = 0; g.chainPts = 0;
+    }
   }
+  if (g.tallyTimer > 0) g.tallyTimer = Math.max(0, g.tallyTimer - dt);
   if (g.comboFlash > 0) g.comboFlash = Math.max(0, g.comboFlash - dt);
   if (g.shieldMsgTimer > 0) g.shieldMsgTimer = Math.max(0, g.shieldMsgTimer - dt);
   if (g.rampageFlash > 0) g.rampageFlash = Math.max(0, g.rampageFlash - dt);
@@ -1351,6 +1370,8 @@ function render() {
       rect(ctx, W - 3, 9, 3, H - 34, c);
     }
     drawCombo(ctx, comboMult(), g.comboTimer, RACE.comboWindow);
+    // The receipt yields the spot the moment a NEW chain earns the banner.
+    if (comboMult() < 2) drawChainTally(ctx, g.tallyN, g.tallyPts, g.tallyTimer, RACE.chainTallySeconds);
     drawSandwichCombo(ctx, g.sandwichCombo, g.sandwichComboTimer);
     drawRampageMeter(ctx, {
       meter: g.rampageMeter, max: RACE.rampageNearMisses,

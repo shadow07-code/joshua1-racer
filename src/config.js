@@ -141,6 +141,9 @@ export const RACE = {
   //   fills the rampage meter (see below).
   comboKmh: 100,
   comboWindow: 2.8,
+  // How long the CHAIN BANKED receipt shows once a chain lapses (see
+  // drawChainTally). Only chains that reached the x2 banner get one.
+  chainTallySeconds: 1.5,
   // RAMPAGE pacing: an unbroken chain of `rampageNearMisses` combo-tier near
   // misses fills the nitro meter and ARMS the rampage — the player then taps the
   // top of the screen to unleash it when THEY choose. When a rampage ends the

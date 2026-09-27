@@ -759,6 +759,33 @@ export function sfxCombo(level) {
   o2.start(t); o2.stop(t + 0.12);
 }
 
+// CHAIN BANKED — the receipt for a near-miss chain: a quick run up a bright
+// G-major arpeggio that is LONGER for a bigger multiplier (x2 = 3 notes, x6 and
+// up = 6), landing on a ringing bell. A pat on the back under the music, not a
+// fanfare — the flourish is kept for new bests and unlocks.
+export function sfxChainBank(mult = 2) {
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  const notes = [784, 988, 1175, 1568, 1976, 2349];   // G5 B5 D6 G6 B6 D7
+  const n = Math.max(3, Math.min(notes.length, 1 + Math.ceil(mult * 0.7)));
+  for (let i = 0; i < n; i++) {
+    const at = t + i * 0.035;
+    const o = ctx.createOscillator(); o.type = "square"; o.frequency.value = notes[i];
+    const g = ctx.createGain(); g.gain.value = 0;
+    g.gain.linearRampToValueAtTime(0.11, at + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.001, at + 0.09);
+    o.connect(g); g.connect(sfxGain);
+    o.start(at); o.stop(at + 0.11);
+  }
+  const at = t + n * 0.035;
+  const b = ctx.createOscillator(); b.type = "triangle"; b.frequency.value = notes[n - 1];
+  const bg = ctx.createGain(); bg.gain.value = 0;
+  bg.gain.linearRampToValueAtTime(0.12, at + 0.005);
+  bg.gain.exponentialRampToValueAtTime(0.001, at + 0.45);
+  b.connect(bg); bg.connect(sfxGain);
+  b.start(at); b.stop(at + 0.47);
+}
+
 // Near-miss WHOOSH — a short band-passed air rush that sweeps up then falls
 // away, like traffic ripping past an open cockpit. `tight` 0..1 (1 = the
 // closest shave) makes it brighter and louder, so the risk is audible.
