@@ -907,6 +907,30 @@ export function drawCrashImpact(ctx, prog, cx, cy) {
   }
 }
 
+// RAMPAGE SMASH burst — the point where a rampage (or its exit shockwave) hits a
+// car: a white contact pop, gold and white shards flung out of it, then a dark
+// puff. The visible half of the takedown (sfxSmash is the audible half). Pinned
+// to the screen spot of the hit, like the crash impact, so it adds no motion of
+// its own beyond the shards. Smaller and quicker than drawCrashImpact, because
+// mid-rampage several can be on screen at once. prog: 0 at the hit -> 1.
+export function drawSmashBurst(ctx, prog, cx, cy) {
+  if (prog < 0 || prog >= 1) return;
+  if (prog < 0.18) {
+    disc(ctx, cx, cy, 4, 1);                                 // white contact pop
+    disc(ctx, cx, cy, 2, 5);
+  }
+  if (prog < 0.8) {
+    const spread = 4 + prog * 16;
+    const sz = prog < 0.35 ? 2 : 1;
+    for (let i = 0; i < 6; i++) {
+      const a = i / 6 * Math.PI * 2 + 0.5;
+      const idx = prog < 0.35 ? ((i & 1) ? 5 : 1) : ((i & 1) ? 9 : 2);
+      rect(ctx, (cx + Math.cos(a) * spread) | 0, (cy + Math.sin(a) * spread) | 0, sz, sz, idx);
+    }
+  }
+  if (prog > 0.5) disc(ctx, cx, cy - 1, (2 + prog * 3) | 0, 4);   // dark puff
+}
+
 // CRASH FLASH — a one-shot RED dither pop over the play area the instant a life
 // is lost. Same family as the zone / rampage / explosion flashes (static
 // screen-space colour only, no motion), just red and short, so the hit lands

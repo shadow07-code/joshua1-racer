@@ -225,6 +225,10 @@ export const RACE = {
   // third of a second of red screen.
   crashFlashDur: 0.18,
   crashFxDur: 0.38,
+  // ── RAMPAGE SMASH ── How long the contact burst lasts where a rampage (or the
+  // exit shockwave) knocks a car off the road. Shorter than crashFxDur: several
+  // can be on screen at once mid-rampage, and they must not pile into mush.
+  smashFxDur: 0.30,
 };
 
 // Spawn rates and traffic-row spacing.

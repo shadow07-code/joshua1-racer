@@ -15,14 +15,14 @@ import {
   startEngine, setEngine, stopEngine, setEngineRampage, setEngineStrain, getEngineStyle, setEngineStyle,
   sfxAccelAccent, sfxPickup, sfxCrash, sfxExplosion, sfxBump, sfxBarrelDrop, sfxCombo,
   sfxWhoosh, sfxPerfect, sfxHeartbeat, sfxCoin, sfxHorn, sfxLightsOn,
-  sfxSandwich, sfxRampageWarn,
+  sfxSandwich, sfxRampageWarn, sfxSmash,
   sfxShieldUp, sfxShieldHit, sfxShockwave, sfxRampageCharge, sfxRampageReady, sfxNitrous,
   sfxMenuMove, sfxMenuSelect, sfxCountdownBeep,
   startHeliSound, stopHeliSound,
   setMusicEnabled, setSfxEnabled, isMusicEnabled, isSfxEnabled, applyMix,
   getMusicTrack, setMusicTrack,
 } from "./audio.js";
-import { drawRoad, drawDistanceHaze, drawNightShade, dayNight, distToY, biomeAt } from "./road.js";
+import { drawRoad, drawDistanceHaze, drawNightShade, dayNight, distToY, biomeAt, project } from "./road.js";
 import { makePlayer, updatePlayer, drawPlayer, drawPlayerLights, beamAnchor, playerBox, applyCollisionLoss } from "./entities/player.js";
 import { makeTrafficSystem, updateTraffic, drawTraffic, drawNightLights, drawCoins, checkCoinGrab, checkTrafficHit, prepopulateTraffic, smashCar } from "./entities/traffic.js";
 import { getDaily, applyRun as applyDailyRun } from "./daily.js";
@@ -38,7 +38,7 @@ import {
   drawHud, drawTitleScreen, drawMapSelect, drawDifficultySelect,
   drawGameOver, drawPaused, drawCountdown, drawTutorialOverlay, drawSteerHints, drawCombo, drawShieldMsg,
   drawRampageMeter, drawSandwichCombo, drawShareCard, SHARE_CARD_W, SHARE_CARD_H,
-  drawExplosion, drawCrashImpact, drawCrashFlash, drawPerfect, drawLastLifePulse,
+  drawExplosion, drawCrashImpact, drawCrashFlash, drawSmashBurst, drawPerfect, drawLastLifePulse,
   drawBiomeBanner, drawZoneFlash,
 } from "./hud.js";
 import { registerServiceWorker, initInstallBanner, initInstallButton, initInstallSplash, setInstallButtonVisible } from "./pwa.js";
@@ -455,6 +455,7 @@ function newRaceSetup() {
   g.crashFx = 0;            // metal-on-metal impact burst at the car
   g.crashFlash = 0;         // the red screen pop that goes with it
   g.crashX = 0;             // screen x the burst is pinned to
+  g.smashFx = [];           // live rampage-smash bursts: { sx, sy, age }
   g.rampageWarned = false;  // fired the "about to end" cue for THIS rampage
   g.lightsOn = false;       // headlights state last frame (fires the click once)
   g.hitStop = 0;
@@ -527,10 +528,21 @@ function unleashRampage() {
   setEngineRampage(true);
 }
 
+// The takedown beat for a smashed car: a crunch and a contact burst at the spot
+// it was hit. Used by rampage smashes AND the exit shockwave, which used to be
+// silent and invisible apart from the cars sliding away.
+function smashBeat(c) {
+  sfxSmash();
+  const p = project(g.map, g.player.z, g.player.x, c);
+  if (!p) return;
+  g.smashFx.push({ sx: p.sx, sy: p.sy, age: 0 });
+  if (g.smashFx.length > 10) g.smashFx.shift();
+}
+
 // A traffic car smashed during a rampage — knocked off the road, advances the
 // combo streak, and scores its base × the CAPPED combo multiplier (so a long
 // rampage rewards well without running away).
-function registerSmash() {
+function registerSmash(c) {
   g.combo += 1;
   g.comboBest = Math.max(g.comboBest, g.combo);
   g.comboTimer = RACE.comboWindow;
@@ -540,6 +552,7 @@ function registerSmash() {
   g.smashTotal += 1;
   // No per-smash popup — the COMBO banner already climbs fast during a rampage.
   sfxCombo(g.combo);
+  smashBeat(c);
 }
 
 function beginCountdown() {
@@ -1030,7 +1043,7 @@ function updateRace(dt) {
         .filter(c => !c.smashed && c.z > g.player.z && c.z < g.player.z + RACE.rampageClearDist)
         .sort((a, b) => a.z - b.z)
         .slice(0, 2);
-      for (const c of ahead) smashCar(c, g.player.x);
+      for (const c of ahead) { smashCar(c, g.player.x); smashBeat(c); }
       g.shieldMsg = "CLEAR!"; g.shieldMsgTimer = 0.9;
       // Lock the rampage meter until the cooldown's worth of cars are passed.
       g.rampageCooldown = RACE.rampageCooldownPasses;
@@ -1052,6 +1065,10 @@ function updateRace(dt) {
   if (g.explosion > 0) g.explosion = Math.max(0, g.explosion - dt);
   if (g.crashFx > 0) g.crashFx = Math.max(0, g.crashFx - dt);
   if (g.crashFlash > 0) g.crashFlash = Math.max(0, g.crashFlash - dt);
+  for (let i = g.smashFx.length - 1; i >= 0; i--) {
+    g.smashFx[i].age += dt;
+    if (g.smashFx[i].age >= RACE.smashFxDur) g.smashFx.splice(i, 1);
+  }
   if (g.perfectTimer > 0) g.perfectTimer = Math.max(0, g.perfectTimer - dt);
   if (g.hitStopCool > 0) g.hitStopCool = Math.max(0, g.hitStopCool - dt);
 
@@ -1112,7 +1129,7 @@ function updateRace(dt) {
     let t, guard = 0;
     while ((t = checkTrafficHit(g.traffic, box)) && guard++ < 8) {
       smashCar(t, g.player.x);
-      registerSmash();
+      registerSmash(t);
     }
   } else if (g.player.invuln <= 0) {
     const box = playerBox(g.player);
@@ -1309,6 +1326,8 @@ function render() {
       drawCrashImpact(ctx, 1 - g.crashFx / RACE.crashFxDur, g.crashX, PLAYER_Y);
     }
     if (g.crashFlash > 0) drawCrashFlash(ctx, 1 - g.crashFlash / RACE.crashFlashDur);
+    // Rampage takedowns — a contact burst wherever a car was just smashed.
+    for (const f of g.smashFx) drawSmashBurst(ctx, f.age / RACE.smashFxDur, f.sx, f.sy);
     // Zone-change flash — a one-shot dither pop that masks the biome palette cut.
     if (g.biomeFlash > 0) drawZoneFlash(ctx, 1 - g.biomeFlash / 0.22);
     // Unleash flash — the same one-shot pop, fired the instant a rampage is tapped.

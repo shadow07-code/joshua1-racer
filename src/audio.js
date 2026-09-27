@@ -687,6 +687,42 @@ export function sfxSandwich() {
   });
 }
 
+// RAMPAGE SMASH — metal giving way under the nitrous. A rampage smash used to
+// play only the combo blip, so the payoff for fourteen chained near misses
+// sounded exactly like one more near miss. This is a takedown: a low body thud,
+// a crunch of noise whose filter slams shut as it falls, and a bright clank on
+// top. Pitch and noise offset vary per hit, so a string of smashes lands as a
+// pile-up rather than a machine gun. Throttled: a shockwave can smash two at once.
+export function sfxSmash() {
+  if (!ctx || !throttle("smash", 60)) return;
+  const t = ctx.currentTime;
+  const k = 0.88 + Math.random() * 0.24;
+  const o = ctx.createOscillator(); o.type = "square";
+  o.frequency.setValueAtTime(150 * k, t);
+  o.frequency.exponentialRampToValueAtTime(46 * k, t + 0.12);
+  const og = ctx.createGain(); og.gain.value = 0;
+  og.gain.linearRampToValueAtTime(0.20, t + 0.005);
+  og.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
+  o.connect(og); og.connect(sfxGain);
+  o.start(t); o.stop(t + 0.17);
+  const src = ctx.createBufferSource(); src.buffer = getNoiseBuf();
+  const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.Q.value = 1.2;
+  lp.frequency.setValueAtTime(3600 * k, t);
+  lp.frequency.exponentialRampToValueAtTime(380, t + 0.16);
+  const ng = ctx.createGain(); ng.gain.value = 0;
+  ng.gain.linearRampToValueAtTime(0.30, t + 0.004);
+  ng.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
+  src.connect(lp); lp.connect(ng); ng.connect(sfxGain);
+  src.start(t, Math.random() * 0.6); src.stop(t + 0.2);
+  const src2 = ctx.createBufferSource(); src2.buffer = getNoiseBuf();
+  const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 2800 * k; bp.Q.value = 7;
+  const cg = ctx.createGain(); cg.gain.value = 0;
+  cg.gain.linearRampToValueAtTime(0.16, t + 0.003);
+  cg.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
+  src2.connect(bp); bp.connect(cg); cg.connect(sfxGain);
+  src2.start(t, Math.random() * 0.6); src2.stop(t + 0.08);
+}
+
 // RAMPAGE ENDING — two urgent low ticks with RACE.rampageWarnSeconds left, the
 // audio half of the red strobe on the meter and the car's aura. Deliberately
 // dark and dry: this is a warning, not a reward.
