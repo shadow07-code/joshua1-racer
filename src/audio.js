@@ -893,18 +893,42 @@ export function sfxHorn() {
   });
 }
 
-// COIN grab — a bright, quick two-note "ching" (E6 → B6), the classic pickup
-// blip. Kept light so a fast run of coins layers pleasantly instead of blaring.
-export function sfxCoin() {
+// COIN grab — a bright, quick two-note "ching" (a note, then a fourth above).
+// Consecutive coins CLIMB: `step` is the coin's place in an unbroken run and
+// walks up a major scale from B5, so a trail of three plays a rising phrase and
+// a long run keeps climbing to the octave (then holds there) — collecting the
+// ideal line sounds like a tune instead of one blip on repeat. Kept light so a
+// fast run layers pleasantly instead of blaring.
+const COIN_SCALE = [0, 2, 4, 5, 7, 9, 11, 12];     // semitones: a major scale, one octave
+export function sfxCoin(step = 0) {
   if (!ctx || !throttle("coin", 70)) return;
   const t = ctx.currentTime;
-  [[1319, 0], [1976, 0.045]].forEach(([f, off]) => {
+  const f0 = 988 * Math.pow(2, COIN_SCALE[Math.max(0, Math.min(COIN_SCALE.length - 1, step | 0))] / 12);
+  [[f0, 0], [f0 * 4 / 3, 0.045]].forEach(([f, off]) => {
     const o = ctx.createOscillator(); o.type = "square"; o.frequency.value = f;
     const g = ctx.createGain(); g.gain.value = 0;
     g.gain.linearRampToValueAtTime(0.13, t + off + 0.004);
     g.gain.exponentialRampToValueAtTime(0.001, t + off + 0.10);
     o.connect(g); g.connect(sfxGain);
     o.start(t + off); o.stop(t + off + 0.12);
+  });
+}
+
+// COIN TRAIL complete — every coin of a trail collected: an E-major chord rolled
+// upward in sines, landing just after the last coin's ching. It rewards driving
+// the WHOLE ideal line rather than brushing one coin of it. Sound only — no
+// score, no coins: the economy and the leaderboard are untouched.
+export function sfxCoinTrail() {
+  if (!ctx) return;
+  const t = ctx.currentTime + 0.05;
+  [1319, 1661, 1976, 2637].forEach((f, i) => {
+    const at = t + i * 0.03;
+    const o = ctx.createOscillator(); o.type = "sine"; o.frequency.value = f;
+    const g = ctx.createGain(); g.gain.value = 0;
+    g.gain.linearRampToValueAtTime(0.10, at + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.001, at + 0.28);
+    o.connect(g); g.connect(sfxGain);
+    o.start(at); o.stop(at + 0.3);
   });
 }
 

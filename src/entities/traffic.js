@@ -28,6 +28,7 @@ export function makeTrafficSystem(opts = {}) {
     densityMul: 1.0,             // current difficulty density (set by main.js)
     passedCount: 0,
     rowsSpawned: 0,
+    trailsDone: 0,               // coin trails collected IN FULL (drives the trail chime)
     nextOncomingZ: null,         // z of the next wrong-way car (null until unlocked)
     oncomingNear: 0,             // metres to the nearest wrong-way car inside horn range (0 = none)
   };
@@ -190,8 +191,9 @@ function spawnRow(sys, map) {
   if (!wide && Math.random() < RACE.coinRowChance) {
     const cxCoin = laneToX(gap, map.roadHalfWidth);
     const n = RACE.coinsPerTrail || 3;
+    const trail = { n, got: 0 };                   // shared: completes when all n are taken
     for (let i = 0; i < n; i++) {
-      sys.coins.push({ x: cxCoin, z: sys.nextRowZ - i * (sys.rowGapZ / n), got: false });
+      sys.coins.push({ x: cxCoin, z: sys.nextRowZ - i * (sys.rowGapZ / n), got: false, trail });
     }
   }
 
@@ -574,6 +576,7 @@ export function checkCoinGrab(sys, box) {
     if (box.x1 < c.x + 5 && box.x2 > c.x - 5 && box.z1 < c.z + 6 && box.z2 > c.z - 6) {
       c.got = true;
       got++;
+      if (c.trail && ++c.trail.got === c.trail.n) sys.trailsDone++;   // the whole line, taken
     }
   }
   return got;

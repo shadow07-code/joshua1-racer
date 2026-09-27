@@ -183,6 +183,12 @@ export const RACE = {
   // OPEN gap lane (the ideal weaving line), coinsPerTrail coins spread in z.
   coinRowChance: 0.20,
   coinsPerTrail: 3,
+  // COIN MELODY: coins grabbed less than this many seconds apart count as one
+  // unbroken run, and each steps the pickup note up a major scale. 1.0 s covers
+  // a trail's spacing even at the opening's pace (~0.85 s between coins); at
+  // speed, back-to-back coin rows join up into one long rising run.
+  coinStreakGap: 1.0,
+  coinSparkleDur: 0.4,      // the twinkle round the car when a whole trail is collected
   // Biome cycling: the scene changes (city → tunnel → coast → bridge) every this
   // many seconds of a run — visual freshness + "how far did I get" landmarks.
   biomePeriodSec: 50,

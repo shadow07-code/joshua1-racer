@@ -14,7 +14,7 @@ import {
   playFlourish, tapeStopMusic, engineWindDown,
   startEngine, setEngine, stopEngine, setEngineRampage, setEngineStrain, getEngineStyle, setEngineStyle,
   sfxAccelAccent, sfxPickup, sfxCrash, sfxExplosion, sfxBump, sfxBarrelDrop, sfxCombo,
-  sfxWhoosh, sfxPerfect, sfxHeartbeat, sfxCoin, sfxHorn, sfxLightsOn,
+  sfxWhoosh, sfxPerfect, sfxHeartbeat, sfxCoin, sfxCoinTrail, sfxHorn, sfxLightsOn,
   sfxSandwich, sfxRampageWarn, sfxSmash, sfxChainBank,
   sfxShieldUp, sfxShieldHit, sfxShockwave, sfxRampageCharge, sfxRampageReady, sfxNitrous,
   sfxMenuMove, sfxMenuSelect, sfxCountdownBeep,
@@ -38,7 +38,7 @@ import {
   drawHud, drawTitleScreen, drawMapSelect, drawDifficultySelect,
   drawGameOver, drawPaused, drawCountdown, drawTutorialOverlay, drawSteerHints, drawCombo, drawChainTally, drawShieldMsg,
   drawRampageMeter, drawSandwichCombo, drawShareCard, SHARE_CARD_W, SHARE_CARD_H,
-  drawExplosion, drawCrashImpact, drawCrashFlash, drawSmashBurst, drawPerfect, drawLastLifePulse,
+  drawExplosion, drawCrashImpact, drawCrashFlash, drawSmashBurst, drawCoinSparkle, drawPerfect, drawLastLifePulse,
   drawBiomeBanner, drawZoneFlash, drawWreckFade,
 } from "./hud.js";
 import { registerServiceWorker, initInstallBanner, initInstallButton, initInstallSplash, setInstallButtonVisible } from "./pwa.js";
@@ -459,6 +459,10 @@ function newRaceSetup() {
   g.smashTotal = 0;
   g.rampagesUsed = 0;
   g.coins = 0;
+  g.coinStreak = 0;         // coins in the current unbroken run (steps the coin note up)
+  g.lastCoinT = -99;        // raceTime of the last coin grabbed
+  g.trailsSeen = 0;         // completed trails already celebrated
+  g.coinSparkle = 0;        // seconds left on the trail-complete twinkle
   g.biome = biomeAt(0);            // start in CITY; no banner for the opening zone
   g.biomeName = g.biome.name;
   g.biomeBannerTimer = 0;
@@ -1245,7 +1249,17 @@ function updateRace(dt) {
   if (gotCoins) {
     g.coins += gotCoins;
     g.scoreState.score += gotCoins * SCORE.coinValue;
-    sfxCoin();
+    // COIN MELODY — an unbroken run of coins climbs a scale instead of repeating
+    // one blip, and taking a WHOLE trail lands a chord and a twinkle round the
+    // car. Sound and sparkle only: what a coin is worth is unchanged.
+    g.coinStreak = (g.raceTime - g.lastCoinT < RACE.coinStreakGap) ? g.coinStreak + gotCoins : gotCoins;
+    g.lastCoinT = g.raceTime;
+    sfxCoin(g.coinStreak - 1);
+  }
+  if (g.traffic.trailsDone > g.trailsSeen) {
+    g.trailsSeen = g.traffic.trailsDone;
+    sfxCoinTrail();
+    g.coinSparkle = RACE.coinSparkleDur;
   }
 
   tickScore(g.scoreState, g.player.z, 1);
@@ -1284,6 +1298,7 @@ function decayFx(dt) {
   }
   if (g.perfectTimer > 0) g.perfectTimer = Math.max(0, g.perfectTimer - dt);
   if (g.scoreFlash > 0) g.scoreFlash = Math.max(0, g.scoreFlash - dt);
+  if (g.coinSparkle > 0) g.coinSparkle = Math.max(0, g.coinSparkle - dt);
 }
 
 function updatePaused() {
@@ -1460,6 +1475,7 @@ function render() {
       activeLeft: g.player.rampage,
     });
     if (g.perfectTimer > 0) drawPerfect(ctx, g.perfectTimer, (W / 2 + g.map.biasX + g.player.x) | 0);
+    if (g.coinSparkle > 0) drawCoinSparkle(ctx, 1 - g.coinSparkle / RACE.coinSparkleDur, (W / 2 + g.map.biasX + g.player.x) | 0, PLAYER_Y);
     if (g.biomeBannerTimer > 0) drawBiomeBanner(ctx, g.biomeName, g.biomeBannerTimer);
     if (g.shieldMsgTimer > 0) drawShieldMsg(ctx, g.shieldMsg, RECORD_MSGS.has(g.shieldMsg));
     drawHud(ctx, {

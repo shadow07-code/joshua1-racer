@@ -972,6 +972,26 @@ export function drawCrashFlash(ctx, prog) {
   ditherRect(ctx, 0, 9, W, H - 33, idx, (Math.floor(performance.now() / 30) & 1), 2);
 }
 
+// COIN TRAIL sparkle — a whole trail collected: six little star twinkles pop
+// around the car and blink out over RACE.coinSparkleDur. Fixed offsets pinned
+// to the car (no motion of their own), gold and white on alternate beats; each
+// shrinks from a plus to a single pixel as it fades. prog: 0 -> 1.
+const SPARKLES = [[-10, -8], [9, -6], [-11, 3], [10, 5], [-5, -13], [6, -12]];
+export function drawCoinSparkle(ctx, prog, cx, cy) {
+  if (prog < 0 || prog >= 1) return;
+  const beat = Math.floor(performance.now() / 70) % 2;
+  SPARKLES.forEach(([dx, dy], i) => {
+    if ((i + beat) % 2 === 0 && prog > 0.3) return;        // twinkle: half blink off after the pop
+    const x = cx + dx, y = cy + dy;
+    rect(ctx, x, y, 1, 1, 1);                              // white core
+    if (prog < 0.6) {                                      // gold arms while it's fresh
+      const c = (i + beat) % 2 ? 5 : 21;
+      rect(ctx, x - 1, y, 1, 1, c); rect(ctx, x + 1, y, 1, 1, c);
+      rect(ctx, x, y - 1, 1, 1, c); rect(ctx, x, y + 1, 1, 1, c);
+    }
+  });
+}
+
 // "PERFECT!" micro-pop — a small blinking word just above the car on a
 // pixel-close shave. Rises 3px over its half-second life (a tiny, bounded
 // screen-space drift — not a floater stream) then vanishes. cx = the car's
