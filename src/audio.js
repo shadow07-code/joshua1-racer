@@ -107,6 +107,7 @@ const MUSIC1_URL = new URL("../audio/the-final-bend.mp3", import.meta.url).href;
 let _music1Buffer = null;     // decoded PCM (null until loaded)
 let _music1Promise = null;    // in-flight load (de-dupes concurrent requests)
 let _music1Source = null;     // the live looping source while Track 1 plays
+let _music1Fade = null;       // its own gain stage, so a tape-stop can fade it alone
 
 function loadMusic1() {
   if (_music1Buffer) return Promise.resolve(_music1Buffer);
@@ -138,16 +139,20 @@ function startMusic1File() {
   const src = ctx.createBufferSource();
   src.buffer = _music1Buffer;
   src.loop = true;                 // seamless loop for the whole race
-  src.connect(musicGain);
+  const fade = ctx.createGain();   // per-source stage: a tape-stop fades THIS, never the channel
+  src.connect(fade); fade.connect(musicGain);
   src.start();
   _music1Source = src;
+  _music1Fade = fade;
 }
 
 function stopMusic1File() {
   if (!_music1Source) return;
   try { _music1Source.stop(); } catch {}
   try { _music1Source.disconnect(); } catch {}
+  try { if (_music1Fade) _music1Fade.disconnect(); } catch {}
   _music1Source = null;
+  _music1Fade = null;
 }
 
 // ── TRACK 2: Original chiptune ──────────────────────────────────────────────
@@ -405,6 +410,24 @@ export function stopMusic() {
   stopMusic1File();                         // also halt the looping Track-1 file
 }
 
+// THE WRECK — tape-stop the music: Track 1's playback rate sinks as it fades,
+// the "power cut" beat that says the run is over. The chiptune has no buffer to
+// slow, so its scheduler just stops and the notes already queued (~0.4 s) ring
+// out. stopMusic() at the results tidies both up as usual.
+export function tapeStopMusic(dur = 0.9) {
+  if (!ctx) return;
+  const t = ctx.currentTime;
+  if (musicTimer) { clearInterval(musicTimer); musicTimer = null; }
+  if (_music1Source && _music1Fade) {
+    const r = _music1Source.playbackRate;
+    r.cancelScheduledValues(t); r.setValueAtTime(1, t);
+    r.exponentialRampToValueAtTime(0.3, t + dur);
+    const fg = _music1Fade.gain;
+    fg.cancelScheduledValues(t); fg.setValueAtTime(1, t);
+    fg.linearRampToValueAtTime(0, t + dur);
+  }
+}
+
 export function setMusicIntensity(level) {
   // External may pass 0..1 (speed-based); clamp to 0..2
   intensity = Math.max(0, Math.min(2, Math.round(level)));
@@ -544,6 +567,22 @@ export function setEngine(speed01) {
   engineGain.gain.setTargetAtTime(vol, t, 0.06);
   engineGainSub.gain.setTargetAtTime(vol * st.subRatio, t, 0.06);
 }
+// THE WRECK — the engine dies with the run: its pitch sags to a third and the
+// voice fades out over `dur`. stopEngine() at the results removes it as usual.
+export function engineWindDown(dur = 0.9) {
+  if (!ctx || !engineOsc) return;
+  const t = ctx.currentTime;
+  for (const o of [engineOsc, engineOsc2, engineOscSub]) {
+    const f = o.frequency, v = Math.max(20, f.value);
+    f.cancelScheduledValues(t); f.setValueAtTime(v, t);
+    f.exponentialRampToValueAtTime(Math.max(12, v * 0.35), t + dur);
+  }
+  for (const gn of [engineGain, engineGainSub]) {
+    gn.gain.cancelScheduledValues(t); gn.gain.setValueAtTime(gn.gain.value, t);
+    gn.gain.linearRampToValueAtTime(0, t + dur);
+  }
+}
+
 export function setEngineRampage(on) {
   if (!engineFilt || !ctx || _engineRampage === on) return;
   _engineRampage = on;

@@ -232,6 +232,18 @@ export const RACE = {
   // exit shockwave) knocks a car off the road. Shorter than crashFxDur: several
   // can be on screen at once mid-rampage, and they must not pile into mush.
   smashFxDur: 0.30,
+  // ── THE WRECK ── The run-ending crash used to cut to the results on the SAME
+  // frame: its crash flash and shards never rendered, the music hard-stopped,
+  // and the player often never saw what hit them. Now the world plays on in
+  // slow motion around the stopped car for wreckSeconds while the music
+  // tape-stops and the engine dies, then it closes to black and the results
+  // arrive. Slow motion REDUCES motion, so the dizzy rule is intact.
+  wreckSeconds: 0.9,
+  wreckTimeScale: 0.25,     // world speed during the wreck (1 = real time)
+  // Game-over tap-to-retry guard. It was 0.9 s so the fatal touch could not
+  // insta-restart; the wreck now does most of that job, so death -> retry costs
+  // only ~0.6 s more than before (0.13 freeze + 0.9 wreck + 0.45 guard).
+  retryGuard: 0.45,
 };
 
 // Spawn rates and traffic-row spacing.

@@ -1009,6 +1009,19 @@ export function drawBiomeBanner(ctx, name, timer) {
   textOutlinedCentered(ctx, label, y + 1, 5, 0, 1);
 }
 
+// THE WRECK fade — the last stretch of the run-ending beat closes to black in
+// hard 8-bit steps (every 4th row, then every 2nd, then 3 rows in 4), so the
+// results arrive out of darkness instead of as a cut. Static rows, no motion.
+// prog: 0 at the crash -> 1 as the results take over.
+const WRECK_ROWS = [0, 2, 1];
+export function drawWreckFade(ctx, prog) {
+  if (!(prog >= 0.55)) return;
+  const step = prog < 0.7 ? 1 : prog < 0.85 ? 2 : 3;      // rows (of every 4) blacked out
+  for (let y = 0; y < H; y += 4) {
+    for (let k = 0; k < step; k++) rect(ctx, 0, y + WRECK_ROWS[k], W, 1, 0);
+  }
+}
+
 // Brief ZONE-CHANGE flash — a quick screen-space dither pop over the play area
 // that masks the biome's hard palette cut and sells it as a deliberate "new
 // zone" beat. One-shot (like the combo/explosion flashes), so no optic flow.

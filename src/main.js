@@ -11,7 +11,7 @@ import {
 } from "./input.js";
 import {
   initAudio, resumeAudio, suspendAudio, startMusic, stopMusic, setMusicIntensity, setMusicTempoFactor,
-  playFlourish,
+  playFlourish, tapeStopMusic, engineWindDown,
   startEngine, setEngine, stopEngine, setEngineRampage, setEngineStrain, getEngineStyle, setEngineStyle,
   sfxAccelAccent, sfxPickup, sfxCrash, sfxExplosion, sfxBump, sfxBarrelDrop, sfxCombo,
   sfxWhoosh, sfxPerfect, sfxHeartbeat, sfxCoin, sfxHorn, sfxLightsOn,
@@ -39,7 +39,7 @@ import {
   drawGameOver, drawPaused, drawCountdown, drawTutorialOverlay, drawSteerHints, drawCombo, drawChainTally, drawShieldMsg,
   drawRampageMeter, drawSandwichCombo, drawShareCard, SHARE_CARD_W, SHARE_CARD_H,
   drawExplosion, drawCrashImpact, drawCrashFlash, drawSmashBurst, drawPerfect, drawLastLifePulse,
-  drawBiomeBanner, drawZoneFlash,
+  drawBiomeBanner, drawZoneFlash, drawWreckFade,
 } from "./hud.js";
 import { registerServiceWorker, initInstallBanner, initInstallButton, initInstallSplash, setInstallButtonVisible } from "./pwa.js";
 import {
@@ -369,7 +369,8 @@ function pauseGame() {
 function resumeGame() {
   if (g.state !== STATES.PAUSED) return;
   g.state = g.prevState || STATES.RACE;
-  if (g.state === STATES.RACE) {
+  // (Not mid-wreck: the run is already over, the music already tape-stopped.)
+  if (g.state === STATES.RACE && !(g.wreck > 0)) {
     startMusic(g.map.music);
     setMusicIntensity(0);
     startEngine();
@@ -471,6 +472,9 @@ function newRaceSetup() {
   g.smashFx = [];           // live rampage-smash bursts: { sx, sy, age }
   g.rampageWarned = false;  // fired the "about to end" cue for THIS rampage
   g.lightsOn = false;       // headlights state last frame (fires the click once)
+  g.wreck = 0;              // seconds left of the run-ending wreck beat (0 = racing)
+  g.deathZ = null;          // where the run ended (the wreck coasts a few metres on)
+  g.deathPassed = 0;        // cars passed at the moment of death (frozen for the wreck)
   g.hitStop = 0;
   g.hitStopCool = 0;
   g.perfectTimer = 0;
@@ -529,8 +533,41 @@ function takeHit(_invulnSec) {
   if (g.traffic) {
     g.traffic.phrase = { type: "breather", left: RACE.crashBreatherRows, dir: 1 };
   }
-  if (g.player.lives <= 0) { endRace("GAME OVER"); return true; }
+  if (g.player.lives <= 0) { beginWreck(); return true; }
   return false;
+}
+
+// THE WRECK — the run-ending crash plays out before the results. It used to cut
+// to GAME OVER on the same frame, so its own crash flash and shards never
+// rendered and the player often never saw what hit them. Now: the same impact
+// freeze a survivable crash gets, then the world rolls on in slow motion around
+// the stopped car while the music tape-stops and the engine dies (updateWreck),
+// then it closes to black and endRace() takes over. The run's score, time and
+// pass count are final at the moment of impact.
+function beginWreck() {
+  g.wreck = RACE.wreckSeconds;
+  g.deathZ = g.player.z;
+  g.deathPassed = g.traffic ? g.traffic.passedCount : 0;
+  g.hitStop = Math.max(g.hitStop, RACE.crashHitStop);
+  g.player.invuln = 0;          // a wreck is solid, not the respawn blink
+  tapeStopMusic(RACE.wreckSeconds);
+  engineWindDown(RACE.wreckSeconds);
+}
+
+function updateWreck(dt) {
+  const sdt = dt * RACE.wreckTimeScale;
+  const p = g.player;
+  // The car coasts to a stop; everything else carries on in slow motion.
+  p.speed = Math.max(0, p.speed * (1 - Math.min(1, dt * 3)));
+  p.z += p.speed * sdt;
+  updateTraffic(g.traffic, sdt, p.z, g.map, { playerX: p.x }, 0, false);
+  g.traffic.passedCount = g.deathPassed;     // nothing counts once the run is over
+  updateCops(g.cops, sdt, p.z, p.x, p.speed, g.map, {});
+  updateSmoke(p, sdt);
+  // Screen FX run in REAL time, so the crash plays out in full inside the beat.
+  decayFx(dt);
+  g.wreck = Math.max(0, g.wreck - dt);
+  if (g.wreck === 0) endRace("GAME OVER");
 }
 
 // The player taps to UNLEASH an armed rampage — the peak moment, made theirs.
@@ -620,7 +657,7 @@ function endRace(reason) {
   // ── DAILY CHALLENGE ── Folded in BEFORE the coins are banked, so a completion's
   // reward rides the same deposit and can itself be what unlocks a car this run.
   const dailyRes = applyDailyRun({
-    distance: Math.floor(g.player.z || 0),
+    distance: Math.floor((g.deathZ != null ? g.deathZ : g.player.z) || 0),
     coins: g.coins || 0,
     passed: g.traffic ? g.traffic.passedCount : 0,
     smashed: g.smashTotal || 0,
@@ -894,6 +931,8 @@ function updateRace(dt) {
   if (consumePress("p", "P")) { pauseGame(); return; }
   if (consumePress("m", "M")) { toggleMusic(); }
   if (consumePress("Escape")) { stopMusic(); stopAllLoopingSfx(); g.state = STATES.TITLE; return; }
+  // The run is over — play out the wreck (see beginWreck) instead of racing.
+  if (g.wreck > 0) { updateWreck(dt); return; }
   // UNLEASH an armed rampage. The control is the big red 🔥 button at the bottom
   // centre (pointerdown, wired near the toolbar buttons); Enter is the desktop
   // fallback. There's no tap-zone fallback any more — the whole canvas steers.
@@ -1094,20 +1133,7 @@ function updateRace(dt) {
       g.combo = 0; g.rampageMeter = 0; g.sandwichCombo = 0; g.chainPts = 0;
     }
   }
-  if (g.tallyTimer > 0) g.tallyTimer = Math.max(0, g.tallyTimer - dt);
-  if (g.comboFlash > 0) g.comboFlash = Math.max(0, g.comboFlash - dt);
-  if (g.shieldMsgTimer > 0) g.shieldMsgTimer = Math.max(0, g.shieldMsgTimer - dt);
-  if (g.rampageFlash > 0) g.rampageFlash = Math.max(0, g.rampageFlash - dt);
-  if (g.unleashFlash > 0) g.unleashFlash = Math.max(0, g.unleashFlash - dt);
-  if (g.sandwichComboTimer > 0) g.sandwichComboTimer = Math.max(0, g.sandwichComboTimer - dt);
-  if (g.explosion > 0) g.explosion = Math.max(0, g.explosion - dt);
-  if (g.crashFx > 0) g.crashFx = Math.max(0, g.crashFx - dt);
-  if (g.crashFlash > 0) g.crashFlash = Math.max(0, g.crashFlash - dt);
-  for (let i = g.smashFx.length - 1; i >= 0; i--) {
-    g.smashFx[i].age += dt;
-    if (g.smashFx[i].age >= RACE.smashFxDur) g.smashFx.splice(i, 1);
-  }
-  if (g.perfectTimer > 0) g.perfectTimer = Math.max(0, g.perfectTimer - dt);
+  decayFx(dt);
   if (g.hitStopCool > 0) g.hitStopCool = Math.max(0, g.hitStopCool - dt);
 
   // ── LAST-LIFE TENSION ── On the final life the engine strains (a detune wobble)
@@ -1238,6 +1264,25 @@ function updateRace(dt) {
     g.worldBeaten = true;
     recordCallout("WORLD RECORD!");
   }
+}
+
+// Screen-FX timers — banners, flashes, bursts. They count down in REAL time,
+// shared by the race and the wreck (whose world runs in slow motion).
+function decayFx(dt) {
+  if (g.tallyTimer > 0) g.tallyTimer = Math.max(0, g.tallyTimer - dt);
+  if (g.comboFlash > 0) g.comboFlash = Math.max(0, g.comboFlash - dt);
+  if (g.shieldMsgTimer > 0) g.shieldMsgTimer = Math.max(0, g.shieldMsgTimer - dt);
+  if (g.rampageFlash > 0) g.rampageFlash = Math.max(0, g.rampageFlash - dt);
+  if (g.unleashFlash > 0) g.unleashFlash = Math.max(0, g.unleashFlash - dt);
+  if (g.sandwichComboTimer > 0) g.sandwichComboTimer = Math.max(0, g.sandwichComboTimer - dt);
+  if (g.explosion > 0) g.explosion = Math.max(0, g.explosion - dt);
+  if (g.crashFx > 0) g.crashFx = Math.max(0, g.crashFx - dt);
+  if (g.crashFlash > 0) g.crashFlash = Math.max(0, g.crashFlash - dt);
+  for (let i = g.smashFx.length - 1; i >= 0; i--) {
+    g.smashFx[i].age += dt;
+    if (g.smashFx[i].age >= RACE.smashFxDur) g.smashFx.splice(i, 1);
+  }
+  if (g.perfectTimer > 0) g.perfectTimer = Math.max(0, g.perfectTimer - dt);
   if (g.scoreFlash > 0) g.scoreFlash = Math.max(0, g.scoreFlash - dt);
 }
 
@@ -1255,7 +1300,7 @@ function updateGameOver(dt) {
   if (consumePress("Escape")) { g.state = STATES.TITLE; return; }
   // One-tap INSTANT RETRY — a tap anywhere on the canvas restarts, after a short
   // guard so the fatal moment's own touch can't immediately retry.
-  if (consumePress("Touch") && g.goTime > 0.9) { playAgain(); return; }
+  if (consumePress("Touch") && g.goTime > RACE.retryGuard) { playAgain(); return; }
 }
 
 // ─── Render ──────────────────────────────────────────────────────────────────
@@ -1434,6 +1479,7 @@ function render() {
     if (g.state === STATES.RACE && g.raceTime < 1.6) {
       drawSteerHints(ctx, Math.min(1, (1.6 - g.raceTime) / 0.8));
     }
+    if (g.wreck > 0) drawWreckFade(ctx, 1 - g.wreck / RACE.wreckSeconds);
     if (g.state === STATES.PAUSED) drawPaused(ctx);
     return;
   }
