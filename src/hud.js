@@ -914,7 +914,10 @@ export function drawExplosion(ctx, prog, cx, cy) {
 // flash, shards flung out of it, then a puff of smoke. Compact and pinned to
 // the car (the screen-wide half of the beat is drawCrashFlash below).
 export function drawCrashImpact(ctx, prog, cx, cy) {
-  if (prog <= 0 || prog >= 1) return;
+  // prog 0 is the IMPACT frame, and the crash's hit-stop holds it for 0.13 s —
+  // so it must paint. (It returned on 0, so every freeze showed a frozen road
+  // with no impact on it, and the burst only started once the freeze was over.)
+  if (prog < 0 || prog >= 1) return;
   if (prog < 0.16) {
     disc(ctx, cx, cy, 7, 1);                                 // white contact flash
     disc(ctx, cx, cy, 4, 5);
@@ -964,7 +967,7 @@ export function drawSmashBurst(ctx, prog, cx, cy) {
 // screen-space colour only, no motion), just red and short, so the hit lands
 // even when the player's eyes are on the far end of the road.
 export function drawCrashFlash(ctx, prog) {
-  if (prog <= 0 || prog >= 1) return;
+  if (prog < 0 || prog >= 1) return;                         // 0 = the freeze frame: paint it
   const idx = prog < 0.45 ? 6 : 7;                           // bright red → dark red
   ditherRect(ctx, 0, 9, W, H - 33, idx, (Math.floor(performance.now() / 30) & 1), 2);
 }
@@ -1010,7 +1013,8 @@ export function drawBiomeBanner(ctx, name, timer) {
 // that masks the biome's hard palette cut and sells it as a deliberate "new
 // zone" beat. One-shot (like the combo/explosion flashes), so no optic flow.
 export function drawZoneFlash(ctx, prog) {
-  if (prog <= 0 || prog >= 1) return;
+  // 0 must paint: a tap-unleashed rampage holds this frame in an 80 ms hit-stop.
+  if (prog < 0 || prog >= 1) return;
   ditherRect(ctx, 0, 9, W, H - 33, 1, (Math.floor(performance.now() / 30) & 1), 2);
 }
 
