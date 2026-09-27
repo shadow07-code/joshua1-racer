@@ -37,12 +37,17 @@ function pad(num, len) {
 }
 
 export function drawHud(ctx, {
-  score, speed, passed, mapKind, time, lives, densityMul, coins,
+  score, speed, passed, mapKind, time, lives, densityMul, coins, newBest, scoreFlash,
 }) {
   // Top thin score strip
   rect(ctx, 0, 0, W, 9, 0);
   rect(ctx, 0, 8, W, 1, 4);
-  text(ctx, "SCORE " + pad(score, 6), 4, 2, 5);
+  // The moment the live score passes your personal best it strobes white/gold,
+  // and a small emerald BEST tag then rides beside it for the rest of the run:
+  // every point from here on is a new record, which is worth knowing mid-run.
+  const strobe = scoreFlash > 0 && Math.floor(performance.now() / 100) % 2 === 0;
+  text(ctx, "SCORE " + pad(score, 6), 4, 2, strobe ? 1 : 5);
+  if (newBest) text(ctx, "BEST", 56, 2, strobe ? 1 : 17);
   // Coin counter on the right — a small gold coin + running count.
   drawSprite(ctx, SPR_COIN, W - 32, 1);
   text(ctx, pad(coins || 0, 3), W - 23, 2, 5);
@@ -1025,11 +1030,14 @@ export function drawLastLifePulse(ctx) {
   rect(ctx, W - th, top, th, h, idx);
 }
 
-// Big transient popup (SHIELD! / SAVED!) centred over the action — blinks.
-export function drawShieldMsg(ctx, msg) {
+// Big transient popup (RAMPAGE! / CLEAR! ...) centred over the action — blinks.
+// `gold` is for the record call-outs (NEW BEST! / WORLD RECORD!), so a personal
+// triumph never reads in the same colours as a power-up.
+export function drawShieldMsg(ctx, msg, gold = false) {
   const t = performance.now();
   const blink = Math.floor(t / 90) % 2 === 0;
-  textOutlinedCentered(ctx, msg, (H * 0.40) | 0, blink ? 17 : 13, 0, 2, 7);
+  if (gold) textOutlinedCentered(ctx, msg, (H * 0.40) | 0, blink ? 5 : 1, 0, 2, 9);
+  else textOutlinedCentered(ctx, msg, (H * 0.40) | 0, blink ? 17 : 13, 0, 2, 7);
 }
 
 export function drawPaused(ctx) {

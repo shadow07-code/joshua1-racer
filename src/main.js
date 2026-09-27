@@ -421,6 +421,15 @@ function newRaceSetup() {
   for (let i = 0; i < 25; i++) updateScenery(g.scenery, 0, g.map, 0.016, SPAWN.sceneryPerMeter);
   prepopulateTraffic(g.traffic, g.map, 500);
   startScoring(g.scoreState, g.map.key, g.difficulty, 0);
+  // The records this run is chasing, for the live NEW BEST / WORLD RECORD
+  // call-outs. 0 = nothing to beat: a first-ever run has no best to pass, and
+  // the world #1 only counts when it is above your own best and isn't you.
+  g.bestMark = g.scoreState.hi || 0;
+  g.bestBeaten = false;
+  const w = g.world || {};
+  g.worldMark = (w.score > g.bestMark && w.name && w.name !== g.playerName) ? w.score : 0;
+  g.worldBeaten = false;
+  g.scoreFlash = 0;
   startEngine();
   // Reset endless-mode trackers.
   g.raceTime = 0;
@@ -467,6 +476,16 @@ function newRaceSetup() {
   g.perfectTimer = 0;
   g.heartTimer = 0;
   g.lastOncomingWarn = 0;
+}
+
+// A record just fell mid-run: a big gold call-out, the HUD score strobes, and
+// the flourish plays (it used to play only on the game-over screen, AFTER the
+// run that earned it had already ended).
+const RECORD_MSGS = new Set(["NEW BEST!", "WORLD RECORD!"]);
+function recordCallout(msg) {
+  g.shieldMsg = msg; g.shieldMsgTimer = 2.0;
+  g.scoreFlash = 1.2;
+  playFlourish();
 }
 
 // Duration (seconds) of the barrel-impact explosion FX.
@@ -1206,6 +1225,20 @@ function updateRace(dt) {
   tickScore(g.scoreState, g.player.z, 1);
   // Per-second time bonus accumulated continuously.
   g.scoreState.score += SCORE.survivalSecondBonus * dt;
+
+  // ── NEW BEST, LIVE ── Passing your personal best was only ever announced on
+  // the game-over screen, after the run that earned it had already ended. Now
+  // it lands the moment it happens — and so does passing the world #1.
+  const sc = g.scoreState.score;
+  if (!g.bestBeaten && g.bestMark > 0 && sc > g.bestMark) {
+    g.bestBeaten = true;
+    recordCallout("NEW BEST!");
+  }
+  if (!g.worldBeaten && g.worldMark > 0 && sc > g.worldMark) {
+    g.worldBeaten = true;
+    recordCallout("WORLD RECORD!");
+  }
+  if (g.scoreFlash > 0) g.scoreFlash = Math.max(0, g.scoreFlash - dt);
 }
 
 function updatePaused() {
@@ -1383,7 +1416,7 @@ function render() {
     });
     if (g.perfectTimer > 0) drawPerfect(ctx, g.perfectTimer, (W / 2 + g.map.biasX + g.player.x) | 0);
     if (g.biomeBannerTimer > 0) drawBiomeBanner(ctx, g.biomeName, g.biomeBannerTimer);
-    if (g.shieldMsgTimer > 0) drawShieldMsg(ctx, g.shieldMsg);
+    if (g.shieldMsgTimer > 0) drawShieldMsg(ctx, g.shieldMsg, RECORD_MSGS.has(g.shieldMsg));
     drawHud(ctx, {
       score: g.scoreState.score,
       speed: g.player.speed,
@@ -1393,6 +1426,8 @@ function render() {
       lives: g.player.lives,
       densityMul: g.densityMul,
       coins: g.coins,
+      newBest: g.bestBeaten,
+      scoreFlash: g.scoreFlash,
     });
     // Keep the steer-zone ripples for the first moment of the race (when the
     // player can finally act), fading out over ~1.5s.
