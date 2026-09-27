@@ -24,7 +24,7 @@ import {
 } from "./audio.js";
 import { drawRoad, drawDistanceHaze, drawNightShade, dayNight, distToY, biomeAt, project } from "./road.js";
 import { makePlayer, updatePlayer, drawPlayer, drawPlayerLights, beamAnchor, playerBox, applyCollisionLoss } from "./entities/player.js";
-import { makeTrafficSystem, updateTraffic, drawTraffic, drawNightLights, drawCoins, checkCoinGrab, checkTrafficHit, prepopulateTraffic, smashCar, knockCar } from "./entities/traffic.js";
+import { makeTrafficSystem, updateTraffic, drawTraffic, drawNightLights, drawCoins, checkCoinGrab, checkTrafficHit, prepopulateTraffic, smashCar, knockCar, pullSpawnToHorizon } from "./entities/traffic.js";
 import { getDaily, applyRun as applyDailyRun } from "./daily.js";
 import { makePickupSystem, updatePickups, drawPickups, checkPickup } from "./entities/pickups.js";
 import { makeCopsSystem, updateCops, drawCops, checkBarrelHit } from "./entities/cops.js";
@@ -537,7 +537,9 @@ function takeHit(_invulnSec) {
   // RECOVERY BEAT: force the next couple of spawned rows open so the player gets
   // a moment to regather instead of being fed straight back into the phrase that
   // just killed them (which is how one crash chains into losing every life).
+  // Spawning restarts AT THE HORIZON, so the open road arrives while it helps.
   if (g.traffic) {
+    pullSpawnToHorizon(g.traffic, g.player.z);
     g.traffic.phrase = { type: "breather", left: RACE.crashBreatherRows, dir: 1 };
   }
   if (g.player.lives <= 0) { beginWreck(); return true; }

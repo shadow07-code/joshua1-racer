@@ -6,7 +6,7 @@
 // Rarely (~5%) a "tough row" shifts the gap by 2, forcing the player to brake
 // to find the gap.
 import { PHYS, RACE, SPAWN } from "../config.js";
-import { project } from "../road.js";
+import { project, VIEW_AHEAD } from "../road.js";
 import { drawSpriteNN, groundShadow, rect } from "../render.js";
 import { TRAFFIC_SKINS, ONCOMING_SKINS, oncomingSkin, SPR_COIN } from "../sprites.js";
 
@@ -242,6 +242,23 @@ function spawnOncoming(sys, map, playerZ) {
   });
   sys.nextOncomingZ += RACE.oncomingSpacingMin +
     Math.random() * (RACE.oncomingSpacingMax - RACE.oncomingSpacingMin);
+}
+
+// CRASH RECOVERY — the breather a crash asks for (main.js takeHit) only helps if
+// it arrives while the player is regathering. But rows are spawned ~220 m ahead,
+// so it used to reach the player 6-8 s after the crash — AFTER the 1.5 s of
+// invulnerability, through the busiest stretch (measured: 2.2 cars/s at 3-6 s).
+// Everything past the horizon has never been drawn (project() culls beyond
+// VIEW_AHEAD), so those rows are quietly withdrawn and the spawn cursor pulled
+// back to the horizon: the breather now starts right there. Wrong-way cars keep
+// their own schedule and are left alone; a coin trail is withdrawn whole.
+export function pullSpawnToHorizon(sys, playerZ) {
+  const edge = playerZ + VIEW_AHEAD + 2;
+  if (sys.nextRowZ <= edge) return;
+  sys.list = sys.list.filter((c) => c.oncoming || c.smashed || c.z <= edge);
+  const cut = new Set(sys.coins.filter((c) => c.z > edge).map((c) => c.trail));
+  sys.coins = sys.coins.filter((c) => c.z <= edge && !cut.has(c.trail));
+  sys.nextRowZ = edge;
 }
 
 // Initial wave so the road is busy at race start. Does NOT mark anything as passed.
