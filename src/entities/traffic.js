@@ -5,7 +5,7 @@
 // most ±1 lane, so the player can ALWAYS thread through with steering alone.
 // Rarely (~5%) a "tough row" shifts the gap by 2, forcing the player to brake
 // to find the gap.
-import { PHYS, RACE } from "../config.js";
+import { PHYS, RACE, SPAWN } from "../config.js";
 import { project } from "../road.js";
 import { drawSpriteNN, groundShadow, rect } from "../render.js";
 import { TRAFFIC_SKINS, ONCOMING_SKINS, oncomingSkin, SPR_COIN } from "../sprites.js";
@@ -51,6 +51,14 @@ function pickSkin() {
 // ±2 juke. Every phrase shifts the gap ≤1 lane/row (tough aside), so the road
 // stays threadable with steering alone.
 function pickPhrase(sys) {
+  // The opening (traffic placed before GO) only ever weaves: no squeeze, no
+  // juke, no gauntlet while the player is still finding their feet.
+  if (sys.opening) {
+    const r = Math.random();
+    if (r < 0.2) return { type: "breather", left: 1, dir: 1 };
+    if (r < 0.55) return { type: "sweep", left: 2 + (Math.random() * 2 | 0), dir: Math.random() < 0.5 ? -1 : 1 };
+    return { type: "slalom", left: 3 + (Math.random() * 2 | 0), dir: 1 };
+  }
   const dm = sys.densityMul || 1;
   const last = sys.phrase ? sys.phrase.type : "breather";
   // A gauntlet or a squeeze ("the drop") always resolves to air — a short
@@ -76,7 +84,7 @@ function pickPhrase(sys) {
 // Generate one row of cars at sys.nextRowZ, leaving a gap lane (plus a flowing
 // corridor) the player can thread, shaped by the current phrase.
 function spawnRow(sys, map) {
-  const wide = sys.rowsSpawned < 4;
+  const wide = sys.rowsSpawned < 2;              // the first two rows: one car each
   let ph = sys.phrase;
   if (wide) ph = { type: "breather", left: 1, dir: 1 };          // gentle opening
   else if (!ph || ph.left <= 0) ph = pickPhrase(sys);
@@ -144,7 +152,7 @@ function spawnRow(sys, map) {
     const skin = pickSkin();
     const x = laneToX(lane, map.roadHalfWidth);
     const jitter = (Math.random() - 0.5) * 4; // small z stagger inside a row
-    const speed = PHYS.cruiseSpeed * (skin.speedMul + (Math.random() * 0.08 - 0.02));
+    const speed = PHYS.cruiseSpeed * (skin.speedMul + (Math.random() * 0.08 - 0.02)) * (sys.opening ? SPAWN.openingPace : 1);
     // Lateral drift is decided AT SPAWN and stays constant — no random
     // mid-screen swerves. ~60% drift left or right; the rest hold their lane.
     // A drifting car SIGNALS like a real driver: its amber turn indicator
@@ -188,7 +196,9 @@ function spawnRow(sys, map) {
   // precise driving and adds a grab-or-play-safe decision. Skipped during the
   // gentle opening rows. The gap shifts ≤1 lane/row, so successive trails form a
   // dotted line that follows the weave.
-  if (!wide && Math.random() < RACE.coinRowChance) {
+  // (Never in the opening: it is there to be overtaken, and the garage ladder is
+  // priced against the coin yield of the road AFTER it — 57 a clean 2-min run.)
+  if (!wide && !sys.opening && Math.random() < RACE.coinRowChance) {
     const cxCoin = laneToX(gap, map.roadHalfWidth);
     const n = RACE.coinsPerTrail || 3;
     const trail = { n, got: 0 };                   // shared: completes when all n are taken
@@ -235,10 +245,18 @@ function spawnOncoming(sys, map, playerZ) {
 }
 
 // Initial wave so the road is busy at race start. Does NOT mark anything as passed.
+// This is THE OPENING (see SPAWN.openingPace): closer, a little tighter, slow,
+// and always gentle, so the first overtakes arrive within seconds of GO.
 export function prepopulateTraffic(sys, map, distance = 600) {
+  const gap = sys.rowGapZ;
+  sys.opening = true;
+  sys.nextRowZ = SPAWN.openingFirstRowZ;
+  sys.rowGapZ = SPAWN.openingRowGap;
   while (sys.nextRowZ < distance) {
     spawnRow(sys, map);
   }
+  sys.opening = false;
+  sys.rowGapZ = gap;
 }
 
 // Merge safety check: is another car occupying (or nearly occupying) the space

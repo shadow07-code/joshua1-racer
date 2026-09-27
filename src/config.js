@@ -273,6 +273,16 @@ export const SPAWN = {
   // Row-based — each row leaves one open lane the player can steer to.
   trafficRowGapCity: 72,
   trafficRowGapJungle: 70,  // unused (jungle removed) — kept for safety
+  // ── THE OPENING ── The traffic already on the road at GO. It used to start
+  // 80 m out, crawl along at nearly the player's own early speed and open with
+  // four single-car breathers, so the first car wasn't overtaken until 5.6-9 s
+  // after GO and the road asked nothing of you for ~15 s — on EVERY retry, and
+  // in a game whose sense of speed comes from overtaking. The opening rows now
+  // start closer, sit a little tighter, and drive at a fraction of normal pace
+  // so you reel them in straight away. Always gentle phrases (see pickPhrase).
+  openingFirstRowZ: 32,
+  openingRowGap: 46,
+  openingPace: 0.35,       // opening cars' speed as a fraction of a normal car's
   sceneryPerMeter: 0.22,
   aiInitial: 0,
 };
