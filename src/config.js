@@ -217,6 +217,12 @@ export const RACE = {
   // unthrottled 60ms freeze per tight shave reads as STUTTER instead of impact.
   // This keeps it a rare accent (the whoosh/PERFECT feedback still fires every time).
   hitStopCooldown: 0.45,
+  // ── SHAVE TIERS ── Measured as px of DAYLIGHT between the two hitboxes at the
+  // closest point of the pass (hitboxes sit ~1.6 px inside the sprites, so 2 px
+  // here = the sprites touching). The near-miss window itself (and its score)
+  // is unchanged; these only decide how a shave FEELS.
+  shaveWhooshPx: 5,     // air-rush whoosh, brighter the closer it was
+  shavePerfectPx: 2,    // paint-trading: PERFECT! pop + the (throttled) hit-stop
   // After a crash the next couple of spawned rows are forced open, so the player
   // isn't dropped straight back into the pattern that just killed them.
   crashBreatherRows: 2,

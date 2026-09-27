@@ -379,13 +379,29 @@ export function updateTraffic(sys, dt, playerZ, map, cbs, clearAheadDist = 0, al
       }
       cbs?.onPassed?.(sandwich);
     }
-    if (!c.nearMissed && c.passed && Math.abs(c.z - playerZ) < 18) {
-      const closenessPx = Math.abs(c.x - (cbs?.playerX ?? 0));
-      if (closenessPx < 18) {
+    // ── NEAR MISS — judged ONCE, as the car leaves the stretch where the two
+    // could touch lengthwise, on the CLOSEST it came while alongside. It used to
+    // read one arbitrary frame and measure centre-to-centre, which went wrong
+    // both ways: the hitbox is narrower than that measure assumed, so the best
+    // shave that doesn't crash topped out at tightness 0.57 and PERFECT! (0.6)
+    // could only fire while invulnerable — ghosting THROUGH a car — and the car
+    // you had just crashed into scored as a near miss too (40 crashes in 48).
+    // Contact (daylight < 0) now never counts.
+    if (!c.nearMissed) {
+      const dz = c.z - playerZ;
+      const zone = shaveZoneZ(c);
+      if (dz > -zone && dz < zone) {
+        const dx = Math.abs(c.x - (cbs?.playerX ?? 0));
+        if (c.minDx == null || dx < c.minDx) c.minDx = dx;
+      } else if (dz <= -zone && c.minDx != null) {
         c.nearMissed = true;
-        // tightness 0..1 (1 = the closest possible shave) drives the precision bonus.
-        const tightness = Math.max(0, Math.min(1, 1 - closenessPx / 18));
-        cbs?.onNearMiss?.(tightness);
+        const daylight = c.minDx - shaveEdgeX(c);        // px between the hitboxes
+        if (daylight >= 0 && c.minDx < 18) {
+          // Score precision keeps its old scale (centre distance over 18 px), so
+          // the leaderboard stays comparable; `daylight` drives how it FEELS.
+          const tightness = Math.max(0, Math.min(1, 1 - c.minDx / 18));
+          cbs?.onNearMiss?.(tightness, daylight);
+        }
       }
     }
   }
@@ -589,6 +605,11 @@ export function checkCoinGrab(sys, box) {
 // rear bumper has visibly more room to swerve out before the hit registers.
 // Clipping a corner reads as a great dodge, not a cheap death.
 const HIT_SCALE = 0.85;
+// The same geometry checkTrafficHit() uses, for judging near misses: how far
+// apart lengthwise the two can touch, and the centre distance at which the
+// hitboxes meet side by side.
+function shaveZoneZ(c) { return PHYS.carHalfHeight * 0.5 + skinHalfZ(c.skin) * HIT_SCALE * 0.34; }
+function shaveEdgeX(c) { return PHYS.carHalfWidth + skinHalfX(c.skin) * HIT_SCALE * 0.70; }
 export function checkTrafficHit(sys, box) {
   for (const c of sys.list) {
     if (c.smashed) continue;                 // already knocked off the road

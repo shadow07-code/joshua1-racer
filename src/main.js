@@ -1032,7 +1032,7 @@ function updateRace(dt) {
       if (g.rampageCooldown > 0) g.rampageCooldown -= 1;
     },
 
-    onNearMiss: (tightness) => {
+    onNearMiss: (tightness, daylight = 99) => {
       // Two tiers. Below comboKmh (100): every close shave still pays a flat
       // bonus with a discreet "NEAR MISS" flash — but no multiplier. At
       // comboKmh+ we enter NEAR MISS COMBO territory: shaves chain into a
@@ -1042,21 +1042,20 @@ function updateRace(dt) {
       const t = tightness != null ? tightness : 0;
       const precision = 1 + SCORE.precisionMax * t;     // 1 → 1.5 (pixel-perfect)
       // ── Game-feel juice (freeze + audio only, per the no-shake/no-zoom rule) ──
-      // A TIGHT shave gets a 60ms hit-stop (a micro freeze actually REDUCES
-      // motion) + an air-rush whoosh that brightens with tightness; a
-      // pixel-close one also pops "PERFECT!" over the car with a crystal ting.
-      if (t >= 0.45) {
-        sfxWhoosh(t);
-        // The freeze is THROTTLED (the whoosh isn't): back-to-back tight shaves
+      // Tiered by the real DAYLIGHT between the hitboxes at the closest point:
+      // a close shave gets an air-rush whoosh that brightens the closer it was;
+      // paint-trading (the sprites touching) pops "PERFECT!" with a crystal ting
+      // and a 60ms hit-stop (a micro freeze actually REDUCES motion).
+      if (daylight <= RACE.shaveWhooshPx) sfxWhoosh(1 - daylight / RACE.shaveWhooshPx);
+      if (daylight <= RACE.shavePerfectPx) {
+        g.perfectTimer = 0.5;
+        sfxPerfect();
+        // The freeze is THROTTLED (the pop isn't): back-to-back perfect shaves
         // would otherwise stutter the whole run instead of punctuating it.
         if (g.hitStopCool <= 0) {
           g.hitStop = Math.max(g.hitStop, 0.06);
           g.hitStopCool = RACE.hitStopCooldown;
         }
-      }
-      if (t >= 0.6) {
-        g.perfectTimer = 0.5;
-        sfxPerfect();
       }
       if (kmh >= RACE.comboKmh) {
         g.combo += 1;
