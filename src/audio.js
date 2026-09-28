@@ -631,22 +631,36 @@ export function sfxBrake() {
   o.start(t); o.stop(t + 0.28);
 }
 
+// Where a one-shot goes: straight to the SFX bus, or through a stereo panner
+// (-1 left … +1 right) so the player HEARS which side it happened on — the car
+// they just shaved, the wrong-way car's lane, the fence they hit. Mono (the
+// plain bus) whenever pan is 0 or the browser has no StereoPannerNode.
+function sfxOut(pan) {
+  if (!pan || !ctx.createStereoPanner) return sfxGain;
+  const p = ctx.createStereoPanner();
+  p.pan.value = Math.max(-1, Math.min(1, pan));
+  p.connect(sfxGain);
+  return p;
+}
+
 // Soft low thud + rubbery noise tap — used when the car bumps a road-edge fence.
-export function sfxBump() {
+// `pan` puts it on the side of the fence that was hit.
+export function sfxBump(pan = 0) {
   if (!ctx) return;
   const t = ctx.currentTime;
+  const out = sfxOut(pan);
   const o = ctx.createOscillator(); o.type = "square";
   o.frequency.setValueAtTime(180, t);
   o.frequency.exponentialRampToValueAtTime(70, t + 0.10);
   const og = ctx.createGain(); og.gain.value = 0.15;
   og.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
-  o.connect(og); og.connect(sfxGain);
+  o.connect(og); og.connect(out);
   o.start(t); o.stop(t + 0.16);
   const src = ctx.createBufferSource(); src.buffer = getNoiseBuf();
   const filt = ctx.createBiquadFilter(); filt.type = "lowpass"; filt.frequency.value = 900;
   const ng = ctx.createGain(); ng.gain.value = 0.10;
   ng.gain.exponentialRampToValueAtTime(0.001, t + 0.10);
-  src.connect(filt); filt.connect(ng); ng.connect(sfxGain);
+  src.connect(filt); filt.connect(ng); ng.connect(out);
   src.start(t); src.stop(t + 0.12);
 }
 
@@ -732,9 +746,10 @@ export function sfxSandwich() {
 // a crunch of noise whose filter slams shut as it falls, and a bright clank on
 // top. Pitch and noise offset vary per hit, so a string of smashes lands as a
 // pile-up rather than a machine gun. Throttled: a shockwave can smash two at once.
-export function sfxSmash() {
+export function sfxSmash(pan = 0) {
   if (!ctx || !throttle("smash", 60)) return;
   const t = ctx.currentTime;
+  const out = sfxOut(pan);
   const k = 0.88 + Math.random() * 0.24;
   const o = ctx.createOscillator(); o.type = "square";
   o.frequency.setValueAtTime(150 * k, t);
@@ -742,7 +757,7 @@ export function sfxSmash() {
   const og = ctx.createGain(); og.gain.value = 0;
   og.gain.linearRampToValueAtTime(0.20, t + 0.005);
   og.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
-  o.connect(og); og.connect(sfxGain);
+  o.connect(og); og.connect(out);
   o.start(t); o.stop(t + 0.17);
   const src = ctx.createBufferSource(); src.buffer = getNoiseBuf();
   const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.Q.value = 1.2;
@@ -751,14 +766,14 @@ export function sfxSmash() {
   const ng = ctx.createGain(); ng.gain.value = 0;
   ng.gain.linearRampToValueAtTime(0.30, t + 0.004);
   ng.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
-  src.connect(lp); lp.connect(ng); ng.connect(sfxGain);
+  src.connect(lp); lp.connect(ng); ng.connect(out);
   src.start(t, Math.random() * 0.6); src.stop(t + 0.2);
   const src2 = ctx.createBufferSource(); src2.buffer = getNoiseBuf();
   const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 2800 * k; bp.Q.value = 7;
   const cg = ctx.createGain(); cg.gain.value = 0;
   cg.gain.linearRampToValueAtTime(0.16, t + 0.003);
   cg.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
-  src2.connect(bp); bp.connect(cg); cg.connect(sfxGain);
+  src2.connect(bp); bp.connect(cg); cg.connect(out);
   src2.start(t, Math.random() * 0.6); src2.stop(t + 0.08);
 }
 
@@ -827,8 +842,9 @@ export function sfxChainBank(mult = 2) {
 
 // Near-miss WHOOSH — a short band-passed air rush that sweeps up then falls
 // away, like traffic ripping past an open cockpit. `tight` 0..1 (1 = the
-// closest shave) makes it brighter and louder, so the risk is audible.
-export function sfxWhoosh(tight = 0.5) {
+// closest shave) makes it brighter and louder, so the risk is audible. `pan`
+// puts it on the side the car went past.
+export function sfxWhoosh(tight = 0.5, pan = 0) {
   if (!ctx || !throttle("whoosh", 110)) return;
   const t = ctx.currentTime;
   const k = Math.max(0, Math.min(1, tight));
@@ -840,7 +856,7 @@ export function sfxWhoosh(tight = 0.5) {
   const g = ctx.createGain(); g.gain.value = 0;
   g.gain.linearRampToValueAtTime(0.14 + 0.12 * k, t + 0.015);
   g.gain.exponentialRampToValueAtTime(0.001, t + 0.19);
-  src.connect(bp); bp.connect(g); g.connect(sfxGain);
+  src.connect(bp); bp.connect(g); g.connect(sfxOut(pan));
   src.start(t); src.stop(t + 0.21);
 }
 
@@ -878,9 +894,12 @@ function throttle(key, minMs) {
 
 // WRONG-WAY HORN — a blaring two-tone car horn (a dissonant fifth, the classic
 // "get out of the way" sound) fired once when a wrong-way car comes into range.
-export function sfxHorn() {
+// `pan` places it in the wrong-way car's lane — the one cue there is (no HUD
+// warning by design) now also says WHERE.
+export function sfxHorn(pan = 0) {
   if (!ctx) return;
   const t = ctx.currentTime;
+  const out = sfxOut(pan);
   [370, 466].forEach((f) => {
     const o = ctx.createOscillator(); o.type = "sawtooth"; o.frequency.value = f;
     const g = ctx.createGain(); g.gain.value = 0;
@@ -888,7 +907,7 @@ export function sfxHorn() {
     g.gain.setValueAtTime(0.10, t + 0.34);
     g.gain.exponentialRampToValueAtTime(0.001, t + 0.48);
     const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 1500;
-    o.connect(lp); lp.connect(g); g.connect(sfxGain);
+    o.connect(lp); lp.connect(g); g.connect(out);
     o.start(t); o.stop(t + 0.5);
   });
 }

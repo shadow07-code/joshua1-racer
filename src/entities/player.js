@@ -119,7 +119,7 @@ export function updatePlayer(p, dt, input, map, callbacks) {
     if (p.edgeContact !== side) {                 // fresh contact with this edge
       p.edgeContact = side;
       p.speed = Math.max(PHYS.startSpeed * 0.6, p.speed * PHYS.fenceSpeedKeep);
-      if (callbacks?.onFenceBump) callbacks.onFenceBump();
+      if (callbacks?.onFenceBump) callbacks.onFenceBump(side);
     }
     p.bounce = -side * PHYS.fenceBounce;           // arm the inward rebound
   }

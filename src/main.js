@@ -609,8 +609,14 @@ function unleashRampage() {
 // The takedown beat for a smashed car: a crunch and a contact burst at the spot
 // it was hit. Used by rampage smashes AND the exit shockwave, which used to be
 // silent and invisible apart from the cars sliding away.
+// Stereo position of something at lateral x on the road, relative to the car
+// (-0.8 … +0.8 — never hard-panned, it should still read as "here").
+function panFor(x) {
+  return Math.max(-1, Math.min(1, (x - g.player.x) / g.map.roadHalfWidth)) * 0.8;
+}
+
 function smashBeat(c) {
-  sfxSmash();
+  sfxSmash(panFor(c.x));
   const p = project(g.map, g.player.z, g.player.x, c);
   if (!p) return;
   g.smashFx.push({ sx: p.sx, sy: p.sy, age: 0 });
@@ -962,7 +968,7 @@ function updateRace(dt) {
   g.raceTime += dt;
   recordGhost(g.ghostRec, g.raceTime, g.player);   // track this run for the ghost
 
-  updatePlayer(g.player, dt, input, g.map, { onAccelAccent: sfxAccelAccent, onFenceBump: sfxBump });
+  updatePlayer(g.player, dt, input, g.map, { onAccelAccent: sfxAccelAccent, onFenceBump: (side) => sfxBump(side * 0.7) });
 
   const speed01 = g.player.speed / PHYS.maxSpeed;
   setEngine(speed01);
@@ -1042,7 +1048,7 @@ function updateRace(dt) {
       if (g.rampageCooldown > 0) g.rampageCooldown -= 1;
     },
 
-    onNearMiss: (tightness, daylight = 99) => {
+    onNearMiss: (tightness, daylight = 99, side = 0) => {
       // Two tiers. Below comboKmh (100): every close shave still pays a flat
       // bonus with a discreet "NEAR MISS" flash — but no multiplier. At
       // comboKmh+ we enter NEAR MISS COMBO territory: shaves chain into a
@@ -1056,7 +1062,8 @@ function updateRace(dt) {
       // a close shave gets an air-rush whoosh that brightens the closer it was;
       // paint-trading (the sprites touching) pops "PERFECT!" with a crystal ting
       // and a 60ms hit-stop (a micro freeze actually REDUCES motion).
-      if (daylight <= RACE.shaveWhooshPx) sfxWhoosh(1 - daylight / RACE.shaveWhooshPx);
+      // ...on the side the car went past.
+      if (daylight <= RACE.shaveWhooshPx) sfxWhoosh(1 - daylight / RACE.shaveWhooshPx, side * 0.6);
       if (daylight <= RACE.shavePerfectPx) {
         g.perfectTimer = 0.5;
         sfxPerfect();
@@ -1103,7 +1110,7 @@ function updateRace(dt) {
   // Wrong-way horn — one blast per car, fired as it bears down (no HUD warning:
   // the whole point is that it ambushes you). Edge-triggered off the distance.
   const nearOncoming = g.traffic.oncomingNear || 0;
-  if (nearOncoming > 0 && g.lastOncomingWarn <= 0) sfxHorn();
+  if (nearOncoming > 0 && g.lastOncomingWarn <= 0) sfxHorn(panFor(g.traffic.oncomingNearX));
   g.lastOncomingWarn = nearOncoming;
 
   // ── Rampage + post-rampage shockwave ──

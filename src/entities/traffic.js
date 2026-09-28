@@ -31,6 +31,7 @@ export function makeTrafficSystem(opts = {}) {
     trailsDone: 0,               // coin trails collected IN FULL (drives the trail chime)
     nextOncomingZ: null,         // z of the next wrong-way car (null until unlocked)
     oncomingNear: 0,             // metres to the nearest wrong-way car inside horn range (0 = none)
+    oncomingNearX: 0,            // ...and its lateral position (pans the horn)
   };
 }
 
@@ -377,7 +378,7 @@ export function updateTraffic(sys, dt, playerZ, map, cbs, clearAheadDist = 0, al
     // it's meant to ambush).
     if (c.oncoming) {
       const d = c.z - playerZ;
-      if (d > 0 && d < RACE.oncomingHornDist && (nearDist === 0 || d < nearDist)) nearDist = d;
+      if (d > 0 && d < RACE.oncomingHornDist && (nearDist === 0 || d < nearDist)) { nearDist = d; sys.oncomingNearX = c.x; }
     }
 
     // ── CLOSING squeeze ── The flankers hold station until the player is inside
@@ -454,7 +455,7 @@ export function updateTraffic(sys, dt, playerZ, map, cbs, clearAheadDist = 0, al
           // Score precision keeps its old scale (centre distance over 18 px), so
           // the leaderboard stays comparable; `daylight` drives how it FEELS.
           const tightness = Math.max(0, Math.min(1, 1 - c.minDx / 18));
-          cbs?.onNearMiss?.(tightness, daylight);
+          cbs?.onNearMiss?.(tightness, daylight, Math.sign(c.x - (cbs?.playerX ?? 0)));
         }
       }
     }
