@@ -8,28 +8,34 @@ const state = {
   pressed: new Set(),           // edge-triggered, consumed by main loop
 };
 
-const heldKeys = new Set();
-const touchPoints = new Map(); // identifier -> { x, y, side }
-const btnHeld = { L: false, R: false }; // explicit on-screen-button state
+// Every held input remembers WHEN it was pressed (a rising sequence number), so
+// steering can follow the most recent one — see recompute().
+let _seq = 0;
+const heldKeys = new Map();    // key -> press seq
+const touchPoints = new Map(); // identifier -> { x, y, side, seq }
+const btnHeld = { L: 0, R: 0 }; // on-screen pads: press seq while held, 0 when up
 
+// LAST PRESS WINS. Steering follows the most recently pressed direction that is
+// still held, across keys, pads and screen halves alike; lifting it falls back
+// to whatever is still down. Holding both directions used to CANCEL to zero —
+// and a two-thumb reversal always overlaps (the new thumb lands before the old
+// one lifts), so the car stopped dead for the whole overlap, then pulled away
+// from rest: measured, every ms of overlap added a ms to the reversal (a 150 ms
+// overlap took 183 ms to come back 3 px, against 50 ms for a clean handoff).
 function recompute() {
-  let s = 0;
-  if (KEYS.left.some(k => heldKeys.has(k))) s -= 1;
-  if (KEYS.right.some(k => heldKeys.has(k))) s += 1;
-  // On-screen buttons take priority — they're the new "official" mobile controls.
-  if (btnHeld.L && !btnHeld.R) s = -1;
-  else if (btnHeld.R && !btnHeld.L) s = 1;
-  // Canvas-half touch as a fallback (kept for menus and casual taps).
-  else {
-    let leftTouch = false, rightTouch = false;
-    for (const t of touchPoints.values()) {
-      if (t.side === "L") leftTouch = true;
-      else if (t.side === "R") rightTouch = true;
-    }
-    if (leftTouch && !rightTouch) s = -1;
-    else if (rightTouch && !leftTouch) s = 1;
+  let s = 0, best = 0;
+  const consider = (dir, seq) => { if (seq > best) { best = seq; s = dir; } };
+  for (const [k, seq] of heldKeys) {
+    if (KEYS.left.includes(k)) consider(-1, seq);
+    else if (KEYS.right.includes(k)) consider(1, seq);
   }
-  state.steer = Math.max(-1, Math.min(1, s));
+  if (btnHeld.L) consider(-1, btnHeld.L);
+  if (btnHeld.R) consider(1, btnHeld.R);
+  for (const t of touchPoints.values()) {
+    if (t.side === "L") consider(-1, t.seq);
+    else if (t.side === "R") consider(1, t.seq);
+  }
+  state.steer = s;
   state.brake = false;
 }
 
@@ -38,8 +44,8 @@ window.addEventListener("keydown", (e) => {
   if (["ArrowLeft","ArrowRight","ArrowUp","ArrowDown"," "].includes(e.key)) {
     e.preventDefault();
   }
-  if (!heldKeys.has(e.key)) {
-    heldKeys.add(e.key);
+  if (!heldKeys.has(e.key)) {          // (auto-repeat keydowns keep the first seq)
+    heldKeys.set(e.key, ++_seq);
     state.pressed.add(e.key);
   }
   recompute();
@@ -75,7 +81,7 @@ function bindPointer(canvas) {
     e.preventDefault();
     for (const t of e.changedTouches) {
       const side = sideOf(t.clientX, t.clientY);
-      touchPoints.set(t.identifier, { x: t.clientX, y: t.clientY, side });
+      touchPoints.set(t.identifier, { x: t.clientX, y: t.clientY, side, seq: ++_seq });
     }
     state.pressed.add("Touch");
     recompute();
@@ -84,7 +90,11 @@ function bindPointer(canvas) {
     e.preventDefault();
     for (const t of e.changedTouches) {
       const tp = touchPoints.get(t.identifier);
-      if (tp) { tp.x = t.clientX; tp.y = t.clientY; tp.side = sideOf(t.clientX, t.clientY); }
+      if (!tp) continue;
+      tp.x = t.clientX; tp.y = t.clientY;
+      const side = sideOf(t.clientX, t.clientY);
+      // A thumb sliding across into the other half is a fresh press that way.
+      if (side !== tp.side) { tp.side = side; tp.seq = ++_seq; }
     }
     recompute();
   }, { passive: false });
@@ -103,13 +113,16 @@ function bindPointer(canvas) {
     if (e.button !== 0) return;
     mouseDown = true;
     const side = sideOf(e.clientX, e.clientY);
-    touchPoints.set(mouseId, { x: e.clientX, y: e.clientY, side });
+    touchPoints.set(mouseId, { x: e.clientX, y: e.clientY, side, seq: ++_seq });
     state.pressed.add("Touch");
     recompute();
   });
   window.addEventListener("mousemove", (e) => {
     if (!mouseDown) return;
-    touchPoints.set(mouseId, { x: e.clientX, y: e.clientY, side: sideOf(e.clientX, e.clientY) });
+    const tp = touchPoints.get(mouseId);
+    const side = sideOf(e.clientX, e.clientY);
+    if (tp && side !== tp.side) { tp.side = side; tp.seq = ++_seq; }
+    if (tp) { tp.x = e.clientX; tp.y = e.clientY; }
     recompute();
   });
   window.addEventListener("mouseup", () => {
@@ -128,12 +141,12 @@ function bindSteerButtons() {
   const btnR = document.getElementById("btn-steer-right");
   if (!btnL || !btnR) return;
   const press = (side) => {
-    btnHeld[side] = true;
+    btnHeld[side] = ++_seq;
     state.pressed.add("Touch");
     recompute();
   };
   const release = (side) => {
-    btnHeld[side] = false;
+    btnHeld[side] = 0;
     recompute();
   };
   // Pointer events cover both touch and mouse in one binding.
@@ -213,8 +226,8 @@ export function clearPresses() {
 export function releaseAllInput() {
   heldKeys.clear();
   touchPoints.clear();
-  btnHeld.L = false;
-  btnHeld.R = false;
+  btnHeld.L = 0;
+  btnHeld.R = 0;
   state.pressed.clear();
   recompute();
 }
