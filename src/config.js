@@ -144,6 +144,10 @@ export const RACE = {
   // How long the CHAIN BANKED receipt shows once a chain lapses (see
   // drawChainTally). Only chains that reached the x2 banner get one.
   chainTallySeconds: 1.5,
+  // The last stretch of the combo window, during which its timer bar strobes
+  // red/white — one more shave keeps the chain. It used to drain silently, so
+  // a chain died without the player ever being told it was about to.
+  comboWarnSeconds: 0.7,
   // RAMPAGE pacing: an unbroken chain of `rampageNearMisses` combo-tier near
   // misses fills the nitro meter and ARMS the rampage — the player then taps the
   // top of the screen to unleash it when THEY choose. When a rampage ends the
@@ -226,6 +230,12 @@ export const RACE = {
   // After a crash the next couple of spawned rows are forced open, so the player
   // isn't dropped straight back into the pattern that just killed them.
   crashBreatherRows: 2,
+  // The post-crash blink thins out (hidden 1 beat in 4 instead of 1 in 2) over
+  // the last stretch of invulnerability, so the car visibly FIRMS UP just before
+  // you are solid again. It used to strobe at one rate to the very end — no way
+  // to tell when you'd be mortal. (It errs early: you look solid 0.45 s before
+  // you are, never after.)
+  invulnSettleSeconds: 0.45,
   // ── CONTACT ── A crash is two bodies meeting, so both react. You are SHOVED
   // clear on the fence's own spring (eased over ~0.25 s — it used to be a 9 px
   // teleport in one frame), and the car you hit is jolted the other way, small

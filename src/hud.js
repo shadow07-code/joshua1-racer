@@ -620,8 +620,13 @@ export function drawCombo(ctx, combo, comboTimer, comboWindow) {
   rect(ctx, x - 4, y + 8, w + 8, 1, hot ? 9 : 5);   // bottom accent
   textCentered(ctx, label, y + 1, idx);             // (scale defaults to 1 — was 0 = invisible!)
   const frac = Math.max(0, Math.min(1, comboTimer / (comboWindow || 1)));
+  // About to lapse: the timer bar and the bottom accent strobe red/white — one
+  // more shave keeps the chain alive.
+  const lapsing = comboTimer > 0 && comboTimer <= (RACE.comboWarnSeconds || 0.7);
+  const strobe = Math.floor(t / 70) % 2 === 0 ? 6 : 1;
+  if (lapsing) rect(ctx, x - 4, y + 8, w + 8, 1, strobe);
   rect(ctx, x - 4, y + 9, w + 8, 1, 4);
-  rect(ctx, x - 4, y + 9, ((w + 8) * frac) | 0, 1, hot ? 9 : 17);
+  rect(ctx, x - 4, y + 9, ((w + 8) * frac) | 0, 1, lapsing ? strobe : (hot ? 9 : 17));
 }
 
 // CHAIN BANKED — when a near-miss chain lapses, its receipt: how long it ran and

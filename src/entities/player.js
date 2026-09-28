@@ -153,8 +153,17 @@ export function applyCollisionLoss(p, severity, invulnSeconds = 0.6) {
   p.invuln = Math.max(p.invuln, invulnSeconds);
 }
 
+// The post-crash blink: hidden every other 60 ms beat, thinning to one beat in
+// four over the last RACE.invulnSettleSeconds — the car firms up just before
+// invulnerability ends. Shared by the car and its lamps so they blink together.
+function invulnHidden(p) {
+  if (!(p.invuln > 0)) return false;
+  const beat = Math.floor(performance.now() / 60);
+  return p.invuln > RACE.invulnSettleSeconds ? beat % 2 === 0 : beat % 4 === 0;
+}
+
 export function drawPlayer(ctx, p, map) {
-  if (p.invuln > 0 && (Math.floor(performance.now() / 60) % 2 === 0)) return;
+  if (invulnHidden(p)) return;
   const cx = roadCenterX(map, p.z, p.x, 0);
   // Slight wobble while in the legacy slip state.
   const slipping = p.slip > 0;
@@ -218,7 +227,7 @@ export function drawPlayer(ctx, p, map) {
 // hover over a car that isn't being drawn.
 export function drawPlayerLights(ctx, p, map, ns) {
   if (!headlightsLit(ns)) return;
-  if (p.invuln > 0 && (Math.floor(performance.now() / 60) % 2 === 0)) return;
+  if (invulnHidden(p)) return;
   const halfW = 10 * PLAYER_SCALE / 2, halfH = 15 * PLAYER_SCALE / 2;
   const spriteX = Math.round(roadCenterX(map, p.z, p.x, 0) + p.x - halfW);
   const spriteW = Math.max(1, Math.round(halfW * 2));
