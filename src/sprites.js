@@ -194,6 +194,34 @@ export const SPR_FERRARI_BASE = [
   [_,_,0,4,0,0,4,0,_,_],     // 14 rear bumper + exhaust
 ];
 
+// ELEVATE — a compact SUV in Lunar Silver, styled on the Honda Elevate: boxy
+// nose with LED lamps either side of a chrome grille bar, a tinted windshield,
+// roof rails framing a sunroof, a chrome tailgate strip and wide tail lamps.
+// The one garage car that is NOT a Ferrari repaint, but it keeps the Ferrari's
+// 10x15 footprint, so it drives, collides and lights up at night identically:
+// its tail lamps sit on row 13, cols 2-3 / 6-7, exactly where
+// drawPlayerLights() paints the player's lamps. Silver = light grey 2 with a
+// white sheen 1 and mid-grey shade 3; glass is deep grey 23 with a blue glint 13.
+// The dark rails and sunroof keep it apart from the plain-roofed white traffic
+// SUVs.
+export const SPR_ELEVATE = [
+  [_,0,0,0,0,0,0,0,0,_],      //  0 front bumper (black cladding)
+  [_,0,5,1,4,4,1,5,0,_],      //  1 LED lamps + chrome bar + grille
+  [_,0,2,2,1,1,2,2,0,_],      //  2 hood (bright centre crease)
+  [0,0,3,2,2,2,2,3,0,0],      //  3 hood + front wheels
+  [_,0,3,13,23,23,23,3,0,_],  //  4 windshield (glint top-left)
+  [_,0,4,2,1,1,2,4,0,_],      //  5 roof (sheen) between the rails
+  [_,0,4,2,23,23,2,4,0,_],    //  6 sunroof
+  [_,0,4,2,23,23,2,4,0,_],    //  7 sunroof
+  [_,0,4,1,2,2,1,4,0,_],      //  8 roof + rails
+  [_,0,4,2,2,2,2,4,0,_],      //  9 roof + rails
+  [_,0,3,23,23,23,23,3,0,_],  // 10 rear glass
+  [0,0,3,2,2,2,2,3,0,0],      // 11 tailgate + rear wheels
+  [_,0,2,1,1,1,1,2,0,_],      // 12 chrome tailgate strip
+  [_,0,9,9,2,2,9,9,0,_],      // 13 wide LED tail lamps
+  [_,0,0,0,0,0,0,0,0,_],      // 14 rear bumper (black cladding)
+];
+
 // No steering-lean variants — the car stays straight (the 1px yaw read as
 // unnatural). Kept as aliases so any stray importer still resolves.
 export const SPR_PLAYER   = SPR_FERRARI_BASE;

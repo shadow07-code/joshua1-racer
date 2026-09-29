@@ -9,9 +9,10 @@
 // leaderboard is the competitive layer; if coins bought power, a grinder would
 // outscore a better driver and the board would stop meaning anything.
 //
-// The cars themselves cost zero new pixel art: each is a recolorBody() paint
-// swap of the same Ferrari sprite (the trick the traffic skins already use).
-import { SPR_FERRARI_BASE, recolorBody } from "./sprites.js";
+// Most cars cost zero new pixel art: each is a recolorBody() paint swap of the
+// same Ferrari sprite (the trick the traffic skins already use). A car with its
+// own `sprite` (the ELEVATE) uses that instead.
+import { SPR_FERRARI_BASE, SPR_ELEVATE, recolorBody } from "./sprites.js";
 
 const WALLET_KEY = "joshua1.wallet.v1";
 const OWNED_KEY  = "joshua1.cars.v1";
@@ -21,8 +22,11 @@ const PICKED_KEY = "joshua1.car.v1";
 // the first unlock lands in 2-3 runs (teaches the loop, pays off fast) and the
 // last is a long chase. Body tones recolour from the base red (dark 7 / main 6 /
 // light 8) into each livery's (dark, main, light).
+// A price of 0 marks a STARTER: owned from the first run, never "unlocked" (so
+// it is never auto-equipped by claimUnlocks), just picked in the garage.
 export const CARS = [
   { id: "rosso",    name: "ROSSO",    price: 0,    tone: null,          swatch: 6  },
+  { id: "elevate",  name: "ELEVATE",  price: 0,    sprite: SPR_ELEVATE, swatch: 2  },
   { id: "midnight", name: "MIDNIGHT", price: 150,  tone: [4, 16, 13],   swatch: 16 },
   { id: "jade",     name: "JADE",     price: 400,  tone: [11, 17, 10],  swatch: 17 },
   { id: "phantom",  name: "PHANTOM",  price: 900,  tone: [0, 4, 3],     swatch: 4  },
@@ -35,9 +39,11 @@ const _sprites = new Map();
 export function carSprite(id) {
   if (_sprites.has(id)) return _sprites.get(id);
   const car = CARS.find(c => c.id === id) || CARS[0];
-  const spr = car.tone
-    ? recolorBody(SPR_FERRARI_BASE, 7, 6, 8, car.tone[0], car.tone[1], car.tone[2])
-    : SPR_FERRARI_BASE;
+  const spr = car.sprite
+    ? car.sprite
+    : car.tone
+      ? recolorBody(SPR_FERRARI_BASE, 7, 6, 8, car.tone[0], car.tone[1], car.tone[2])
+      : SPR_FERRARI_BASE;
   _sprites.set(car.id, spr);
   return spr;
 }
@@ -62,7 +68,7 @@ export function ownedIds() {
   let list = [];
   try { list = JSON.parse(localStorage.getItem(OWNED_KEY) || "[]"); } catch {}
   if (!Array.isArray(list)) list = [];
-  if (!list.includes("rosso")) list.push("rosso");    // the starter is always owned
+  for (const c of CARS) if (c.price === 0 && !list.includes(c.id)) list.push(c.id);   // starters are always owned
   return list;
 }
 export function isOwned(id) { return ownedIds().includes(id); }
