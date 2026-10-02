@@ -30,3 +30,6 @@ local.properties
 twa-manifest.json
 store_icon.png
 manifest-checksum.txt
+
+# The headless test kit (tests/README.md): development only, never deployed.
+tests/

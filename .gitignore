@@ -27,3 +27,6 @@ local.properties
 twa-manifest.json
 store_icon.png
 manifest-checksum.txt
+
+# Modules the test harness regenerates on every run (see tests/README.md).
+tests/.gen/
