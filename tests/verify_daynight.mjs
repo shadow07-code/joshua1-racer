@@ -9,6 +9,10 @@ import { pathToFileURL, fileURLToPath } from "node:url";
 import path from "node:path";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");   // the repo root
 const imp = (r) => import(pathToFileURL(path.join(ROOT, r)).href);
+// Seeded (mulberry32), like verify_feel: section C builds its traffic with
+// Math.random, and about 1 run in 13 drew a road where no lamp's random delay
+// fell under 0.3 s, so "lamps come on progressively" failed with no change.
+{ let a = 20261019; Math.random = () => { a |= 0; a = (a + 0x6D2B79F5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 
 let REC = [];
 function makeCtx() {
