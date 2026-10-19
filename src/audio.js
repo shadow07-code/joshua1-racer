@@ -813,6 +813,25 @@ export function sfxCombo(level) {
   o2.start(t); o2.stop(t + 0.12);
 }
 
+// MULTIPLIER TIER-UP — a two-note rising chime (a perfect fifth) just after the
+// shave's own blip, pitched up a whole tone per tier (x2 = G5 ... x8 = G6). Short
+// and quiet: it marks the step; the blip still carries the shave.
+export function sfxComboTier(mult = 2) {
+  if (!ctx || !throttle("tier", 120)) return;
+  const t0 = ctx.currentTime + 0.05;
+  const base = 784 * Math.pow(2, (Math.max(2, Math.min(8, mult)) - 2) * 2 / 12);
+  [base, base * 1.5].forEach((f, i) => {
+    const s = t0 + i * 0.07;
+    const o = ctx.createOscillator(); o.type = "square"; o.frequency.value = f;
+    const g = ctx.createGain(); g.gain.value = 0;
+    g.gain.setValueAtTime(0, s);
+    g.gain.linearRampToValueAtTime(0.10, s + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.001, s + 0.11);
+    o.connect(g); g.connect(sfxGain);
+    o.start(s); o.stop(s + 0.13);
+  });
+}
+
 // CHAIN BANKED — the receipt for a near-miss chain: a quick run up a bright
 // G-major arpeggio that is LONGER for a bigger multiplier (x2 = 3 notes, x6 and
 // up = 6), landing on a ringing bell. A pat on the back under the music, not a

@@ -15,7 +15,7 @@ import {
   startEngine, setEngine, stopEngine, setEngineRampage, setEngineStrain, getEngineStyle, setEngineStyle,
   sfxAccelAccent, sfxPickup, sfxCrash, sfxExplosion, sfxBump, sfxBarrelDrop, sfxCombo,
   sfxWhoosh, sfxPerfect, sfxHeartbeat, sfxCoin, sfxCoinTrail, sfxHorn, sfxLightsOn,
-  sfxSandwich, sfxRampageWarn, sfxSmash, sfxChainBank,
+  sfxSandwich, sfxRampageWarn, sfxSmash, sfxChainBank, sfxComboTier,
   sfxShieldUp, sfxShieldHit, sfxShockwave, sfxRampageCharge, sfxRampageReady, sfxNitrous,
   sfxMenuMove, sfxMenuSelect, sfxCountdownBeep,
   startHeliSound, stopHeliSound,
@@ -130,6 +130,7 @@ const g = {
   combo: 0,             // near-miss STREAK count (drives the capped combo multiplier)
   comboTimer: 0,        // seconds left before the combo lapses
   comboFlash: 0,        // brief screen-edge flash on each combo step
+  tierStamp: 0,         // the COMBO plate's gold stamp on a multiplier tier-up
   comboBest: 0,         // best combo this run (for the game-over stats)
   sandwichCombo: 0,     // banked sandwiches this combo run (combo-score multiplier)
   sandwichComboTimer: 0,// transient "SANDWICH COMBO" banner timer
@@ -447,6 +448,7 @@ function newRaceSetup() {
   g.combo = 0;
   g.comboTimer = 0;
   g.comboFlash = 0;
+  g.tierStamp = 0;
   g.comboBest = 0;
   g.sandwichCombo = 0;
   g.sandwichComboTimer = 0;
@@ -508,6 +510,15 @@ const EXPLOSION_DUR = 0.55;
 // multiplier can't — that ceiling is what keeps the score from exploding.
 function comboMult() {
   return Math.min(SCORE.comboMultMax, 1 + Math.floor(g.combo / SCORE.comboPerStep));
+}
+
+// A chain step just landed. If it lifted the CAPPED multiplier a tier (every
+// comboPerStep beats, x2 up to x8), mark it: the COMBO plate stamps gold and a
+// chime rings, so the ladder the score rides on is heard instead of a number
+// that changes silently. `before` is comboMult() from before the step.
+function noteTierUp(before) {
+  const now = comboMult();
+  if (now > before) { g.tierStamp = RACE.comboTierStamp; sfxComboTier(now); }
 }
 
 // Take a hit: lose a life (a real crash also breaks the combo streak).
@@ -627,6 +638,7 @@ function smashBeat(c) {
 // combo streak, and scores its base × the CAPPED combo multiplier (so a long
 // rampage rewards well without running away).
 function registerSmash(c) {
+  const tierBefore = comboMult();
   g.combo += 1;
   g.comboBest = Math.max(g.comboBest, g.combo);
   g.comboTimer = RACE.comboWindow;
@@ -637,6 +649,7 @@ function registerSmash(c) {
   g.smashTotal += 1;
   // No per-smash popup — the COMBO banner already climbs fast during a rampage.
   sfxCombo(g.combo);
+  noteTierUp(tierBefore);
   smashBeat(c);
 }
 
@@ -1038,10 +1051,12 @@ function updateRace(dt) {
         g.sandwichComboTimer = 1.6;     // transient banner — shows then blinks off
         g.scoreState.score += SCORE.sandwichBonus;
         g.chainPts += SCORE.sandwichBonus;
+        const tierBefore = comboMult();
         g.combo += 1;
         g.comboBest = Math.max(g.comboBest, g.combo);
         g.comboTimer = RACE.comboWindow;
         sfxSandwich();
+        noteTierUp(tierBefore);
       }
       // Each pass burns down the post-rampage cooldown; once it's spent, the
       // rampage meter is armed and near misses bank toward the next one.
@@ -1075,6 +1090,7 @@ function updateRace(dt) {
         }
       }
       if (kmh >= RACE.comboKmh) {
+        const tierBefore = comboMult();
         g.combo += 1;
         g.comboBest = Math.max(g.comboBest, g.combo);
         g.comboTimer = RACE.comboWindow;
@@ -1083,6 +1099,7 @@ function updateRace(dt) {
         g.scoreState.score += gain;
         g.chainPts += gain;
         sfxCombo(g.combo);
+        noteTierUp(tierBefore);
         // Risk → reward: an unbroken chain of `rampageNearMisses` shaves fills
         // the meter and ARMS the nitrous — the player then unleashes it with a
         // tap on the top of the screen, when THEY choose (agency + anticipation
@@ -1310,6 +1327,7 @@ function updateRace(dt) {
 function decayFx(dt) {
   if (g.tallyTimer > 0) g.tallyTimer = Math.max(0, g.tallyTimer - dt);
   if (g.comboFlash > 0) g.comboFlash = Math.max(0, g.comboFlash - dt);
+  if (g.tierStamp > 0) g.tierStamp = Math.max(0, g.tierStamp - dt);
   if (g.shieldMsgTimer > 0) g.shieldMsgTimer = Math.max(0, g.shieldMsgTimer - dt);
   if (g.rampageFlash > 0) g.rampageFlash = Math.max(0, g.rampageFlash - dt);
   if (g.unleashFlash > 0) g.unleashFlash = Math.max(0, g.unleashFlash - dt);
@@ -1487,7 +1505,7 @@ function render() {
       rect(ctx, 0, 9, 3, H - 34, c);
       rect(ctx, W - 3, 9, 3, H - 34, c);
     }
-    drawCombo(ctx, comboMult(), g.comboTimer, RACE.comboWindow);
+    drawCombo(ctx, comboMult(), g.comboTimer, RACE.comboWindow, g.tierStamp > 0);
     // The receipt yields the spot the moment a NEW chain earns the banner.
     if (comboMult() < 2) drawChainTally(ctx, g.tallyN, g.tallyPts, g.tallyTimer, RACE.chainTallySeconds);
     drawSandwichCombo(ctx, g.sandwichCombo, g.sandwichComboTimer);
@@ -1501,7 +1519,8 @@ function render() {
     });
     if (g.perfectTimer > 0) drawPerfect(ctx, g.perfectTimer, (W / 2 + g.map.biasX + g.player.x) | 0);
     if (g.coinSparkle > 0) drawCoinSparkle(ctx, 1 - g.coinSparkle / RACE.coinSparkleDur, (W / 2 + g.map.biasX + g.player.x) | 0, PLAYER_Y);
-    if (g.biomeBannerTimer > 0) drawBiomeBanner(ctx, g.biomeName, g.biomeBannerTimer);
+    if (g.biomeBannerTimer > 0) drawBiomeBanner(ctx, g.biomeName, g.biomeBannerTimer,
+      comboMult() >= 2 || g.tallyTimer > 0 || g.sandwichComboTimer > 0);
     if (g.shieldMsgTimer > 0) drawShieldMsg(ctx, g.shieldMsg, RECORD_MSGS.has(g.shieldMsg));
     drawHud(ctx, {
       score: g.scoreState.score,

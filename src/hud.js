@@ -605,7 +605,9 @@ export function drawTutorialOverlay(ctx, tut) {
 
 // COMBO banner — appears at the top once the multiplier is ≥2, pulses
 // hotter as it climbs, with a draining timer bar. Pure "juice" for close dodges.
-export function drawCombo(ctx, combo, comboTimer, comboWindow) {
+// `stamp`: the multiplier just stepped up a tier — the plate flashes gold for a
+// beat (dark text on it), the same stamp the CHAIN receipt opens with.
+export function drawCombo(ctx, combo, comboTimer, comboWindow, stamp = false) {
   if (!combo || combo < 2) return;
   const t = performance.now();
   const y = 13;
@@ -615,10 +617,10 @@ export function drawCombo(ctx, combo, comboTimer, comboWindow) {
   const label = "COMBO x" + combo;
   const w = label.length * 4 - 1;
   const x = ((W - w) / 2) | 0;
-  rect(ctx, x - 4, y - 2, w + 8, 11, 0);            // dark plate
+  rect(ctx, x - 4, y - 2, w + 8, 11, stamp ? 5 : 0);   // dark plate (gold on a tier-up)
   rect(ctx, x - 4, y - 2, w + 8, 1, hot ? 9 : 5);   // top accent
   rect(ctx, x - 4, y + 8, w + 8, 1, hot ? 9 : 5);   // bottom accent
-  textCentered(ctx, label, y + 1, idx);             // (scale defaults to 1 — was 0 = invisible!)
+  textCentered(ctx, label, y + 1, stamp ? 0 : idx); // (scale defaults to 1 — was 0 = invisible!)
   const frac = Math.max(0, Math.min(1, comboTimer / (comboWindow || 1)));
   // About to lapse: the timer bar and the bottom accent strobe red/white — one
   // more shave keeps the chain alive.
@@ -1019,13 +1021,17 @@ export function drawPerfect(ctx, timer, cx) {
 // BIOME landmark banner — a transient "▷ TUNNEL ◁" announcement when the scene
 // changes, so each new zone reads as a "how far did I get" milestone. Fades over
 // its ~2s life; drawn just under the top HUD strip so it clears the play focus.
-export function drawBiomeBanner(ctx, name, timer) {
+// `low`: the COMBO banner, its CHAIN receipt or the SANDWICH line is up, so the
+// banner drops below the whole top stack (combo y11-22, sandwich y23-31, rampage
+// pips y32-38). At y16 it sat ON the combo banner, and a zone change lands every
+// 50 s, usually mid-chain, so neither could be read.
+export function drawBiomeBanner(ctx, name, timer, low = false) {
   if (timer <= 0 || !name) return;
   const f = Math.max(0, Math.min(1, timer / 2));
   // Blink out over the last third instead of a true alpha fade (flat palette).
   if (f < 0.35 && Math.floor(performance.now() / 90) % 2 === 0) return;
   const label = "- " + name + " -";      // font-safe (no arrow glyphs in FONT_3x5)
-  const y = 16;
+  const y = low ? 42 : 16;
   const w = label.length * 4 - 1;
   const x = ((W - w) / 2) | 0;
   rect(ctx, x - 5, y - 2, w + 10, 11, 0);            // dark plate

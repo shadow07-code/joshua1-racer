@@ -148,6 +148,10 @@ export const RACE = {
   // red/white — one more shave keeps the chain. It used to drain silently, so
   // a chain died without the player ever being told it was about to.
   comboWarnSeconds: 0.7,
+  // A multiplier TIER-UP (x2, x3 ... x8: every third beat of a chain) stamps the
+  // COMBO plate gold for this long and rings a two-note chime. The number used
+  // to change silently, so the ladder the whole score rides on went unnoticed.
+  comboTierStamp: 0.14,
   // RAMPAGE pacing: an unbroken chain of `rampageNearMisses` combo-tier near
   // misses fills the nitro meter and ARMS the rampage — the player then taps the
   // top of the screen to unleash it when THEY choose. When a rampage ends the

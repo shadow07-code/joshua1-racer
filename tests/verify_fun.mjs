@@ -24,7 +24,7 @@ const fresh = (settle = 0) => {
   }
 };
 const liveCar = () => g.traffic.list.find((c) => !c.smashed && !c.oncoming);
-const sections = (process.argv[2] || "0123456789abc").split("");
+const sections = (process.argv[2] || "0123456789abcd").split("");
 
 // Isolate the road: no spawns, no wrong-way cars, no coins — only what a test places.
 let SKIN = null;
@@ -730,6 +730,66 @@ if (sections.includes("c")) {
   add("c15 its personal-best ghost works (masked copy of the SUV)", SP.ghostSprite(E).length === 15 && SP.ghostSprite(E) !== E);
   GA.setSelectedId("rosso");
   for (const [k, v] of keep) { if (v == null) H.LS.delete(k); else H.LS.set(k, v); }
+}
+
+// ═══ d. AUDIT PASS — multiplier tier-ups, zone banner placement ═════════════
+if (sections.includes("d")) {
+  const PLATE = (list, w) => list.filter((r) => r.y === 11 && r.h === 11 && r.w === w);
+  fresh(8);
+  quietRoad();
+  const tierCalls = () => H.audioCalls("sfxComboTier").map((c) => c[1]);
+  const before = tierCalls().length;
+  const stampOnStep = [];
+  let plateGold = null, plateLater = null, setupOk = true;
+  for (let i = 1; i <= 7; i++) {
+    if (!nearMiss(12)) { setupOk = false; break; }
+    stampOnStep.push(g.tierStamp > 0);
+    if (i === 6) {                                   // the x3 tier-up: capture the next frame
+      REC.on = true; REC.list = []; H.tick(); REC.on = false;
+      plateGold = PLATE(REC.list, 39).map((r) => r.c);
+      H.run(0.3);
+      REC.on = true; REC.list = []; H.tick(); REC.on = false;
+      plateLater = PLATE(REC.list, 39).map((r) => r.c);
+    }
+  }
+  add("d0 (setup) seven controlled combo-tier near misses in one chain", setupOk && g.combo === 7, `combo ${g.combo}`);
+  const newTiers = tierCalls().slice(before);
+  add("d1 the chain rings the tier-up chime at x2 and x3 only (beats 3 and 6)",
+    JSON.stringify(newTiers) === "[2,3]", JSON.stringify(newTiers));
+  add("d2 ...and stamps the COMBO plate only on those two beats",
+    JSON.stringify(stampOnStep) === JSON.stringify([false, false, true, false, false, true, false]), JSON.stringify(stampOnStep));
+  add("d3 the stamped plate is gold, and dark again 0.3 s later",
+    plateGold && plateGold[0] === GOLD && plateLater && plateLater[0] === PALETTE[0],
+    JSON.stringify({ plateGold, plateLater }));
+
+  // Rampage smashes climb the same ladder.
+  const car = { skin: SKIN, z: g.player.z + 20, x: g.player.x, laneIdx: 0, speed: 5, cruise: 5 };
+  g.combo = 2;
+  const b2 = tierCalls().length;
+  H.M.registerSmash(car);
+  H.M.registerSmash(car);
+  add("d4 a rampage smash that crosses a tier rings it too (once)",
+    JSON.stringify(tierCalls().slice(b2)) === "[2]", JSON.stringify(tierCalls().slice(b2)));
+
+  // The zone banner: up top when the strip is free, below the stack when not.
+  const label = "- " + g.biomeName + " -";
+  const bw = label.length * 4 - 1 + 10;
+  const bannerY = (setup) => {
+    Object.assign(g, { combo: 0, comboTimer: 0, tallyTimer: 0, sandwichCombo: 0, sandwichComboTimer: 0 }, setup);
+    g.biomeBannerTimer = 2;
+    REC.on = true; REC.list = []; H.tick(); REC.on = false;
+    const p = REC.list.filter((r) => r.h === 11 && r.w === bw && r.c === PALETTE[0]);
+    return p.length ? p[0].y : null;
+  };
+  const free = bannerY({});
+  const underCombo = bannerY({ combo: 3, comboTimer: 2 });
+  const underTally = bannerY({ tallyN: 6, tallyPts: 900, tallyTimer: 1 });
+  const underSandwich = bannerY({ sandwichCombo: 1, sandwichComboTimer: 1.2 });
+  add("d5 with the top strip free the zone banner keeps its old spot (y16)", free === 14, free);
+  add("d6 under a COMBO banner it drops below the whole stack (clear of y11-38)", underCombo === 40, underCombo);
+  add("d7 ...and the same under the CHAIN receipt or the SANDWICH line",
+    underTally === 40 && underSandwich === 40, JSON.stringify([underTally, underSandwich]));
+  g.biomeBannerTimer = 0;
 }
 
 // ═══ report ══════════════════════════════════════════════════════════════════
