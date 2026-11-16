@@ -15,6 +15,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SUITES = [
   "verify_fun.mjs",       // fun, mechanics and feel passes, timing tells, ELEVATE
   "verify_feel.mjs",      // feel + graphics pass, asserted against recorded draws
+  "verify_look.mjs",      // look pass: cast shadows, wheel paths, haze, exhaust
   "verify_daynight.mjs",  // day/night timing, darkness and headlights
   "verify5.mjs",          // leaderboard API ghost path + rival sprite
   "verify_nogates.mjs",   // risk gates gone, every traffic row still solvable
