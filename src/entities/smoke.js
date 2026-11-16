@@ -49,12 +49,13 @@ export function drawSmoke(ctx, map, playerZ, playerX, car) {
       const sy = (proj.sy - size / 2) | 0;
       rect(ctx, sx, sy, size, size, col);
     } else {
+      // A translucent puff that pales and thins as it cools. Solid grey squares
+      // read as debris dropped on the road, not exhaust in the air.
       const ageFrac = p.age / PARTICLE_LIFE;
-      const size = Math.max(1, 3 - Math.round(ageFrac * 2));
-      const col = ageFrac < 0.30 ? 4 : ageFrac < 0.65 ? 3 : 2;
-      const sx = (proj.sx - size / 2) | 0;
-      const sy = (proj.sy - size / 2) | 0;
-      rect(ctx, sx, sy, size, size, col);
+      const size = ageFrac < 0.35 ? 2 : 3;
+      const shade = Math.round(70 + 130 * ageFrac);
+      ctx.fillStyle = `rgba(${shade},${shade},${shade + 6},${(0.45 * (1 - ageFrac)).toFixed(3)})`;
+      ctx.fillRect((proj.sx - size / 2) | 0, (proj.sy - size / 2) | 0, size, size);
     }
   }
 }
