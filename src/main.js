@@ -4,7 +4,7 @@
 // civilian costs one life. Once you reach top speed, traffic density compounds
 // by +5% every 60 seconds, so the game gets harder the longer you survive.
 import { W, H, PHYS, SPAWN, RACE, SCORE, PLAYER_Y } from "./config.js";
-import { getCtx, clear, rect } from "./render.js";
+import { getCtx, clear, rect, SUN } from "./render.js";
 import { MAPS, MAP_LIST, DIFFICULTY_LIST } from "./maps.js";
 import {
   initInput, getInput, consumePress, consumeAnyPress, clearPresses, releaseAllInput,
@@ -22,7 +22,7 @@ import {
   setMusicEnabled, setSfxEnabled, isMusicEnabled, isSfxEnabled, applyMix,
   getMusicTrack, setMusicTrack,
 } from "./audio.js";
-import { drawRoad, drawDistanceHaze, drawNightShade, dayNight, distToY, biomeAt, project } from "./road.js";
+import { drawRoad, drawDistanceHaze, drawNightShade, dayNight, distToY, biomeAt, project, sunShadow } from "./road.js";
 import { makePlayer, updatePlayer, drawPlayer, drawPlayerLights, beamAnchor, playerBox, applyCollisionLoss } from "./entities/player.js";
 import { makeTrafficSystem, updateTraffic, drawTraffic, drawNightLights, drawCoins, checkCoinGrab, checkTrafficHit, prepopulateTraffic, smashCar, knockCar, pullSpawnToHorizon } from "./entities/traffic.js";
 import { getDaily, applyRun as applyDailyRun } from "./daily.js";
@@ -1365,6 +1365,7 @@ function updateGameOver(dt) {
 function drawWorld() {
   const biome = g.biome || biomeAt(g.raceTime);
   const ns = dayNight(g.raceTime);
+  Object.assign(SUN, sunShadow(biome, ns));   // which way every vehicle's shadow falls
   drawRoad(ctx, g.map, g.player.z, g.player.speed, biome, g.player.rampage > 0);
   drawScenery(ctx, g.scenery, g.map, g.player.z);
   drawSmoke(ctx, g.map, g.player.z, g.player.x, g.player);

@@ -261,6 +261,18 @@ export function drawNightShade(ctx, ns, beam) {
   }
 }
 
+// Where vehicle shadows fall (see render.js SUN). Outdoors the light is the
+// sun at the top-left, so shadows drop right and back; it fades as night falls
+// (the shade swallows them anyway, and only the headlight beam would show a
+// sun shadow that shouldn't be there). The tunnel is lit from the ceiling, so
+// there a car just sits on a soft contact shadow directly beneath it. A biome
+// change is masked by the zone flash, so the switch never shows.
+export function sunShadow(biome, ns) {
+  if (biome && biome.name === "TUNNEL") return { ox: 0, oy: 1, alpha: 0.26 };
+  const dark = ns ? ns.dark : 0;
+  return { ox: 1, oy: 2, alpha: 0.30 * (1 - 0.6 * dark) };
+}
+
 export function project(map, playerZ, _x, entity) {
   const dist = entity.z - playerZ;
   if (dist > VIEW_AHEAD_METERS) return null;     // beyond the horizon

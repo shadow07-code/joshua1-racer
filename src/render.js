@@ -89,6 +89,52 @@ export function drawSpriteNN(ctx, sprite, dx, dy, factor = 1) {
   ctx.imageSmoothingEnabled = prev;
 }
 
+// ── CAST SHADOWS ─────────────────────────────────────────────────────────────
+// Every vehicle drops a shadow of its OWN silhouette, offset away from the
+// light. All the car art is shaded for a light at the top-left (lit left flank,
+// dark right flank), so the shadow falls right and back: the one direction
+// that agrees with the paintwork. It is translucent, so a lane seam or the
+// asphalt under it shows through darkened rather than painted over. It travels
+// with its car, so it adds no optic flow.
+//
+// The old ground patch (groundShadow below) was a symmetric 3-row smudge
+// under the bumper; it grounded a car but gave it no volume.
+//
+// main.js sets SUN once per frame (road.js sunShadow): a directional drop
+// outdoors by day, tucked under the car as a contact shadow in the tunnel.
+export const SUN = { ox: 1, oy: 2, alpha: 0.30 };
+const _shadowCache = new Map();
+function shadowToCanvas(sprite) {
+  let cv = _shadowCache.get(sprite);
+  if (cv) return cv;
+  let w = 0;
+  for (const row of sprite) if (row.length > w) w = row.length;
+  const h = sprite.length;
+  cv = document.createElement("canvas");
+  cv.width = w; cv.height = h;
+  const c = cv.getContext("2d");
+  c.fillStyle = "#000000";
+  for (let r = 0; r < h; r++) {
+    const row = sprite[r];
+    for (let x = 0; x < row.length; x++) if (row[x] >= 0) c.fillRect(x, r, 1, 1);
+  }
+  _shadowCache.set(sprite, cv);
+  return cv;
+}
+// Same arguments as drawSpriteNN, so a caller passes exactly what it blits.
+export function drawShadowNN(ctx, sprite, dx, dy, factor = 1) {
+  if (!(SUN.alpha > 0)) return;
+  const cv = shadowToCanvas(sprite);
+  const w = Math.max(1, Math.round(cv.width * factor));
+  const h = Math.max(1, Math.round(cv.height * factor));
+  const prev = ctx.imageSmoothingEnabled;
+  ctx.imageSmoothingEnabled = false;
+  ctx.globalAlpha = SUN.alpha;
+  ctx.drawImage(cv, Math.round(dx) + SUN.ox, Math.round(dy) + SUN.oy, w, h);
+  ctx.globalAlpha = 1;
+  ctx.imageSmoothingEnabled = prev;
+}
+
 // Filled disc (Bresenham-ish span fill) — for suns, glows, wheels, dots.
 export function disc(ctx, cx, cy, r, paletteIdx) {
   ctx.fillStyle = PALETTE[paletteIdx];

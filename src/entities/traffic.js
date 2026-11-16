@@ -7,7 +7,7 @@
 // to find the gap.
 import { PHYS, RACE, SPAWN } from "../config.js";
 import { project, VIEW_AHEAD } from "../road.js";
-import { drawSpriteNN, groundShadow, rect } from "../render.js";
+import { drawSpriteNN, drawShadowNN, rect } from "../render.js";
 import { TRAFFIC_SKINS, ONCOMING_SKINS, oncomingSkin, SPR_COIN } from "../sprites.js";
 
 const LANES = 5;
@@ -531,8 +531,8 @@ export function drawTraffic(ctx, sys, map, playerZ, playerX) {
     const spr = c.smashed && c.vx > 0 ? (c.skin.sprR || c.skin.spr)
               : c.smashed && c.vx < 0 ? (c.skin.sprL || c.skin.spr)
               : c.skin.spr;
-    // Shadow hugs the car's visible base so it looks grounded, not flying.
-    groundShadow(ctx, p.sx, p.sy + hz - 2, hx);
+    // Its own silhouette as a cast shadow (render.js SUN), then the car.
+    drawShadowNN(ctx, spr, p.sx - hx, p.sy - hz, c.skin.scale);
     drawSpriteNN(ctx, spr, p.sx - hx, p.sy - hz, c.skin.scale);
     // WRONG-WAY: twin headlights blazing at the camera + a blinking hazard bar,
     // so an approaching car is unmistakable long before it arrives. The sprite is

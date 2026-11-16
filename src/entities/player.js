@@ -1,6 +1,6 @@
 // Player car — auto-accelerate with a start-of-race speed ramp, brake, steer, slip.
 import { PHYS, RACE, PLAYER_Y, W } from "../config.js";
-import { drawSpriteNN, groundShadow, ring, disc, rect } from "../render.js";
+import { drawSpriteNN, drawShadowNN, ring, disc, rect } from "../render.js";
 import { roadCenterX, headlightsLit } from "../road.js";
 import { selectedSprite } from "../garage.js";
 
@@ -174,10 +174,11 @@ export function drawPlayer(ctx, p, map) {
   const cxp = (cx + p.x) | 0;
   // RAMPAGE nitrous flames blasting from the twin exhausts (behind the car).
   if (p.rampage > 0) drawNitroFlames(ctx, cxp, (PLAYER_Y + halfH) | 0);
-  // Grounding shadow under the car, then the Ferrari sprite — always straight
-  // (no steering lean).
-  groundShadow(ctx, (cx + p.x) | 0, PLAYER_Y + halfH - 3, 5);
-  drawSpriteNN(ctx, selectedSprite(), cx + p.x - halfW + wobble, PLAYER_Y - halfH, PLAYER_SCALE);
+  // The car's cast shadow (render.js SUN), then the car itself — always
+  // straight (no steering lean).
+  const spr = selectedSprite();
+  drawShadowNN(ctx, spr, cx + p.x - halfW + wobble, PLAYER_Y - halfH, PLAYER_SCALE);
+  drawSpriteNN(ctx, spr, cx + p.x - halfW + wobble, PLAYER_Y - halfH, PLAYER_SCALE);
   // (No combo glow around the car — the red/orange underglow + exhaust streaks
   // read as clutter against the sprite. The COMBO xN banner carries that
   // feedback instead. Rampage keeps its own flames + aura below.)
