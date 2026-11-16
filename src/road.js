@@ -116,6 +116,19 @@ export function drawRoad(ctx, map, playerZ, speed = 0, biome = null, rampageOn =
     }
   }
 
+  // ── WHEEL PATHS — two faint darker tracks down every lane, where the tyres
+  // of the traffic actually run (a car is 9px wide, so its wheels sit ±4px
+  // off the lane centre). It is what real asphalt looks like from above, and
+  // it gives the road a material instead of a flat grey slab. Continuous
+  // full-height columns, like the seams: invariant under forward motion, so
+  // zero optic flow at any speed. One shade under the asphalt, never a line.
+  const laneWear = (halfW * 2) / LANES_DRAWN;
+  for (let i = 0; i < LANES_DRAWN; i++) {
+    const lc = cx - halfW + laneWear * (i + 0.5);
+    rect(ctx, Math.round(lc - 5), 0, 2, H, 26);
+    rect(ctx, Math.round(lc + 3), 0, 2, H, 26);
+  }
+
   // ── LANE SEAMS — the road's actual five-lane structure ──
   // Four SOLID 1px lines on the four real lane boundaries. A continuous line is
   // invariant under forward motion, so unlike a dash it cannot strobe and

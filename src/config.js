@@ -28,6 +28,7 @@ export const PALETTE = [
   "#202830", // 23 deep gray (bus)
   "#6488A0", // 24 muted blue gray (sedan)
   "#E0D8C0", // 25 cream (van / road shoulder dust)
+  "#717171", // 26 asphalt wheel-path wear (a shade under the asphalt)
 ];
 
 // Logical canvas. Width is fixed (gameplay is tuned around a 160-wide field);
