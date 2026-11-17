@@ -12,10 +12,13 @@ const WHITE = PALETTE[1], GOLD = PALETTE[5];
 const within = (r, x0, y0, x1, y1) => r.x >= x0 && r.x <= x1 && r.y >= y0 && r.y <= y1;
 // A fresh race, driven "blind" (no steering) for `settle` seconds to get up to
 // speed. Invulnerable while settling: the opening is busy enough that a blind
-// car WILL hit traffic. Then every test-relevant state is put back to clean.
+// car WILL hit traffic. No booster canisters while it settles either: a blind
+// car that happens to run one over starts a RAMPAGE, and a crash test run
+// inside one is a smash, not a crash. Then every test-relevant state is put
+// back to clean.
 const fresh = (settle = 0) => {
   H.seed(7); if (g.state !== STATES.TITLE) g.state = STATES.TITLE; H.tick(); H.startRace();
-  for (let i = 0; i < Math.round(settle * 60); i++) { g.player.invuln = 99; g.player.lives = 3; H.tick(); }
+  for (let i = 0; i < Math.round(settle * 60); i++) { g.player.invuln = 99; g.player.lives = 3; g.pickups.list.length = 0; H.tick(); }
   if (settle) {
     H.run(0.5);   // let any freeze / shove from the settle finish
     Object.assign(g.player, { invuln: 0, lives: 3, bounce: 0 });
