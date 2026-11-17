@@ -1,5 +1,5 @@
 // Verifies the five-change "fun pass" against the REAL main.js (see harness.mjs).
-globalThis.__EXTRA_EXPORTS = ["updateWreck", "coinNote"];
+globalThis.__EXTRA_EXPORTS = ["updateWreck"];
 const H = await import("./harness.mjs");
 const { M, REC } = H;
 const { g, STATES } = M;
@@ -29,12 +29,11 @@ const fresh = (settle = 0) => {
 const liveCar = () => g.traffic.list.find((c) => !c.smashed && !c.oncoming);
 const sections = (process.argv[2] || "0123456789abcd").split("");
 
-// Isolate the road: no spawns, no wrong-way cars, no coins — only what a test places.
+// Isolate the road: no spawns, no wrong-way cars — only what a test places.
 let SKIN = null;
 function quietRoad() {
   SKIN = SKIN || (g.traffic.list.find((c) => !c.oncoming) || {}).skin;
   g.traffic.list = [];
-  g.traffic.coins = [];
   g.traffic.nextRowZ = g.player.z + 1e6;
   g.traffic.nextOncomingZ = g.player.z + 1e6;
 }
@@ -270,15 +269,17 @@ if (sections.includes("4")) {
   // run — never leave a dead run paused where RESTART/QUIT would discard it.
   for (const how of ["pause button", "app backgrounded"]) {
     fresh(8);
-    g.coins = 5;
     g.player.lives = 1; g.player.invuln = 0;
     const c2 = liveCar(); c2.z = g.player.z + 1; c2.x = g.player.x;
     H.tick(); H.run(0.3);
-    const wallet0 = +(H.LS.get("joshua1.wallet.v1") || 0), sm = H.audioCalls("startMusic").length;
+    H.LS.delete("joshua1.lb.pending.v2");
+    const sm = H.audioCalls("startMusic").length;
     if (how === "pause button") { for (const fn of document.getElementById("btn-pause")._l.click || []) fn({}); }
     else { H.key("", "blur"); }
     add(`4p ${how} mid-wreck goes straight to the results`, g.state === STATES.GAME_OVER, g.state);
-    add(`4q ...with the run's coins banked (+5)`, +(H.LS.get("joshua1.wallet.v1") || 0) - wallet0 === 5, `${wallet0} -> ${H.LS.get("joshua1.wallet.v1")}`);
+    await new Promise((r) => setTimeout(r, 0));          // (the submit is async)
+    const sent = JSON.parse(H.LS.get("joshua1.lb.pending.v2") || "null");
+    add(`4q ...with the run submitted (queued offline)`, sent && sent.score === Math.floor(g.scoreState.score), JSON.stringify(sent));
     add(`4r ...and no music revived`, H.audioCalls("startMusic").length === sm);
   }
   // Escape during the wreck can't dodge the banking either.
@@ -288,72 +289,8 @@ if (sections.includes("4")) {
   H.tick(); H.run(0.2);
   H.key("Escape"); H.key("Escape", "keyup");
   H.run(1.2);
-  add("4s Escape mid-wreck still ends in the results (banked), not the title", g.state === STATES.GAME_OVER, g.state);
+  add("4s Escape mid-wreck still ends in the results (submitted), not the title", g.state === STATES.GAME_OVER, g.state);
   if (g.state !== STATES.TITLE) { H.key("Escape"); H.key("Escape", "keyup"); H.tick(); }
-}
-
-// ═══ 5. COIN MELODY — the ideal line plays a tune ═══════════════════════════
-if (sections.includes("5")) {
-  // Spawned trails: the coins of one trail share one trail record.
-  fresh(1);
-  let shared = false;
-  for (let i = 0; i < 3600 && !shared; i++) {
-    H.tick();
-    // Group live coins by trail record; a freshly spawned trail shows all n together.
-    const groups = new Map();
-    for (const c of g.traffic.coins) if (c.trail) groups.set(c.trail, (groups.get(c.trail) || 0) + 1);
-    shared = [...groups].some(([tr, k]) => k === RACE.coinsPerTrail && tr.n === RACE.coinsPerTrail && tr.got === 0);
-  }
-  add("5a every spawned trail's coins share one {n, got} record", shared);
-
-  fresh(6); quietRoad();
-  const lay = (gaps, n = gaps.length) => {           // one trail of n coins, `gaps` metres apart
-    const trail = { n, got: 0 };
-    let z = g.player.z + 2;
-    for (const d of gaps) { g.traffic.coins.push({ x: g.player.x, z, got: false, trail }); z += d; }
-    return trail;
-  };
-  const steps = () => H.audioCalls("sfxCoin").map((c) => c[1]);
-  const c0 = steps().length, t0 = H.audioCalls("sfxCoinTrail").length, coins0 = g.coins, score0 = g.scoreState.score;
-  lay([14, 14, 14]);
-  H.run(1.5);
-  const got = steps().slice(c0);
-  add("5b a trail of three climbs the scale: steps 0, 1, 2", JSON.stringify(got) === "[0,1,2]", JSON.stringify(got));
-  add("5c taking the whole trail rings the chord, once", H.audioCalls("sfxCoinTrail").length - t0 === 1);
-  add("5d coins and their value are unchanged (+3 coins)", g.coins - coins0 === 3);
-  H.run(1.5);
-  const c1 = steps().length;
-  lay([14, 14, 14]);
-  H.run(1.5);
-  add("5e after a pause longer than coinStreakGap the run restarts at step 0", JSON.stringify(steps().slice(c1)) === "[0,1,2]", JSON.stringify(steps().slice(c1)));
-  // A partial trail: 2 of 3 taken (the third sits off the line).
-  H.run(1.5);
-  const t1 = H.audioCalls("sfxCoinTrail").length;
-  const tr = lay([14, 14], 3);
-  g.traffic.coins.push({ x: g.player.x + 40, z: g.player.z + 30, got: false, trail: tr });
-  H.run(1.5);
-  add("5f a partial trail (2 of 3) gets no chord", H.audioCalls("sfxCoinTrail").length === t1 && tr.got === 2);
-  // Two trails back to back join into one rising run, capped at the octave.
-  H.run(1.5);
-  const c2 = steps().length;
-  const a = { n: 3, got: 0 }, b = { n: 3, got: 0 }, c = { n: 3, got: 0 };
-  let z = g.player.z + 2;
-  for (const tr2 of [a, b, c]) for (let i = 0; i < 3; i++) { g.traffic.coins.push({ x: g.player.x, z, got: false, trail: tr2 }); z += 12; }
-  H.run(3);
-  const run9 = steps().slice(c2);
-  add("5g back-to-back trails join into one climbing run", JSON.stringify(run9) === "[0,1,2,3,4,5,6,7,8]", JSON.stringify(run9));
-  let threw = false; try { (await import("./.gen/audio_spy.mjs")).sfxCoin(40); } catch (e) { threw = true; }
-  add("5h steps past the octave are clamped safely", !threw);
-  // The twinkle.
-  const t2 = H.audioCalls("sfxCoinTrail").length;
-  lay([12, 12, 12]);
-  let n = 0; while (H.audioCalls("sfxCoinTrail").length === t2 && n++ < 200) H.tick();
-  const cx = (W / 2 + g.map.biasX + g.player.x) | 0;
-  REC.on = true; REC.list = []; H.tick(); REC.on = false;
-  const sp = REC.list.filter((r) => r.w === 1 && r.h === 1 && Math.abs(r.x - cx) <= 12 && r.y >= PLAYER_Y - 14 && r.y <= PLAYER_Y + 6 && (r.c === WHITE || r.c === GOLD || r.c === PALETTE[21]));
-  add("5i a completed trail pops a twinkle round the car", g.coinSparkle > 0 && sp.length >= 12, `${sp.length} sparkle px`);
-  H.run(RACE.coinSparkleDur + 0.05);
-  add("5j the twinkle expires", g.coinSparkle === 0);
 }
 
 // ═══ 6. SHAVES JUDGED HONESTLY — closest approach, against the real hitbox ═══
@@ -502,7 +439,6 @@ if (sections.includes("8")) {
   add("8f spawning restarted AT the horizon", firstNew && firstNew.z - g.player.z < VIEW_AHEAD + 10, firstNew && `first new car at +${(firstNew.z - g.player.z).toFixed(1)} m`);
   const firstRowCars = newRows.filter((c) => Math.abs(c.z - firstNew.z) < 3).length;
   add("8g ...and it is the breather (one car)", firstRowCars === 1, `${firstRowCars} cars`);
-  add("8h coins never survive half a trail", g.traffic.coins.every((c) => g.traffic.coins.filter((o) => o.trail === c.trail).length + (c.trail.got || 0) === c.trail.n || c.z <= edge()));
   // A second crash while the cursor is already at the horizon is a no-op.
   H.run(1.6);
   const n0 = g.traffic.list.length, cur0 = g.traffic.nextRowZ;
@@ -682,36 +618,28 @@ if (sections.includes("c")) {
   const SP = await import("../src/sprites.js");
   const E = SP.SPR_ELEVATE, F = SP.SPR_FERRARI_BASE;
   const keep = ["joshua1.wallet.v1", "joshua1.cars.v1", "joshua1.car.v1"].map((k) => [k, H.LS.get(k)]);
-  const reset = (wallet, owned, pick) => {
-    H.LS.set("joshua1.wallet.v1", String(wallet));
-    if (owned) H.LS.set("joshua1.cars.v1", owned); else H.LS.delete("joshua1.cars.v1");
-    if (pick) H.LS.set("joshua1.car.v1", pick); else H.LS.delete("joshua1.car.v1");
-    GA.setSelectedId(GA.getSelectedId());          // (touch the memo; re-read below)
-  };
   // Sprite: same footprint and lamp positions as the Ferrari, valid palette only.
   add("c1 10x15, the Ferrari's footprint", E.length === 15 && E.every((r) => r.length === 10));
   add("c2 tail lamps on row 13 at cols 2-3 / 6-7, where the night lamps paint", [2, 3, 6, 7].every((c) => E[13][c] === 9 && F[13][c] === 9));
   add("c3 only real palette colours", E.flat().every((v) => v === -1 || (Number.isInteger(v) && v >= 0 && v < PALETTE.length)));
   add("c4 left/right symmetric apart from the windshield glint", E.every((r, y) => r.every((v, x) => v === r[9 - x] || (y === 4 && (x === 3 || x === 6)))));
   add("c5 it is silver (light grey body), not a repaint", E.flat().filter((v) => v === 2).length >= 20 && GA.carSprite("elevate") === E);
-  // A brand-new player: owned from the start, never auto-unlocked or auto-equipped.
-  reset(0, null, null);
-  add("c6 new player: ELEVATE is owned from the first run", GA.ownedIds().includes("elevate") && GA.ownedIds().includes("rosso"));
-  add("c7 ...the next car to work toward is still MIDNIGHT", GA.nextLocked().id === "midnight");
-  add("c8 ...and banking a run never 'unlocks' or auto-equips it", GA.claimUnlocks().length === 0);
-  add("c9 it can be picked in the garage and becomes the driven sprite", GA.setSelectedId("elevate") && GA.selectedSprite() === E);
-  GA.setSelectedId("rosso");
-  // The price ladder is untouched: 10000 coins still buys the five priced cars, 3250 left.
-  reset(10000, null, "rosso");
-  const got = GA.claimUnlocks().map((c) => c.id).join(",");
-  add("c10 ladder unchanged: 10000 coins -> midnight..chrome, 3250 left", got === "midnight,jade,phantom,sunburst,chrome" && GA.getWallet() === 3250, `${got} / ${GA.getWallet()}`);
-  // An existing player's save (no elevate in it) and a corrupt one.
-  reset(40, JSON.stringify(["rosso", "midnight"]), "midnight");
-  add("c11 existing save: gains ELEVATE, keeps its equipped car", GA.ownedIds().includes("elevate") && GA.isOwned("midnight"));
+  // Every car is yours from the first run: no prices, no wallet, no unlocks.
+  const ids = GA.CARS.map((c) => c.id);
+  for (const k of ["joshua1.wallet.v1", "joshua1.cars.v1", "joshua1.car.v1"]) H.LS.delete(k);
+  add("c6 new player: all seven cars are owned from the first run", ids.length === 7 && ids.every((id) => GA.isOwned(id)) && GA.ownedIds().join() === ids.join(), GA.ownedIds().join());
+  add("c7 no prices and no coin economy left in the garage", GA.CARS.every((c) => c.price === undefined)
+    && ["addCoins", "getWallet", "buyCar", "claimUnlocks", "nextLocked"].every((f) => GA[f] === undefined));
+  add("c8 every car can be picked and becomes the driven sprite", ids.every((id) => GA.setSelectedId(id) && GA.selectedSprite() === GA.carSprite(id)));
+  add("c9 the ELEVATE is the SUV, not a repaint", GA.setSelectedId("elevate") && GA.selectedSprite() === E);
+  // An old save — a wallet and a partial owned list from the coin days.
+  H.LS.set("joshua1.wallet.v1", "40"); H.LS.set("joshua1.cars.v1", JSON.stringify(["rosso", "midnight"]));
+  GA.setSelectedId("midnight");
+  add("c10 an old save keeps its equipped car and owns everything", GA.getSelectedId() === "midnight" && ids.every((id) => GA.isOwned(id)));
   H.LS.set("joshua1.cars.v1", "{not json");
-  add("c12 corrupt save: still owns both starters", GA.ownedIds().includes("elevate") && GA.ownedIds().includes("rosso"));
+  add("c11 a corrupt old owned-list doesn't matter", ids.every((id) => GA.isOwned(id)));
+  add("c12 an unknown car can't be equipped", !GA.setSelectedId("lambo") && GA.getSelectedId() === "midnight");
   // Drive it: a full race past nightfall with the ELEVATE equipped.
-  reset(0, null, null);
   GA.setSelectedId("elevate");
   fresh(0);
   let drew = 0, visible = 0, lamps = 0, err = null;

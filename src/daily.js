@@ -1,19 +1,18 @@
-// DAILY CHALLENGE — one goal a day, the same goal for everyone, paid in coins.
+// DAILY CHALLENGE — one goal a day, the same goal for everyone.
 //
 // WHY IT EXISTS: the game is endless, so "come back tomorrow" needs a reason that
 // isn't just a higher number. A daily goal gives the day a shape — you open the
 // app with something specific to do, and a STREAK you'd rather not drop.
 //
-// Two hard rules it inherits:
-//  1. It pays COINS ONLY (never speed, lives or rampage). Coins feed the garage,
-//     which is cosmetic, so a daily grinder can never out-gun a better driver on
-//     the global leaderboard.
+// Two hard rules:
+//  1. It pays NOTHING the leaderboard cares about (never speed, lives or score):
+//     completing it is its own reward, plus the streak. (It paid coins until
+//     coins were removed on 2026-11-17.)
 //  2. Progress accumulates ACROSS the day's runs (for 'sum' goals), so a
-//     15-second disaster still moves it — the same promise the coin bank makes.
+//     15-second disaster still moves it.
 //
 // The goal is derived from the DATE by hash, not stored, so every device shows
 // the same challenge on the same day with no server involved.
-import { DAILY } from "./config.js";
 
 const KEY = "joshua1.daily.v1";
 
@@ -31,15 +30,13 @@ const KEY = "joshua1.daily.v1";
 // (verified: static, coin-chasing and weaving drivers all average 232), so that
 // figure is safe to calibrate against.
 //
-// `distance` was unaffected (6009 vs the ~6000 it was set against) and `coins`
-// still lands in its original 40-60 band for a realistic driver, so neither
-// moved. Only a perfect coin-chaser clears the 70 tier inside one run, and
-// rewarding perfect play there is fine. A daily should want 2-4 runs, so the 'sum'
-// targets sit above what any single good run delivers — otherwise the day's goal
-// falls out of the first attempt and stops being a reason to come back.
+// `distance` was unaffected (6009 vs the ~6000 it was set against), so it did not
+// move. A daily should want 2-4 runs, so the 'sum' targets sit above what any
+// single good run delivers — otherwise the day's goal falls out of the first
+// attempt and stops being a reason to come back. (The COINS goal went with the
+// coins on 2026-11-17, which reshuffled which goal falls on which date.)
 const GOALS = [
   { id: "dist",  mode: "sum",  stat: "distance", tiers: [8000, 14000, 20000],   label: n => "DRIVE " + n + "M" },
-  { id: "coins", mode: "sum",  stat: "coins",    tiers: [70, 110, 160],         label: n => "COLLECT " + n + " COINS" },
   { id: "pass",  mode: "sum",  stat: "passed",   tiers: [335, 600, 920],        label: n => "PASS " + n + " CARS" },
   { id: "smash", mode: "sum",  stat: "smashed",  tiers: [12, 20, 30],           label: n => "SMASH " + n + " CARS" },
   { id: "combo", mode: "best", stat: "combo",    tiers: [15, 22, 30],           label: n => "REACH X" + n + " COMBO" },
@@ -82,10 +79,10 @@ export function goalFor(day) {
 }
 
 // ── Persistence ───────────────────────────────────────────────────────────────
-// { day, prog, done, reward, streak, lastDone }
+// { day, prog, done, streak, lastDone }
 //   streak   — consecutive completed days ENDING at lastDone
 //   lastDone — the last day the goal was completed
-const FRESH = () => ({ day: "", prog: 0, done: false, reward: 0, streak: 0, lastDone: "" });
+const FRESH = () => ({ day: "", prog: 0, done: false, streak: 0, lastDone: "" });
 const num = (v) => { const n = Math.floor(Number(v)); return Number.isFinite(n) && n >= 0 ? n : 0; };
 const str = (v) => (typeof v === "string" ? v : "");
 
@@ -103,7 +100,6 @@ function load() {
         day: str(raw.day),
         prog: num(raw.prog),
         done: !!raw.done,
-        reward: num(raw.reward),
         streak: num(raw.streak),
         lastDone: str(raw.lastDone),
       };
@@ -124,7 +120,6 @@ function rollToToday(s) {
     s.day = today;
     s.prog = 0;
     s.done = false;
-    s.reward = 0;
     save(s);
   }
   return s;
@@ -135,13 +130,6 @@ function rollToToday(s) {
 function currentStreak(s) {
   if (s.lastDone === dayKey() || s.lastDone === yesterdayKey()) return s.streak || 0;
   return 0;
-}
-
-// What a completion is worth right now: a flat base plus a bonus per consecutive
-// day, capped so a long streak is a nice-to-have and never a runaway income.
-export function rewardFor(streakAfter) {
-  const extra = Math.min(Math.max(0, streakAfter - 1), DAILY.streakBonusCap);
-  return DAILY.baseCoins + DAILY.streakBonus * extra;
 }
 
 // Everything the UI needs for today, in one read.
@@ -156,17 +144,16 @@ export function getDaily() {
     mode: goal.mode,
     prog: Math.min(s.prog || 0, goal.target),
     done: !!s.done,
-    reward: s.done ? (s.reward || 0) : rewardFor(streak + 1),
     streak,
   };
 }
 
 // Fold one finished run into today's progress.
 //
-// `run` carries the run summary: { distance, coins, passed, smashed,
-// combo, score, time }. Returns { completed, reward, prog, target, label } —
-// `completed` is true ONLY on the run that crosses the line, so the caller can
-// fire the payout and the celebration exactly once.
+// `run` carries the run summary: { distance, passed, smashed, combo, score,
+// time }. Returns { completed, prog, target, label, streak } — `completed` is
+// true ONLY on the run that crosses the line, so the caller can fire the
+// celebration exactly once.
 export function applyRun(run) {
   const s = rollToToday(load());
   const goal = goalFor(s.day);
@@ -182,13 +169,11 @@ export function applyRun(run) {
     s.streak = (s.lastDone === yesterdayKey()) ? (s.streak || 0) + 1 : 1;
     s.lastDone = s.day;
     s.done = true;
-    s.reward = rewardFor(s.streak);
     completed = true;
   }
   save(s);
   return {
     completed,
-    reward: completed ? s.reward : 0,
     prog: Math.min(s.prog, goal.target),
     target: goal.target,
     label: goal.label,

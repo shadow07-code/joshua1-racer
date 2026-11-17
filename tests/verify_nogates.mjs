@@ -41,7 +41,7 @@ function phraseMix(density, event) {
     traffic.updateTraffic(s, dt, z, map, {}, 0, true);
     if (s.phrase) counts[s.phrase.type] = (counts[s.phrase.type] || 0) + 1;
   }
-  return { counts, rows: s.rowsSpawned, coins: s.coins.length };
+  return { counts, rows: s.rowsSpawned };
 }
 const mix = phraseMix(1.45, null);
 add("no `gate` phrase is ever selected", !mix.counts.gate, JSON.stringify(mix.counts));
@@ -49,15 +49,13 @@ add("all core phrases still occur",
   ["slalom", "sweep", "gauntlet", "breather"].every((k) => mix.counts[k] > 0),
   JSON.stringify(mix.counts));
 
-// Coin trails were SUPPRESSED on gate rows; with gates gone they must still flow.
-let sawCoins = false;
+// Coins were removed on 2026-11-17: two minutes of real traffic spawn none.
 {
   const s = traffic.makeTrafficSystem({ rowGapZ: SPAWN.trafficRowGapCity });
   s.densityMul = 1.2; s.rowGapZ = SPAWN.trafficRowGapCity / 1.2;
-  let z = 0, total = 0;
-  for (let i = 0; i < 60 * 120; i++) { z += PHYS.maxSpeed * dt; traffic.updateTraffic(s, dt, z, map, {}, 0, false); total = Math.max(total, s.coins.length); }
-  sawCoins = total > 0;
-  add("coin trails still spawn", sawCoins, "peak concurrent " + total);
+  let z = 0;
+  for (let i = 0; i < 60 * 120; i++) { z += PHYS.maxSpeed * dt; traffic.updateTraffic(s, dt, z, map, {}, 0, false); }
+  add("traffic spawns no coins any more", !("coins" in s) && !traffic.drawCoins && !traffic.checkCoinGrab, Object.keys(s).join(","));
 }
 
 // ── C: solvability by forward reachability (the phrase mix changed) ──
@@ -114,7 +112,8 @@ for (let i = 0; i < 400; i++) {
 }
 const uniq = [...new Set(ids)].sort();
 add("no THREAD GATES goal can be selected on any day", !uniq.includes("gates"), uniq.join(","));
-add("every remaining goal is still reachable by the hash", uniq.length === 7, `${uniq.length}: ${uniq.join(",")}`);
+add("every remaining goal is still reachable by the hash", uniq.length === 6, `${uniq.length}: ${uniq.join(",")}`);
+add("no COLLECT COINS goal can be selected on any day", !uniq.includes("coins"), uniq.join(","));
 const labels = [...new Set(ids.map((_, i) => null))];
 add("no goal label mentions gates",
   !ids.some((id) => id === "gates"));

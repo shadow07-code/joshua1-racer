@@ -6,7 +6,7 @@ for (const seed of [1, 2, 3, 4, 5, 6]) {
   H.seed(seed); g.state = "TITLE"; H.tick(); H.startRace(); H.run(12);
   for (let k = 0; k < 8; k++) {
     const car = g.traffic.list.find((c) => !c.smashed && !c.oncoming);
-    g.traffic.list = [car]; g.traffic.coins = [];
+    g.traffic.list = [car];
     g.traffic.nextRowZ = g.player.z + 1e6; g.traffic.nextOncomingZ = g.player.z + 1e6;
     Object.assign(car, { z: g.player.z + 1, x: g.player.x + 3, nearMissed: false, minDx: null, passed: false, smashed: false });
     g.player.invuln = 0; g.player.lives = 3;

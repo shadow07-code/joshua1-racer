@@ -20,7 +20,6 @@ export function initUI(callbacks) {
     titleControls: document.getElementById("title-controls"),
     garagePanel: document.getElementById("garage"),
     garageList: document.getElementById("garage-list"),
-    garageWallet: document.getElementById("garage-wallet"),
     garageBack: document.getElementById("garage-back"),
     soundControls: document.getElementById("sound-controls"),
     namePanel: document.getElementById("name-entry"),
@@ -197,22 +196,18 @@ function spriteCanvas(sprite, scale = 2) {
   return cv;
 }
 
-// Build the garage list. data = { cars, wallet, owned, selected, spriteFor }.
-// Owned cars are tappable to equip; locked ones show their price (and how close
-// the wallet is for the cheapest one).
+// Build the garage list. data = { cars, selected, spriteFor }. Every car is
+// yours: tap one to drive it.
 export function renderGarage(data) {
   if (!el.garageList) return;
-  const { cars = [], wallet = 0, owned = [], selected = "rosso", spriteFor } = data || {};
-  if (el.garageWallet) el.garageWallet.textContent = "BANK " + wallet;
+  const { cars = [], selected = "rosso", spriteFor } = data || {};
   el.garageList.innerHTML = "";
 
-  let firstLocked = true;
   for (const car of cars) {
-    const isOwned = owned.includes(car.id);
-    const isEquipped = isOwned && car.id === selected;
+    const isEquipped = car.id === selected;
 
     const row = document.createElement("div");
-    row.className = "garage-row" + (isOwned ? "" : " locked") + (isEquipped ? " equipped" : "");
+    row.className = "garage-row" + (isEquipped ? " equipped" : "");
 
     if (spriteFor) row.appendChild(spriteCanvas(spriteFor(car.id), 2));
 
@@ -222,15 +217,12 @@ export function renderGarage(data) {
 
     const state = document.createElement("span");
     state.className = "car-state";
-    if (isEquipped) state.textContent = "EQUIPPED";
-    else if (isOwned) state.textContent = "TAP TO USE";
-    else if (firstLocked) { state.textContent = wallet + "/" + car.price; firstLocked = false; }
-    else state.textContent = String(car.price);
+    state.textContent = isEquipped ? "EQUIPPED" : "TAP TO USE";
 
     row.appendChild(name);
     row.appendChild(state);
 
-    if (isOwned && !isEquipped) {
+    if (!isEquipped) {
       row.addEventListener("click", (e) => {
         e.stopPropagation();
         cb.onGaragePick && cb.onGaragePick(car.id);

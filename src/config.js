@@ -188,16 +188,6 @@ export const RACE = {
   // met. This makes it a dependable mid-run beat (~14 s after the unlock, ≈58 s
   // into a run) without changing how often they come after that.
   boosterFirstGap: 700,
-  // Coins: ~this fraction of spawned rows also drops a short coin trail down the
-  // OPEN gap lane (the ideal weaving line), coinsPerTrail coins spread in z.
-  coinRowChance: 0.20,
-  coinsPerTrail: 3,
-  // COIN MELODY: coins grabbed less than this many seconds apart count as one
-  // unbroken run, and each steps the pickup note up a major scale. 1.0 s covers
-  // a trail's spacing even at the opening's pace (~0.85 s between coins); at
-  // speed, back-to-back coin rows join up into one long rising run.
-  coinStreakGap: 1.0,
-  coinSparkleDur: 0.4,      // the twinkle round the car when a whole trail is collected
   // Biome cycling: the scene changes (city → tunnel → coast → bridge) every this
   // many seconds of a run — visual freshness + "how far did I get" landmarks.
   biomePeriodSec: 50,
@@ -331,19 +321,6 @@ export const SCORE = {
   // Splitting a tight 2-car gap (a "sandwich"): a flat bonus that ALSO advances
   // the combo streak (no separate uncapped multiplier any more).
   sandwichBonus: 150,
-  // COINS scattered along the ideal weaving line — each grabbed coin pays this
-  // (a light bonus; the count also shows at game over and feeds a future garage).
-  coinValue: 50,
-};
-
-// DAILY CHALLENGE payout. Coins only — a daily grinder must never be able to buy
-// anything the leaderboard cares about (same rule as the garage). Sized against a
-// typical haul of ~40-60 coins a run, so completing the daily is worth roughly a
-// good run on top, and a maintained streak is worth about two.
-export const DAILY = {
-  baseCoins: 60,
-  streakBonus: 10,      // extra coins per consecutive day...
-  streakBonusCap: 5,    // ...for at most 5 extra days (day 6+ = 110, then flat)
 };
 
 // Game-over LETTER GRADE by final score — the instant "did I do well?" verdict

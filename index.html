@@ -358,13 +358,6 @@
     }
 
     /* ── Garage panel — the car collection ───────────────────────────────── */
-    .garage-wallet {
-      text-align: center;
-      font-size: 12px;
-      font-weight: bold;
-      letter-spacing: 1.5px;
-      color: var(--dmg-light);
-    }
     .garage-list {
       overflow-y: auto;
       -webkit-overflow-scrolling: touch;
@@ -385,9 +378,8 @@
       -webkit-tap-highlight-color: transparent;
     }
     .garage-row canvas { image-rendering: pixelated; display: block; flex: none; }
-    .garage-row.locked { opacity: 0.5; cursor: default; }
     .garage-row.equipped { border-color: var(--dmg-lightest); background: var(--dmg-dark); }
-    .garage-row:not(.locked):active { background: var(--dmg-dark); }
+    .garage-row:active { background: var(--dmg-dark); }
     .car-name {
       flex: 1;
       font-size: 12px;
@@ -750,11 +742,10 @@
     </div>
   </div>
 
-  <!-- Garage — the car collection (coins unlock liveries; tap an owned car to equip) -->
+  <!-- Garage — the car collection (every car is yours; tap one to drive it) -->
   <div id="garage" class="panel" role="dialog" aria-label="Garage">
     <div class="panel-box">
       <div class="panel-title">🏁 GARAGE</div>
-      <div id="garage-wallet" class="garage-wallet">BANK 0</div>
       <div id="garage-list" class="garage-list"></div>
       <div class="panel-row">
         <button id="garage-back" class="btn-go">BACK</button>

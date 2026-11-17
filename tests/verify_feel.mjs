@@ -124,14 +124,22 @@ function sysWithCars() {
   // Tail lamps are orange (9) / bloom gold (5); wrong-way heads are white (1).
   const cols = new Set(REC.map(r => r.c));
   add("tail lamps use the taillight orange", cols.has(PALETTE[9]), [...cols].join(","));
-  // Nothing may be painted into the top HUD strip (rows 0-8) or off-canvas.
-  // The TOP strip is the one that matters: it is drawn before the HUD, so a lamp
-  // up there would sit under the score bar. The bottom overhang is fine — a car
-  // half off the lower edge is clipped by the canvas, exactly as drawTraffic
-  // already allows (project() keeps cars until sy > H + 24).
-  add("no lamp paints into the top HUD strip or off the sides",
-    REC.every(r => r.y >= 9 && r.x > -12 && r.x < W + 12),
-    JSON.stringify(REC.filter(r => r.y < 9).slice(0, 3)));
+  // Every lamp sits ON its own car: inside the sprite rectangle of a car that
+  // is actually there. (This used to assert "nothing in the top HUD strip",
+  // which is only true while no car happens to be within ~2.5 m of the
+  // horizon; a car there is drawn under the opaque score bar with its lamps,
+  // correctly. It flaked whenever the random layout put one there.) The
+  // bottom overhang is fine: a car half off the lower edge is clipped by the
+  // canvas, exactly as drawTraffic already allows.
+  const boxes = s.list.filter(c => !c.smashed).map(c => {
+    const p = road.project(map, z, 0, c);
+    if (!p) return null;
+    const hw = c.skin.w * c.skin.scale / 2, hh = c.skin.h * c.skin.scale / 2;
+    return { x0: Math.round(p.sx - hw), y0: Math.round(p.sy - hh), w: c.skin.w, h: c.skin.h };
+  }).filter(Boolean);
+  const stray = REC.filter(r => !boxes.some(b => r.x >= b.x0 && r.x + r.w <= b.x0 + b.w && r.y >= b.y0 && r.y + r.h <= b.y0 + b.h + 1));
+  add("every lamp sits on its own car (none stray, none off the sides)",
+    stray.length === 0 && REC.every(r => r.x > -12 && r.x < W + 12), JSON.stringify(stray.slice(0, 3)));
 
   // A smashed car has no engine and must go dark.
   const s2 = JSON.parse(JSON.stringify({ list: s.list.map(c => ({ ...c, smashed: true })) }));

@@ -33,7 +33,7 @@ const P = pickups.makePickupSystem();
 const S = scenery.makeScenerySystem();
 
 let z = 0, top = 0, raceTime = 0;
-const peak = { traffic: 0, coins: 0, barrels: 0, pickups: 0, scenery: 0, helis: 0 };
+const peak = { traffic: 0, barrels: 0, pickups: 0, scenery: 0, helis: 0 };
 const at = {};                       // array sizes sampled per minute
 let nanHits = [];
 const MINUTES = 10;
@@ -69,7 +69,6 @@ for (let i = 0; i < MINUTES * 60 * 60; i++) {
   scenery.updateScenery(S, z, map, dt, SPAWN.sceneryPerMeter, sp / PHYS.maxSpeed);
 
   peak.traffic = Math.max(peak.traffic, T.list.length);
-  peak.coins = Math.max(peak.coins, T.coins.length);
 
   peak.barrels = Math.max(peak.barrels, C.barrels.length);
   peak.pickups = Math.max(peak.pickups, P.list.length);
@@ -78,7 +77,7 @@ for (let i = 0; i < MINUTES * 60 * 60; i++) {
 
   if (i % (60 * 60) === 0) {
     const m = i / 3600;
-    at[m + "min"] = { traffic: T.list.length, coins: T.coins.length, 
+    at[m + "min"] = { traffic: T.list.length,
                       barrels: C.barrels.length, pickups: P.list.length, scenery: S.list.length };
   }
 }
@@ -87,7 +86,7 @@ scanNaN("traffic", T); scanNaN("cops", C); scanNaN("pickups", P); scanNaN("scene
 console.log(`SOAK — ${MINUTES} simulated minutes (${MINUTES * 3600} ticks)\n`);
 console.log("Array sizes per minute (must plateau, not climb):");
 for (const [k, v] of Object.entries(at)) {
-  console.log(`   ${k.padStart(6)}  traffic ${String(v.traffic).padStart(3)}  coins ${String(v.coins).padStart(3)}  barrels ${String(v.barrels).padStart(2)}  pickups ${String(v.pickups).padStart(2)}  scenery ${String(v.scenery).padStart(3)}`);
+  console.log(`   ${k.padStart(6)}  traffic ${String(v.traffic).padStart(3)}  barrels ${String(v.barrels).padStart(2)}  pickups ${String(v.pickups).padStart(2)}  scenery ${String(v.scenery).padStart(3)}`);
 }
 console.log("\nPeaks:", JSON.stringify(peak));
 console.log(`Distance covered: ${Math.round(z)}   rows spawned: ${T.rowsSpawned}   passed: ${T.passedCount}`);
@@ -100,7 +99,6 @@ const midT = mins[Math.floor(mins.length / 2)].traffic, endT = mins[mins.length 
 add("traffic list plateaus (no leak)", endT <= midT * 2 + 10, `mid ${midT} end ${endT}`);
 const midS = mins[Math.floor(mins.length / 2)].scenery, endS = mins[mins.length - 1].scenery;
 add("scenery list plateaus (no leak)", endS <= midS * 2 + 10, `mid ${midS} end ${endS}`);
-add("coins list bounded", peak.coins < 200, "peak " + peak.coins);
 
 add("barrels bounded", peak.barrels < 60, "peak " + peak.barrels);
 add("pickups bounded", peak.pickups < 20, "peak " + peak.pickups);

@@ -8,7 +8,7 @@ import {
 import {
   SPR_PLAYER, SPR_AI_BLUE, SPR_AI_GREEN, SPR_AI_ORANGE, SPR_PALM, SPR_TREE,
   SPR_SEDAN_BLUE, SPR_SEDAN_RED, SPR_BUS_YELLOW,
-  SPR_DRIVER_STAND, SPR_DRIVER_THUMB, SPR_COIN,
+  SPR_DRIVER_STAND, SPR_DRIVER_THUMB,
   ICN_SPEED, ICN_FLAG, ICN_TROPHY, ICN_PASS,
 } from "./sprites.js";
 import { selectedSprite } from "./garage.js";
@@ -37,7 +37,7 @@ function pad(num, len) {
 }
 
 export function drawHud(ctx, {
-  score, speed, passed, mapKind, time, lives, densityMul, coins, newBest, scoreFlash,
+  score, speed, passed, mapKind, time, lives, densityMul, newBest, scoreFlash,
 }) {
   // Top thin score strip
   rect(ctx, 0, 0, W, 9, 0);
@@ -48,13 +48,10 @@ export function drawHud(ctx, {
   const strobe = scoreFlash > 0 && Math.floor(performance.now() / 100) % 2 === 0;
   text(ctx, "SCORE " + pad(score, 6), 4, 2, strobe ? 1 : 5);
   if (newBest) text(ctx, "BEST", 56, 2, strobe ? 1 : 17);
-  // Coin counter on the right — a small gold coin + running count.
-  drawSprite(ctx, SPR_COIN, W - 32, 1);
-  text(ctx, pad(coins || 0, 3), W - 23, 2, 5);
-  // Density indicator, tucked just left of the coins when traffic is intensified.
+  // Density indicator on the right, shown once traffic is intensified.
   if (densityMul && densityMul > 1.001) {
     const pct = Math.round((densityMul - 1) * 100);
-    textRight(ctx, "+" + pct + "%", W - 36, 2, 9);
+    textRight(ctx, "+" + pct + "%", W - 4, 2, 9);
   }
 
   // Bottom panel
@@ -382,7 +379,6 @@ export function drawTitleScreen(ctx, allTimeBest, world, playerName, daily, riva
     if (daily.streak > 0) textRight(ctx, "STREAK " + daily.streak, chipX + chipW - 4, dY + 3, 9, 1);
     if (daily.done) {
       text(ctx, "COMPLETE", chipX + 4, dY + 10, 17, 1);
-      textRight(ctx, "+" + daily.reward, chipX + chipW - 4, dY + 10, 17, 1);
     } else {
       text(ctx, daily.label.slice(0, 28), chipX + 4, dY + 10, 1, 1);
     }
@@ -734,7 +730,7 @@ export function gradeFor(score) {
   return GRADES[GRADES.length - 1];
 }
 
-export function drawGameOver(ctx, { name, score, hi, isNew, bestDelta, rankInfo, reason, passed, time, topSpeed, combo, smashed, rampages, coins, wallet, unlocked, nextCar, daily }) {
+export function drawGameOver(ctx, { name, score, hi, isNew, bestDelta, rankInfo, reason, passed, time, topSpeed, combo, smashed, rampages, daily }) {
   const t = performance.now();
   const flash = Math.floor(t / 300) % 2 === 0;
   // Dark backdrop with a quiet twinkling starfield — ties the screen to the
@@ -752,11 +748,10 @@ export function drawGameOver(ctx, { name, score, hi, isNew, bestDelta, rankInfo,
   // canvas draws the banner + verdict + a trimmed ledger, centred in the upper
   // ~66% so they never sit behind that bar.
   const rowH = 12;
-  const N = 8;                       // ledger rows (score/best live in the verdict)
+  const N = 7;                       // ledger rows (score/best live in the verdict)
   const panelH = rowH * N + 10;
   const heroH = 22;
-  const bankH = 16;                  // the coin-bank strip under the ledger
-  const totalH = 26 + 2 + heroH + 10 + 10 + panelH + bankH;
+  const totalH = 26 + 2 + heroH + 10 + 10 + panelH;
   const avail = H * 0.66;
   const baseY = Math.max(4, ((avail - totalH) / 2) | 0);
 
@@ -824,37 +819,12 @@ export function drawGameOver(ctx, { name, score, hi, isNew, bestDelta, rankInfo,
   statRow("NAME",       (name || "AAA").slice(0, 10),          5);
   statRow("TIME",       mmss(time || 0),                       1);
   statRow("PASSED",     pad(passed != null ? passed : 0, 3),   1);
-  statRow("COINS",      pad(coins != null ? coins : 0, 3),     5);
   statRow("TOP SPEED",  (topSpeed || 0) + " KMH",              9);
   statRow("BEST COMBO", "X" + (combo || 0),                    17);
   statRow("SMASHED",    pad(smashed != null ? smashed : 0, 3), 9);
   statRow("RAMPAGES",   "X" + (rampages || 0),                 5);
 
-  // ── COIN BANK ── The payoff that survives death: this run's coins are added
-  // to a permanent wallet, and the bar shows how close the next car now is. Even
-  // a terrible run moves it, so no attempt is ever wasted.
-  let bankY = statsTop + panelH + 3;
-  if (unlocked && unlocked.length) {
-    // Celebration beat — a new livery just paid off.
-    const car = unlocked[unlocked.length - 1];
-    rect(ctx, 6, bankY, W - 12, 13, flash ? 5 : 9);          // strobing gold plate
-    textOutlinedCentered(ctx, "NEW CAR: " + car.name, bankY + 4, 1, 0, 1);
-  } else {
-    drawSprite(ctx, SPR_COIN, 8, bankY);
-    text(ctx, "+" + (coins || 0), 17, bankY + 1, 5);
-    textRight(ctx, "BANK " + (wallet || 0), W - 8, bankY + 1, 1);
-    if (nextCar) {
-      // Progress toward the cheapest locked car.
-      const have = Math.max(0, Math.min(nextCar.price, wallet || 0));
-      const frac = nextCar.price > 0 ? have / nextCar.price : 1;
-      const barY = bankY + 9, barW = W - 16;
-      rect(ctx, 8, barY, barW, 3, 4);                         // track
-      rect(ctx, 8, barY, Math.max(1, (barW * frac) | 0), 3, 5); // fill
-      text(ctx, nextCar.name, 8, barY + 5, 13);
-      textRight(ctx, have + "/" + nextCar.price, W - 8, barY + 5, 13);
-    }
-  }
-  bankY += (unlocked && unlocked.length) ? 15 : 20;
+  let bankY = statsTop + panelH + 4;
 
   // ── DAILY CHALLENGE ── Most retries never pass through the title screen, so
   // the day's goal has to report here or the player forgets it exists. Drawn
@@ -864,9 +834,9 @@ export function drawGameOver(ctx, { name, score, hi, isNew, bestDelta, rankInfo,
   if (daily && bankY + 11 < H - 26) {
     const doneNow = daily.done;
     if (daily.completedThisRun) {
-      // The moment it lands — a celebration plate, same weight as a new car.
+      // The moment it lands — a celebration plate.
       rect(ctx, 6, bankY, W - 12, 10, flash ? 17 : 10);
-      textOutlinedCentered(ctx, "DAILY DONE  +" + daily.reward, bankY + 2, 1, 0, 1);
+      textOutlinedCentered(ctx, "DAILY DONE!", bankY + 2, 1, 0, 1);
     } else {
       text(ctx, "DAILY", 8, bankY, doneNow ? 17 : 5);
       textRight(ctx, doneNow ? "COMPLETE" : (daily.prog + "/" + daily.target), W - 8, bankY, doneNow ? 17 : 13);
@@ -878,7 +848,7 @@ export function drawGameOver(ctx, { name, score, hi, isNew, bestDelta, rankInfo,
     bankY += 13;
   }
 
-  // One-tap retry prompt — a blinking hint under the bank strip (the whole
+  // One-tap retry prompt — a blinking hint under the daily line (the whole
   // canvas is tappable to restart; the HTML PLAY AGAIN button does the same).
   if (bankY < H - 26) textOutlinedCentered(ctx, "TAP TO RETRY", bankY, flash ? 5 : 1, 0, 1);
 }
@@ -977,26 +947,6 @@ export function drawCrashFlash(ctx, prog) {
   if (prog < 0 || prog >= 1) return;                         // 0 = the freeze frame: paint it
   const idx = prog < 0.45 ? 6 : 7;                           // bright red → dark red
   ditherRect(ctx, 0, 9, W, H - 33, idx, (Math.floor(performance.now() / 30) & 1), 2);
-}
-
-// COIN TRAIL sparkle — a whole trail collected: six little star twinkles pop
-// around the car and blink out over RACE.coinSparkleDur. Fixed offsets pinned
-// to the car (no motion of their own), gold and white on alternate beats; each
-// shrinks from a plus to a single pixel as it fades. prog: 0 -> 1.
-const SPARKLES = [[-10, -8], [9, -6], [-11, 3], [10, 5], [-5, -13], [6, -12]];
-export function drawCoinSparkle(ctx, prog, cx, cy) {
-  if (prog < 0 || prog >= 1) return;
-  const beat = Math.floor(performance.now() / 70) % 2;
-  SPARKLES.forEach(([dx, dy], i) => {
-    if ((i + beat) % 2 === 0 && prog > 0.3) return;        // twinkle: half blink off after the pop
-    const x = cx + dx, y = cy + dy;
-    rect(ctx, x, y, 1, 1, 1);                              // white core
-    if (prog < 0.6) {                                      // gold arms while it's fresh
-      const c = (i + beat) % 2 ? 5 : 21;
-      rect(ctx, x - 1, y, 1, 1, c); rect(ctx, x + 1, y, 1, 1, c);
-      rect(ctx, x, y - 1, 1, 1, c); rect(ctx, x, y + 1, 1, 1, c);
-    }
-  });
 }
 
 // "PERFECT!" micro-pop — a small blinking word just above the car on a
@@ -1102,7 +1052,7 @@ export function drawPaused(ctx) {
 export const SHARE_CARD_W = 160;
 export const SHARE_CARD_H = 200;
 
-export function drawShareCard(ctx, { name, score, isNew, time, topSpeed, passed, combo, smashed, rampages, coins, world }) {
+export function drawShareCard(ctx, { name, score, isNew, time, topSpeed, passed, combo, smashed, rampages, world }) {
   const Wc = SHARE_CARD_W, Hc = SHARE_CARD_H;
   // Backdrop — black with a quiet starfield and a gold double frame.
   rect(ctx, 0, 0, Wc, Hc, 0);
@@ -1143,7 +1093,6 @@ export function drawShareCard(ctx, { name, score, isNew, time, topSpeed, passed,
   row("TIME", mmss(time || 0), 1);
   row("TOP SPEED", (topSpeed || 0) + " KMH", 9);
   row("PASSED", pad(passed || 0, 3), 1);
-  row("COINS", pad(coins || 0, 3), 5);
   row("SMASHED", pad(smashed || 0, 3), 9);
   row("BEST COMBO", "X" + (combo || 0), 17);
   row("RAMPAGES", "X" + (rampages || 0), 5);

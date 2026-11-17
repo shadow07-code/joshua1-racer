@@ -14,7 +14,7 @@ import {
   playFlourish, tapeStopMusic, engineWindDown,
   startEngine, setEngine, stopEngine, setEngineRampage, setEngineStrain, getEngineStyle, setEngineStyle,
   sfxAccelAccent, sfxPickup, sfxCrash, sfxExplosion, sfxBump, sfxBarrelDrop, sfxCombo,
-  sfxWhoosh, sfxPerfect, sfxHeartbeat, sfxCoin, sfxCoinTrail, sfxHorn, sfxLightsOn,
+  sfxWhoosh, sfxPerfect, sfxHeartbeat, sfxHorn, sfxLightsOn,
   sfxSandwich, sfxRampageWarn, sfxSmash, sfxChainBank, sfxComboTier,
   sfxShieldUp, sfxShieldHit, sfxShockwave, sfxRampageCharge, sfxRampageReady, sfxNitrous,
   sfxMenuMove, sfxMenuSelect, sfxCountdownBeep,
@@ -24,7 +24,7 @@ import {
 } from "./audio.js";
 import { drawRoad, drawDistanceHaze, drawNightShade, dayNight, distToY, biomeAt, project, sunShadow } from "./road.js";
 import { makePlayer, updatePlayer, drawPlayer, drawPlayerLights, beamAnchor, playerBox, applyCollisionLoss } from "./entities/player.js";
-import { makeTrafficSystem, updateTraffic, drawTraffic, drawNightLights, drawCoins, checkCoinGrab, checkTrafficHit, prepopulateTraffic, smashCar, knockCar, pullSpawnToHorizon } from "./entities/traffic.js";
+import { makeTrafficSystem, updateTraffic, drawTraffic, drawNightLights, checkTrafficHit, prepopulateTraffic, smashCar, knockCar, pullSpawnToHorizon } from "./entities/traffic.js";
 import { getDaily, applyRun as applyDailyRun } from "./daily.js";
 import { makePickupSystem, updatePickups, drawPickups, checkPickup } from "./entities/pickups.js";
 import { makeCopsSystem, updateCops, drawCops, checkBarrelHit } from "./entities/cops.js";
@@ -38,7 +38,7 @@ import {
   drawHud, drawTitleScreen, drawMapSelect, drawDifficultySelect,
   drawGameOver, drawPaused, drawCountdown, drawTutorialOverlay, drawSteerHints, drawCombo, drawChainTally, drawShieldMsg,
   drawRampageMeter, drawSandwichCombo, drawShareCard, SHARE_CARD_W, SHARE_CARD_H,
-  drawExplosion, drawCrashImpact, drawCrashFlash, drawSmashBurst, drawCoinSparkle, drawPerfect, drawLastLifePulse,
+  drawExplosion, drawCrashImpact, drawCrashFlash, drawSmashBurst, drawPerfect, drawLastLifePulse,
   drawBiomeBanner, drawZoneFlash, drawWreckFade,
 } from "./hud.js";
 import { registerServiceWorker, initInstallBanner, initInstallButton, initInstallSplash, setInstallButtonVisible } from "./pwa.js";
@@ -53,8 +53,7 @@ import {
   cachedChampion,
 } from "./leaderboard.js";
 import {
-  CARS, addCoins, claimUnlocks, getWallet, nextLocked,
-  getSelectedId, setSelectedId, ownedIds, carSprite,
+  CARS, getSelectedId, setSelectedId, carSprite,
 } from "./garage.js";
 import {
   makeGhostRecorder, recordGhost, saveGhost, loadGhost, drawGhost, drawRivalGhost,
@@ -112,9 +111,6 @@ const g = {
   rival: null,           // the global #1's track being replayed, or null
   champion: null,        // cached {name,score,samples} for the global #1
   isNewHi: false,
-  wallet: 0,             // banked coin balance after this run
-  unlocked: [],          // cars this run's coins just unlocked (game-over celebration)
-  nextCar: null,         // the cheapest still-locked car (drives the progress bar)
   bestDelta: 0,          // points over the previous personal best (for "NEW BEST +X")
   rankInfo: null,        // { rank, total } from the leaderboard submit, or { offline:true }; null = pending
   endReason: "GAME OVER",
@@ -141,7 +137,6 @@ const g = {
   unleashFlash: 0,      // one-shot full-frame flash on a tap-unleashed rampage
   smashTotal: 0,        // cars smashed this run (game-over stat)
   rampagesUsed: 0,      // rampages triggered this run (game-over stat)
-  coins: 0,             // coins grabbed this run (score bonus + game-over stat)
   daily: null,          // today's challenge + progress (refreshed on title / game over)
   shieldMsg: "",        // transient "SHIELD!" / "SAVED!" popup text
   shieldMsgTimer: 0,
@@ -360,8 +355,8 @@ function stopAllLoopingSfx() { stopEngine(); stopHeliSound(); g._heliSoundOn = f
 // context) so sound stops IMMEDIATELY, even mid-note. Resuming restarts both.
 function pauseGame() {
   if (g.state !== STATES.RACE) return;
-  // Mid-wreck the run is already over: finish it now (bank the coins, submit
-  // the score) instead of pausing a dead run that RESTART or QUIT would then
+  // Mid-wreck the run is already over: finish it now (submit the score)
+  // instead of pausing a dead run that RESTART or QUIT would then
   // throw away. Covers the auto-pause too — a phone locking during the wreck.
   if (g.wreck > 0) { g.wreck = 0; endRace("GAME OVER"); return; }
   g.prevState = g.state;
@@ -463,11 +458,6 @@ function newRaceSetup() {
   g.unleashFlash = 0;
   g.smashTotal = 0;
   g.rampagesUsed = 0;
-  g.coins = 0;
-  g.coinStreak = 0;         // coins in the current unbroken run (steps the coin note up)
-  g.lastCoinT = -99;        // raceTime of the last coin grabbed
-  g.trailsSeen = 0;         // completed trails already celebrated
-  g.coinSparkle = 0;        // seconds left on the trail-complete twinkle
   g.biome = biomeAt(0);            // start in CITY; no banner for the opening zone
   g.biomeName = g.biome.name;
   g.biomeBannerTimer = 0;
@@ -687,14 +677,9 @@ function endRace(reason) {
   // still be queued and would auto-retry the moment the goTime guard expires —
   // the "game over screen skipped itself" bug.
   clearPresses();
-  // ── Bank this run's coins ── Score dies with you; coins DON'T. Even a short
-  // run pays into the wallet, so every attempt advances the next unlock. Any
-  // car the new balance covers is claimed right here for a game-over payoff.
-  // ── DAILY CHALLENGE ── Folded in BEFORE the coins are banked, so a completion's
-  // reward rides the same deposit and can itself be what unlocks a car this run.
+  // ── DAILY CHALLENGE ── Every run, even a short one, counts toward today's goal.
   const dailyRes = applyDailyRun({
     distance: Math.floor((g.deathZ != null ? g.deathZ : g.player.z) || 0),
-    coins: g.coins || 0,
     passed: g.traffic ? g.traffic.passedCount : 0,
     smashed: g.smashTotal || 0,
     combo: g.comboBest || 0,
@@ -702,14 +687,7 @@ function endRace(reason) {
     time: Math.floor(g.raceTime || 0),
   });
   g.daily = Object.assign(getDaily(), { completedThisRun: dailyRes.completed });
-  g.wallet = addCoins((g.coins || 0) + (dailyRes.reward || 0));
-  g.unlocked = claimUnlocks();          // [] unless this run crossed a price
-  g.nextCar = nextLocked();             // null once everything is owned
-  // Equip a freshly unlocked livery straight away — the reward should be visible
-  // on the very next run (the garage picker will let you switch back).
-  if (g.unlocked.length) setSelectedId(g.unlocked[g.unlocked.length - 1].id);
   if (g.isNewHi) playFlourish();
-  if (g.unlocked.length) playFlourish();
   if (dailyRes.completed) playFlourish();
   // Submit to the global board; the response carries this run's rank + total so
   // the game-over screen can show a percentile ("TOP 14%  RANK 14/98").
@@ -782,9 +760,8 @@ function openLeaderboard(returnTo) {
   g.state = STATES.LEADERBOARD;
 }
 
-// ── Garage ── The car collection. Coins auto-unlock liveries cheapest-first as
-// the wallet grows, so this panel is about CHOOSING among what you own (and
-// seeing how close the next one is).
+// ── Garage ── The car collection. Every car is yours from the first run, so
+// this panel is about CHOOSING what you drive.
 function openGarage() {
   ensureAudio();
   sfxMenuSelect();
@@ -793,8 +770,6 @@ function openGarage() {
 function refreshGarage() {
   renderGarage({
     cars: CARS,
-    wallet: getWallet(),
-    owned: ownedIds(),
     selected: getSelectedId(),
     spriteFor: carSprite,
   });
@@ -836,7 +811,6 @@ async function shareScoreCard() {
     combo: g.comboBest || 0,
     smashed: g.smashTotal || 0,
     rampages: g.rampagesUsed || 0,
-    coins: g.coins || 0,
     world: g.world,
   };
   const base = document.createElement("canvas");
@@ -1284,26 +1258,6 @@ function updateRace(dt) {
     if (!wasActive) g.rampagesUsed += 1;        // only a fresh rampage counts toward the stat
   }
 
-  // Coins on the ideal line — grabbed anytime (even mid-rampage), each pays a
-  // small bonus live and bumps the run's coin count (a game-over stat + a future
-  // garage currency). Following the weave sweeps them up.
-  const gotCoins = checkCoinGrab(g.traffic, playerBox(g.player));
-  if (gotCoins) {
-    g.coins += gotCoins;
-    g.scoreState.score += gotCoins * SCORE.coinValue;
-    // COIN MELODY — an unbroken run of coins climbs a scale instead of repeating
-    // one blip, and taking a WHOLE trail lands a chord and a twinkle round the
-    // car. Sound and sparkle only: what a coin is worth is unchanged.
-    g.coinStreak = (g.raceTime - g.lastCoinT < RACE.coinStreakGap) ? g.coinStreak + gotCoins : gotCoins;
-    g.lastCoinT = g.raceTime;
-    sfxCoin(g.coinStreak - 1);
-  }
-  if (g.traffic.trailsDone > g.trailsSeen) {
-    g.trailsSeen = g.traffic.trailsDone;
-    sfxCoinTrail();
-    g.coinSparkle = RACE.coinSparkleDur;
-  }
-
   tickScore(g.scoreState, g.player.z, 1);
   // Per-second time bonus accumulated continuously.
   g.scoreState.score += SCORE.survivalSecondBonus * dt;
@@ -1341,7 +1295,6 @@ function decayFx(dt) {
   }
   if (g.perfectTimer > 0) g.perfectTimer = Math.max(0, g.perfectTimer - dt);
   if (g.scoreFlash > 0) g.scoreFlash = Math.max(0, g.scoreFlash - dt);
-  if (g.coinSparkle > 0) g.coinSparkle = Math.max(0, g.coinSparkle - dt);
 }
 
 function updatePaused() {
@@ -1375,7 +1328,6 @@ function drawWorld() {
   // FIRST so your own ghost wins the pixels wherever the two overlap.
   if (g.rival) drawRivalGhost(ctx, g.rival, g.raceTime, g.map, g.player.z, g.player.x);
   if (g.ghost) drawGhost(ctx, g.ghost, g.raceTime, g.map, g.player.z, g.player.x);
-  drawCoins(ctx, g.traffic, g.map, g.player.z, g.player.x);
   drawDistanceHaze(ctx, biome);   // atmosphere over the far field — cars emerge from it
   // ── NIGHT ── Everything above is darkened; the headlight beam is carved out of
   // that darkness, so the road and cars ahead show in true colour inside it.
@@ -1519,7 +1471,6 @@ function render() {
       activeLeft: g.player.rampage,
     });
     if (g.perfectTimer > 0) drawPerfect(ctx, g.perfectTimer, (W / 2 + g.map.biasX + g.player.x) | 0);
-    if (g.coinSparkle > 0) drawCoinSparkle(ctx, 1 - g.coinSparkle / RACE.coinSparkleDur, (W / 2 + g.map.biasX + g.player.x) | 0, PLAYER_Y);
     if (g.biomeBannerTimer > 0) drawBiomeBanner(ctx, g.biomeName, g.biomeBannerTimer,
       comboMult() >= 2 || g.tallyTimer > 0 || g.sandwichComboTimer > 0);
     if (g.shieldMsgTimer > 0) drawShieldMsg(ctx, g.shieldMsg, RECORD_MSGS.has(g.shieldMsg));
@@ -1531,7 +1482,6 @@ function render() {
       time: g.raceTime,
       lives: g.player.lives,
       densityMul: g.densityMul,
-      coins: g.coins,
       newBest: g.bestBeaten,
       scoreFlash: g.scoreFlash,
     });
@@ -1559,10 +1509,6 @@ function render() {
       combo: g.comboBest || 0,
       smashed: g.smashTotal || 0,
       rampages: g.rampagesUsed || 0,
-      coins: g.coins || 0,
-      wallet: g.wallet || 0,
-      unlocked: g.unlocked || [],
-      nextCar: g.nextCar || null,
       daily: g.daily,
     });
     return;
