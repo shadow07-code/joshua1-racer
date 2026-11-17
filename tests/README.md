@@ -14,7 +14,9 @@ Run every suite from the repo root:
 
 - `verify_*.mjs`, `soak.mjs`, `swcheck.mjs`: the pass/fail suites that `run_all.mjs` runs.
 - `probes/`: measurements used when tuning. They print numbers rather than
-  pass/fail, and several take minutes.
+  pass/fail, and several take minutes. `probes/snapshot.mjs` is the odd one
+  out: it renders real gameplay frames to PNG (in `.gen/shots/`), for judging
+  a look change by eye, before and after. See its header.
 - `.gen/`: modules the harness regenerates on every run (gitignored).
 
 This folder is never deployed: `.vercelignore` excludes it.
