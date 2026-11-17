@@ -19,6 +19,7 @@ const SUITES = [
   "verify_daynight.mjs",  // day/night timing, darkness and headlights
   "verify5.mjs",          // leaderboard API ghost path + rival sprite
   "verify_nogates.mjs",   // risk gates gone, every traffic row still solvable
+  "verify_lanes.mjs",     // traffic lane changes: one lane, eased, mirror check
   "soak.mjs",             // 10 simulated minutes: no leaks, NaN or escapes
   "swcheck.mjs",          // sw.js precaches everything main.js imports (offline)
 ];
