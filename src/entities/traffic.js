@@ -40,6 +40,8 @@ function laneToX(laneIdx, halfRoad) {
   return -halfRoad + laneW * (laneIdx + 0.5);
 }
 
+const smooth = (u) => u * u * (3 - 2 * u);   // smoothstep on 0..1
+
 function pickSkin() {
   return TRAFFIC_SKINS[Math.floor(Math.random() * TRAFFIC_SKINS.length)];
 }
@@ -154,11 +156,11 @@ function spawnRow(sys, map) {
     const x = laneToX(lane, map.roadHalfWidth);
     const jitter = (Math.random() - 0.5) * 4; // small z stagger inside a row
     const speed = PHYS.cruiseSpeed * (skin.speedMul + (Math.random() * 0.08 - 0.02)) * (sys.opening ? SPAWN.openingPace : 1);
-    // Lateral drift is decided AT SPAWN and stays constant — no random
-    // mid-screen swerves. ~60% drift left or right; the rest hold their lane.
-    // A drifting car SIGNALS like a real driver: its amber turn indicator
-    // blinks for a short lead-in (signalT) before the drift engages, and keeps
-    // blinking the whole time it's tracking across the road.
+    // A lane change is decided AT SPAWN — no random mid-screen swerves. Some
+    // cars change one lane left or right; the rest hold their lane. A changing
+    // car SIGNALS like a real driver: its amber turn indicator blinks for a
+    // short lead-in (signalT) before it moves, and keeps blinking until it has
+    // settled in the new lane.
     // Thread-row flank cars never drift — keeps the split gap open + readable.
     let drift = Math.random() < driftChance ? (Math.random() < 0.5 ? -1 : 1) : 0;
     // Keep the threadable GAP wide enough to drive through: a car sitting right
@@ -168,17 +170,22 @@ function spawnRow(sys, map) {
     if (drift && Math.abs(lane - gap) === 1 && drift === (gap > lane ? 1 : -1)) {
       drift = 0;
     }
+    // A lane change is ONE lane (see updateTraffic), so a car in an edge lane
+    // signalling toward the verge has nowhere to go: it just holds its lane.
+    if (lane + drift < 0 || lane + drift >= LANES) drift = 0;
     sys.list.push({
       skin,
       z: sys.nextRowZ + jitter,
       x,
       laneIdx: lane,
+      laneTo: lane + drift,                            // the ONE lane it changes into
+      lcT: 0,                                          // seconds into that lane change
       speed,
       cruise: speed,                                   // preferred speed to recover to
       passed: false,
       nearMissed: false,
       driftVx: 0,                                      // engages after the lead-in
-      pendingDriftVx: drift * (6 + Math.random() * 5), // px/s lateral once engaged
+      pendingDriftVx: drift * (6 + Math.random() * 5), // lane-change rate, px/s (sets its duration)
       signalT: drift ? 0.7 + Math.random() * 0.8 : 0,  // blink-before-merge lead-in (s)
       sigPhase: Math.random() * 560,                   // unsynced blinker phase (ms)
       // CLOSING flankers: hold station, then squeeze toward the gap once the
@@ -281,9 +288,19 @@ export function prepopulateTraffic(sys, map, distance = 600) {
 // this car is drifting toward? Blocked drivers HOLD their lane — blinker still
 // going — and resume the merge once the gap is clear. This is what keeps
 // traffic from ever steering into each other (no snap-apart correction needed).
-function driftBlocked(cars, c) {
+//
+// MIRROR CHECK: the player counts too. A driver who can see you alongside, in
+// the lane they want, doesn't pull into your door; they wait, blinker on, and
+// go once you're past. It is the same test the cars get, so it only bites when
+// you are genuinely beside the car: a car that started over well ahead of you
+// still holds its line half across the seam, and you still have to go round.
+function driftBlocked(cars, c, pl = null) {
   const dir = c.driftVx > 0 ? 1 : -1;
   const cHx = skinHalfX(c.skin), cHz = skinHalfZ(c.skin);
+  if (pl && Math.abs(pl.z - c.z) < cHz + PHYS.carHalfHeight + 6) {
+    const dx = (pl.x - c.x) * dir;
+    if (dx > 0 && dx < cHx + PHYS.carHalfWidth + 8) return true;
+  }
   for (const o of cars) {
     if (o === c || o.smashed || o.oncoming) continue;   // wrong-way cars flash past — don't wait on them
     if (Math.abs(o.z - c.z) >= cHz + skinHalfZ(o.skin) + 6) continue; // not alongside
@@ -354,6 +371,8 @@ export function updateTraffic(sys, dt, playerZ, map, cbs, clearAheadDist = 0, al
   }
 
   const halfRoad = map.roadHalfWidth;
+  const laneW = (halfRoad * 2) / LANES;
+  const playerX = cbs?.playerX;       // undefined when there's no player (probes)
   let nearDist = 0;                   // nearest wrong-way car inside horn range (metres)
   for (const c of sys.list) {
     // Smashed cars are knocked off the road: they tumble sideways/back and no
@@ -403,16 +422,29 @@ export function updateTraffic(sys, dt, playerZ, map, cbs, clearAheadDist = 0, al
       if (c.signalT <= 0) c.driftVx = c.pendingDriftVx;
     }
 
-    // ── Steady lateral drift (assigned at spawn, engaged after the signal) ──
-    // The car tracks across the road at a constant rate — predictable and
-    // readable. It WAITS (lane held, blinker on) whenever the space it's
-    // merging into is occupied, and when it reaches a road edge it straightens
-    // out (indicator stops). No random swerves, no steering into anyone.
-    if (c.driftVx && !driftBlocked(sys.list, c)) {
-      c.x += c.driftVx * dt;
-      const lim = halfRoad - 6;
-      if (c.x >= lim)       { c.x = lim;  c.driftVx = 0; }
-      else if (c.x <= -lim) { c.x = -lim; c.driftVx = 0; }
+    // ── LANE CHANGE (assigned at spawn, engaged after the signal) ──
+    // ONE lane, the way a real driver does it: ease out of the lane, cross the
+    // seam, settle exactly on the next lane's centre, indicator off. It used to
+    // slide across the road at a constant rate until it hit the verge, which
+    // read as a drunk driver and left the car straddling seams for seconds;
+    // now you can see where it is going and where it will stop. A change takes
+    // as long as the old drift took to cross one lane (a lane width at the
+    // car's drift rate), on a smoothstep, so it starts and ends gently. It
+    // WAITS (blinker on) whenever the space it is moving into is taken, by
+    // another car or by you (the mirror check in driftBlocked).
+    if (c.driftVx && !driftBlocked(sys.list, c, playerX == null ? null : { x: playerX, z: playerZ })) {
+      const from = c.laneIdx, to = c.laneTo ?? Math.max(0, Math.min(LANES - 1, from + Math.sign(c.driftVx)));
+      if (to === from) c.driftVx = 0;
+      else {
+        const dur = laneW / Math.abs(c.driftVx);
+        const t0 = c.lcT || 0, t1 = Math.min(dur, t0 + dt);
+        // Moved by the eased DELTA, so a crash jolt (knock) on top survives.
+        c.x += (laneToX(to, halfRoad) - laneToX(from, halfRoad)) * (smooth(t1 / dur) - smooth(t0 / dur));
+        c.lcT = t1;
+        if (t1 >= dur) { c.driftVx = 0; c.laneIdx = to; c.lcT = 0; }
+        const lim = halfRoad - 6;
+        c.x = Math.max(-lim, Math.min(lim, c.x));
+      }
     }
 
     if (!c.passed && c.z < playerZ - 4) {
