@@ -56,8 +56,8 @@ export const PHYS = {
   // traffic stays proportionally paced (relative speeds unchanged).
   maxSpeed: 65,
   cruiseSpeed: 65,
-  // Nitrous overspeed during RAMPAGE — speed is allowed up to maxSpeed*boostFactor
-  // while the player.boost timer is running, for a real "kick" out of the boost.
+  // NITROUS BOOST overspeed — speed is allowed up to maxSpeed*boostFactor while
+  // the player.boost timer is running, for a real "kick" out of the boost.
   boostFactor: 1.10,
   // Three-phase ramp with a KNEE at 150 km/h where the climb rate HALVES:
   //   0 → 100 km/h over `rampPhase1Seconds` — punchy launch.
@@ -139,7 +139,7 @@ export const RACE = {
   //   below comboKmh — every close shave pays a flat, discreet bonus (no combo);
   //   at comboKmh+   — NEAR MISS COMBO territory: each shave bumps the
   //   multiplier, resetting after comboWindow seconds without another, and
-  //   fills the rampage meter (see below).
+  //   fills the nitrous meter (see below).
   comboKmh: 100,
   comboWindow: 2.8,
   // How long the CHAIN BANKED receipt shows once a chain lapses (see
@@ -153,33 +153,26 @@ export const RACE = {
   // COMBO plate gold for this long and rings a two-note chime. The number used
   // to change silently, so the ladder the whole score rides on went unnoticed.
   comboTierStamp: 0.14,
-  // RAMPAGE pacing: an unbroken chain of `rampageNearMisses` combo-tier near
-  // misses fills the nitro meter and ARMS the rampage — the player then taps the
-  // top of the screen to unleash it when THEY choose. When a rampage ends the
-  // meter is LOCKED until `rampageCooldownPasses` cars have been passed — no
-  // back-to-back rampages. 14 (was 10): earning it should feel like a feat.
-  rampageNearMisses: 14,
-  rampageCooldownPasses: 10,
-  // RAMPAGE: a nitrous boost where the car smashes through traffic (each smash
-  // adds to the combo). When it ends, an instantaneous shockwave from the car
-  // kicks out just the next 2 vehicles ahead — room to maneuver, no long clear.
-  rampageDuration: 7,      // seconds of nitrous smashing
-  // The last stretch of a rampage, during which the HUD timer strobes red and
-  // the car's aura switches to a warning flash. Invincibility used to simply
-  // evaporate mid-traffic with no tell, which turned the game's best moment
-  // into a coin flip about where you happened to be standing when it ended.
-  rampageWarnSeconds: 1.5,
-  rampageClearTime: 0,     // no clear-road grace — the exit shockwave is instantaneous
-  rampageClearDist: 120,   // search range for the exit shockwave (next 2 cars within this)
+  // NITROUS BOOST (replaced RAMPAGE 2026-11-17): an unbroken chain of
+  // `nitroNearMisses` combo-tier near misses fills the meter and ARMS the
+  // boost — the player fires it with the NITRO button when THEY choose. It is
+  // ONLY a speed boost (PHYS.boostFactor for `nitroDuration` s): no
+  // invincibility, nothing gets smashed, and a hit is a hit (it also puts the
+  // boost out). When a boost ends the meter is LOCKED until
+  // `nitroCooldownPasses` cars have been passed — no back-to-back boosts.
+  nitroNearMisses: 14,
+  nitroCooldownPasses: 10,
+  nitroDuration: 7,        // seconds of boost
   // Tension/release pacing: traffic spacing breathes ±densityWaveAmp around the
   // ramped base on a densityWavePeriod-second cycle (surge → breather → surge).
   densityWaveAmp: 0.18,
   densityWavePeriod: 22,
   // Distance milestone banner cadence (metres). Speed milestones are fixed.
   milestoneEveryM: 1000,
-  // RAMPAGE booster pickups — VERY rare, and only after the player has reached
+  // NITROUS canister pickups — VERY rare, and only after the player has reached
   // 150 km/h (the unlock is gated in main.js). Once unlocked, one spawns every
   // [min..max] metres of road — a long way apart so they're a treat, not a crutch.
+  // Driving over one fires a boost instantly.
   boosterSpacingMin: 1800,
   boosterSpacingMax: 3400,
   // The FIRST booster after the 150 km/h unlock uses this much shorter gap. With
@@ -254,10 +247,6 @@ export const RACE = {
   // third of a second of red screen.
   crashFlashDur: 0.18,
   crashFxDur: 0.38,
-  // ── RAMPAGE SMASH ── How long the contact burst lasts where a rampage (or the
-  // exit shockwave) knocks a car off the road. Shorter than crashFxDur: several
-  // can be on screen at once mid-rampage, and they must not pile into mush.
-  smashFxDur: 0.30,
   // ── THE WRECK ── The run-ending crash used to cut to the results on the SAME
   // frame: its crash flash and shards never rendered, the music hard-stopped,
   // and the player often never saw what hit them. Now the world plays on in
@@ -314,7 +303,6 @@ export const SCORE = {
   comboPerStep: 3,         // +1 to the multiplier every 3 chained beats
   nearMissBonus: 60,       // combo-tier near-miss base   (× mult × precision)
   nearMissLowBonus: 40,    // flat near-miss below comboKmh (no multiplier)
-  smashBonus: 120,         // per rampage smash           (× mult)
   // Precision (tightness) bonus on a combo near-miss: 1 → 1 + precisionMax.
   precisionMax: 0.5,
   precisionPx: 8,

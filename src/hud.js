@@ -663,54 +663,50 @@ export function drawSandwichCombo(ctx, count, timer) {
   textCentered(ctx, label, y, 17);          // emerald
 }
 
-// NITRO RAMPAGE meter — a slim row of pips just under the combo banner.
-// Gold pips fill one per combo-tier near miss; a full row fires RAMPAGE.
-// After a rampage the row goes muted blue-gray and refills as the cooldown
-// cars are passed — once spent, gold building resumes. Hidden while a rampage
-// is running and when there's nothing to show (clean screen by default).
-export function drawRampageMeter(ctx, { meter, max, cooldown, cooldownMax, active, armed, activeFrac, activeLeft }) {
+// NITROUS meter — a slim row of pips just under the combo banner. Pale-blue
+// pips fill one per combo-tier near miss; a full row ARMS the boost and strobes
+// until the NITRO button is tapped. After a boost the row goes muted blue-gray
+// and refills as the cooldown cars are passed — once spent, building resumes.
+// While a boost runs the row is its draining timer. Hidden when there's
+// nothing to show (clean screen by default).
+export function drawNitroMeter(ctx, { meter, max, cooldown, cooldownMax, active, armed, activeFrac }) {
   const cellW = 3, cellH = 2, gap = 1;
   const wTot = max * (cellW + gap) - gap;
   const x0 = ((W - wTot) / 2) | 0;
   const y = 34;   // sits below the COMBO banner + the transient SANDWICH line
-  // ── RAMPAGE RUNNING ── The row becomes a draining TIMER instead of hiding.
-  // Invincibility used to simply evaporate, mid-traffic, with no tell — so the
-  // end of the game's best moment was decided by wherever you happened to be
-  // standing. Under RACE.rampageWarnSeconds the bar strobes red: get back on a
-  // clean line, you are about to be mortal again.
+  // ── BOOST RUNNING ── The row becomes a draining timer instead of hiding.
   if (active) {
     const f = Math.max(0, Math.min(1, activeFrac || 0));
-    const warn = (activeLeft || 0) <= (RACE.rampageWarnSeconds || 1.5);
-    const hot = Math.floor(performance.now() / (warn ? 60 : 130)) % 2 === 0;
+    const hot = Math.floor(performance.now() / 130) % 2 === 0;
     rect(ctx, x0 - 2, y - 2, wTot + 4, cellH + 4, 0);        // dark plate
     rect(ctx, x0, y, wTot, cellH, 4);                        // spent track
-    rect(ctx, x0, y, (wTot * f) | 0, cellH, warn ? (hot ? 6 : 1) : (hot ? 5 : 9));
+    rect(ctx, x0, y, (wTot * f) | 0, cellH, hot ? 13 : 16);  // pale blue / blue
     return;
   }
   if (!armed && meter <= 0 && cooldown <= 0) return;
   rect(ctx, x0 - 2, y - 2, wTot + 4, cellH + 4, 0);          // dark plate
-  // ARMED — the whole row strobes white/gold: it's full and waiting on YOUR tap.
+  // ARMED — the whole row strobes white/pale blue: full and waiting on YOUR tap.
   if (armed) {
     const hot = Math.floor(performance.now() / 80) % 2 === 0;
     for (let i = 0; i < max; i++) {
-      rect(ctx, x0 + i * (cellW + gap), y, cellW, cellH, hot ? 1 : 5);
+      rect(ctx, x0 + i * (cellW + gap), y, cellW, cellH, hot ? 1 : 13);
     }
     return;
   }
   const cooling = cooldown > 0;
   const fillN = cooling ? Math.max(0, cooldownMax - cooldown) : meter;
-  // Build-up (J3): the last 3 pips pulse before RAMPAGE, faster the closer it gets.
+  // Build-up (J3): the last 3 pips pulse before it arms, faster the closer it gets.
   const near = !cooling && meter >= max - 3 && meter < max;
   const period = meter >= max - 1 ? 90 : 150;
   const pulse = near && (Math.floor(performance.now() / period) % 2 === 0);
-  const fillIdx = cooling ? 24 : (pulse ? 1 : 5);           // blue-gray / yellow (white pulse)
+  const fillIdx = cooling ? 24 : (pulse ? 1 : 13);          // blue-gray / pale blue (white pulse)
   for (let i = 0; i < max; i++) {
     rect(ctx, x0 + i * (cellW + gap), y, cellW, cellH, i < fillN ? fillIdx : 4);
   }
 }
 
-// (The armed-rampage prompt is now the hovering HTML "PRESS FOR RAMPAGE"
-// button — see #btn-rampage in index.html, shown/hidden per-frame by main.js.)
+// (The armed-boost prompt is the hovering HTML NITRO button — see #btn-nitro in
+// index.html, shown/hidden per-frame by main.js.)
 
 
 // Deterministic full-screen starfield for the game-over backdrop (separate from
@@ -730,7 +726,7 @@ export function gradeFor(score) {
   return GRADES[GRADES.length - 1];
 }
 
-export function drawGameOver(ctx, { name, score, hi, isNew, bestDelta, rankInfo, reason, passed, time, topSpeed, combo, smashed, rampages, daily }) {
+export function drawGameOver(ctx, { name, score, hi, isNew, bestDelta, rankInfo, reason, passed, time, topSpeed, combo, nitros, daily }) {
   const t = performance.now();
   const flash = Math.floor(t / 300) % 2 === 0;
   // Dark backdrop with a quiet twinkling starfield — ties the screen to the
@@ -748,7 +744,7 @@ export function drawGameOver(ctx, { name, score, hi, isNew, bestDelta, rankInfo,
   // canvas draws the banner + verdict + a trimmed ledger, centred in the upper
   // ~66% so they never sit behind that bar.
   const rowH = 12;
-  const N = 7;                       // ledger rows (score/best live in the verdict)
+  const N = 6;                       // ledger rows (score/best live in the verdict)
   const panelH = rowH * N + 10;
   const heroH = 22;
   const totalH = 26 + 2 + heroH + 10 + 10 + panelH;
@@ -821,8 +817,7 @@ export function drawGameOver(ctx, { name, score, hi, isNew, bestDelta, rankInfo,
   statRow("PASSED",     pad(passed != null ? passed : 0, 3),   1);
   statRow("TOP SPEED",  (topSpeed || 0) + " KMH",              9);
   statRow("BEST COMBO", "X" + (combo || 0),                    17);
-  statRow("SMASHED",    pad(smashed != null ? smashed : 0, 3), 9);
-  statRow("RAMPAGES",   "X" + (rampages || 0),                 5);
+  statRow("NITROUS",    "X" + (nitros || 0),                   13);
 
   let bankY = statsTop + panelH + 4;
 
@@ -855,7 +850,7 @@ export function drawGameOver(ctx, { name, score, hi, isNew, bestDelta, rankInfo,
 
 // Impact EXPLOSION — a brief expanding fireball + shrapnel sparks + a quick
 // flash, drawn at the car when a chopper barrel detonates on it. A discrete
-// one-shot (like the combo/rampage flashes), so it adds no continuous optic flow.
+// one-shot (like the combo/nitrous flashes), so it adds no continuous optic flow.
 // prog: 0 at detonation → 1 at the end.
 export function drawExplosion(ctx, prog, cx, cy) {
   const r = (3 + prog * 22) | 0;
@@ -915,32 +910,8 @@ export function drawCrashImpact(ctx, prog, cx, cy) {
   }
 }
 
-// RAMPAGE SMASH burst — the point where a rampage (or its exit shockwave) hits a
-// car: a white contact pop, gold and white shards flung out of it, then a dark
-// puff. The visible half of the takedown (sfxSmash is the audible half). Pinned
-// to the screen spot of the hit, like the crash impact, so it adds no motion of
-// its own beyond the shards. Smaller and quicker than drawCrashImpact, because
-// mid-rampage several can be on screen at once. prog: 0 at the hit -> 1.
-export function drawSmashBurst(ctx, prog, cx, cy) {
-  if (prog < 0 || prog >= 1) return;
-  if (prog < 0.18) {
-    disc(ctx, cx, cy, 4, 1);                                 // white contact pop
-    disc(ctx, cx, cy, 2, 5);
-  }
-  if (prog < 0.8) {
-    const spread = 4 + prog * 16;
-    const sz = prog < 0.35 ? 2 : 1;
-    for (let i = 0; i < 6; i++) {
-      const a = i / 6 * Math.PI * 2 + 0.5;
-      const idx = prog < 0.35 ? ((i & 1) ? 5 : 1) : ((i & 1) ? 9 : 2);
-      rect(ctx, (cx + Math.cos(a) * spread) | 0, (cy + Math.sin(a) * spread) | 0, sz, sz, idx);
-    }
-  }
-  if (prog > 0.5) disc(ctx, cx, cy - 1, (2 + prog * 3) | 0, 4);   // dark puff
-}
-
 // CRASH FLASH — a one-shot RED dither pop over the play area the instant a life
-// is lost. Same family as the zone / rampage / explosion flashes (static
+// is lost. Same family as the zone / nitrous / explosion flashes (static
 // screen-space colour only, no motion), just red and short, so the hit lands
 // even when the player's eyes are on the far end of the road.
 export function drawCrashFlash(ctx, prog) {
@@ -972,7 +943,7 @@ export function drawPerfect(ctx, timer, cx) {
 // changes, so each new zone reads as a "how far did I get" milestone. Fades over
 // its ~2s life; drawn just under the top HUD strip so it clears the play focus.
 // `low`: the COMBO banner, its CHAIN receipt or the SANDWICH line is up, so the
-// banner drops below the whole top stack (combo y11-22, sandwich y23-31, rampage
+// banner drops below the whole top stack (combo y11-22, sandwich y23-31, nitrous
 // pips y32-38). At y16 it sat ON the combo banner, and a zone change lands every
 // 50 s, usually mid-chain, so neither could be read.
 export function drawBiomeBanner(ctx, name, timer, low = false) {
@@ -1007,7 +978,7 @@ export function drawWreckFade(ctx, prog) {
 // that masks the biome's hard palette cut and sells it as a deliberate "new
 // zone" beat. One-shot (like the combo/explosion flashes), so no optic flow.
 export function drawZoneFlash(ctx, prog) {
-  // 0 must paint: a tap-unleashed rampage holds this frame in an 80 ms hit-stop.
+  // 0 must paint: a tap-fired nitrous boost holds this frame in an 80 ms hit-stop.
   if (prog < 0 || prog >= 1) return;
   ditherRect(ctx, 0, 9, W, H - 33, 1, (Math.floor(performance.now() / 30) & 1), 2);
 }
@@ -1016,7 +987,7 @@ export function drawZoneFlash(ctx, prog) {
 // (~1s, matching the heartbeat cadence): thicker + brighter at the peak, thin +
 // dark between. It's a screen-space colour/thickness pulse at the edges only —
 // no spatial motion, no optic flow — so it heightens the danger without breaking
-// the high-speed comfort rule (same family as the combo/rampage edge flashes).
+// the high-speed comfort rule (same family as the combo/nitrous edge flashes).
 export function drawLastLifePulse(ctx) {
   const p = Math.sin(performance.now() / 168) * 0.5 + 0.5;   // 0..1, ~1.05s period
   const th = 1 + Math.round(p * 2);                           // 1..3 px
@@ -1028,7 +999,7 @@ export function drawLastLifePulse(ctx) {
   rect(ctx, W - th, top, th, h, idx);
 }
 
-// Big transient popup (RAMPAGE! / CLEAR! ...) centred over the action — blinks.
+// Big transient popup (NITRO! / NITRO READY! ...) centred over the action — blinks.
 // `gold` is for the record call-outs (NEW BEST! / WORLD RECORD!), so a personal
 // triumph never reads in the same colours as a power-up.
 export function drawShieldMsg(ctx, msg, gold = false) {
@@ -1052,7 +1023,7 @@ export function drawPaused(ctx) {
 export const SHARE_CARD_W = 160;
 export const SHARE_CARD_H = 200;
 
-export function drawShareCard(ctx, { name, score, isNew, time, topSpeed, passed, combo, smashed, rampages, world }) {
+export function drawShareCard(ctx, { name, score, isNew, time, topSpeed, passed, combo, nitros, world }) {
   const Wc = SHARE_CARD_W, Hc = SHARE_CARD_H;
   // Backdrop — black with a quiet starfield and a gold double frame.
   rect(ctx, 0, 0, Wc, Hc, 0);
@@ -1093,9 +1064,8 @@ export function drawShareCard(ctx, { name, score, isNew, time, topSpeed, passed,
   row("TIME", mmss(time || 0), 1);
   row("TOP SPEED", (topSpeed || 0) + " KMH", 9);
   row("PASSED", pad(passed || 0, 3), 1);
-  row("SMASHED", pad(smashed || 0, 3), 9);
   row("BEST COMBO", "X" + (combo || 0), 17);
-  row("RAMPAGES", "X" + (rampages || 0), 5);
+  row("NITROUS", "X" + (nitros || 0), 13);
 
   // World-record challenge line.
   if (world && world.score > 0) {

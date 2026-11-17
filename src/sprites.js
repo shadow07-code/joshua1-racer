@@ -700,8 +700,8 @@ export const SPR_STAR = [
   [5,_,_,_,5],
 ];
 
-// RAMPAGE BOOSTER pickup — a blue nitrous canister topped with a flame, with a
-// yellow label band. Collecting it instantly fires a RAMPAGE. 7w × 11h.
+// NITROUS pickup — a blue nitrous canister topped with a flame, with a yellow
+// label band. Collecting it instantly fires a NITROUS BOOST. 7w × 11h.
 export const SPR_BOOST = [
   [_,_,_,5,_,_,_],     //  0 flame tip
   [_,_,9,5,9,_,_],     //  1 flame

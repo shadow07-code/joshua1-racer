@@ -42,7 +42,7 @@ export function roadCenterX(map /* unused */, _z, _x, _d) {
 export function yToDist(y) { return ((PLAYER_Y - y) / PLAYER_Y) * VIEW_AHEAD_METERS; }
 export function distToY(dist) { return PLAYER_Y - (dist / VIEW_AHEAD_METERS) * PLAYER_Y; }
 
-export function drawRoad(ctx, map, playerZ, speed = 0, biome = null, rampageOn = false) {
+export function drawRoad(ctx, map, playerZ, speed = 0, biome = null) {
   const bm = biome || BIOMES[0];
   // Speed-based "calm" factor — ramps 0→1 between 70 and 130 km/h so fast-moving
   // road detail fades out before it can strobe and strain the eyes at speed.
@@ -70,10 +70,8 @@ export function drawRoad(ctx, map, playerZ, speed = 0, biome = null, rampageOn =
 
   // ── Edge strips — solid, muted, STATIC lines (biome-coloured: cream shoulder,
   // tunnel warning-yellow, bridge railing-white). Replaces the old alternating
-  // magenta/white rumble that flickered hard at the periphery. During a RAMPAGE
-  // they turn solid gold — the whole road reads as "power mode" (colour-only
-  // swap on static columns; no flicker, no motion).
-  const edgeIdx = rampageOn ? 5 : bm.edge;
+  // magenta/white rumble that flickered hard at the periphery.
+  const edgeIdx = bm.edge;
   rect(ctx, (cx - halfW - 3) | 0, 0, 2, H, edgeIdx);
   rect(ctx, (cx + halfW + 1) | 0, 0, 2, H, edgeIdx);
 

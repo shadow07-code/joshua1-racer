@@ -1,6 +1,6 @@
 // Player car — auto-accelerate with a start-of-race speed ramp, brake, steer, slip.
 import { PHYS, RACE, PLAYER_Y, W } from "../config.js";
-import { drawSpriteNN, drawShadowNN, ring, disc, rect } from "../render.js";
+import { drawSpriteNN, drawShadowNN, disc, rect } from "../render.js";
 import { roadCenterX, headlightsLit } from "../road.js";
 import { selectedSprite } from "../garage.js";
 
@@ -16,7 +16,7 @@ export function makePlayer() {
     z: 0,            // world distance traveled (meters)
     x: 0,            // lateral offset from road center (pixels)
     speed: PHYS.startSpeed,
-    boost: 0,        // seconds of nitro remaining
+    boost: 0,        // seconds of NITROUS BOOST remaining (speed only)
     slip: 0,         // seconds of slip remaining (reverses steering)
     edgeContact: 0,  // which fence the car is currently against (-1/0/+1)
     bounce: 0,       // remaining inward rubber-fence rebound (px)
@@ -26,8 +26,6 @@ export function makePlayer() {
     invuln: 0,
     raceTime: 0,     // seconds since race started (drives the speed ramp)
     lives: 3,        // endless survival — 3 hits and you're out
-    rampage: 0,      // seconds of NITROUS RAMPAGE remaining (smash through traffic)
-    rampageClear: 0, // seconds of cleared-road grace after a rampage ends
     steerVis: 0,     // raw steer this frame (drives the lean sprite)
     steerEased: 0,   // eased effective steer (gentle from rest, snappy on release/reverse)
     _wasBraking: false,
@@ -62,7 +60,7 @@ export function updatePlayer(p, dt, input, map, callbacks) {
   p.raceTime += dt;
 
   // Target speed. Nitrous (boost) lifts both the target and the hard cap to
-  // maxSpeed * boostFactor, so a rampage genuinely surges past normal top speed.
+  // maxSpeed * boostFactor, so a boost genuinely surges past normal top speed.
   const boostCap = PHYS.maxSpeed * (PHYS.boostFactor || 1);
   let target = rampTarget(p.raceTime);
   if (p.boost > 0) {
@@ -172,8 +170,8 @@ export function drawPlayer(ctx, p, map) {
   const halfW = 10 * PLAYER_SCALE / 2;   // 5.25 at 1.05× (sprite blits ~11px wide)
   const halfH = 15 * PLAYER_SCALE / 2;   // 7.875 at 1.05× (~16px tall)
   const cxp = (cx + p.x) | 0;
-  // RAMPAGE nitrous flames blasting from the twin exhausts (behind the car).
-  if (p.rampage > 0) drawNitroFlames(ctx, cxp, (PLAYER_Y + halfH) | 0);
+  // NITROUS flames blasting from the twin exhausts (behind the car).
+  if (p.boost > 0) drawNitroFlames(ctx, cxp, (PLAYER_Y + halfH) | 0);
   // The car's cast shadow (render.js SUN), then the car itself — always
   // straight (no steering lean).
   const spr = selectedSprite();
@@ -181,7 +179,7 @@ export function drawPlayer(ctx, p, map) {
   drawSpriteNN(ctx, spr, cx + p.x - halfW + wobble, PLAYER_Y - halfH, PLAYER_SCALE);
   // (No combo glow around the car — the red/orange underglow + exhaust streaks
   // read as clutter against the sprite. The COMBO xN banner carries that
-  // feedback instead. Rampage keeps its own flames + aura below.)
+  // feedback instead. Nitrous shows as its exhaust flames, nothing more.)
   // Scraping the rubber fence throws sparks off the contact side — three
   // flickering pixels, so pinning the car against the wall finally LOOKS like it
   // costs something (it already costs speed).
@@ -203,21 +201,6 @@ export function drawPlayer(ctx, p, map) {
       if (((Math.floor(t / 45) + i * 5) % 3) === 0) continue;
       const sy = (PLAYER_Y - 4 + ((Math.floor(t / 30) + i * 7) % 12)) | 0;
       rect(ctx, sx, sy, 2, 1, (i & 1) ? 5 : 1);
-    }
-  }
-  // RAMPAGE aura — a pulsing fiery ring around the car while nitrous is active.
-  // In the final `rampageWarnSeconds` it switches to a fast red/white WARNING
-  // strobe: invincibility used to just stop, mid-traffic, with no tell at all.
-  if (p.rampage > 0) {
-    const cyp = (PLAYER_Y) | 0;
-    const ending = p.rampage <= (RACE.rampageWarnSeconds || 1.5);
-    const blink = Math.floor(performance.now() / (ending ? 45 : 70)) % 2 === 0;
-    if (ending) {
-      ring(ctx, cxp, cyp, 10, blink ? 1 : 6);  // white / red — "it's about to go"
-      ring(ctx, cxp, cyp, 11, blink ? 6 : 1);
-    } else {
-      ring(ctx, cxp, cyp, 10, blink ? 5 : 9);  // yellow / orange
-      ring(ctx, cxp, cyp, 11, blink ? 9 : 5);
     }
   }
 }
@@ -255,14 +238,18 @@ export function beamAnchor(p, map, ns) {
 }
 
 // Twin nitrous flames out the back of the car — flickering orange/yellow tongues.
+// NITROUS flames from the twin exhausts while a boost runs: blue tongues with a
+// pale-blue core and a white spit, the colour of a nitrous burn (and not the
+// orange of the fire a crash or a barrel makes). Pinned to the car, so the
+// flicker adds no optic flow.
 function drawNitroFlames(ctx, cx, baseY, t = performance.now()) {
   const flick = (Math.sin(t / 40) + Math.sin(t / 17)) * 0.5;  // -1..1
   for (const ox of [-3, 3]) {
     const len = 6 + Math.round(flick * 2 + 2);
-    disc(ctx, cx + ox, baseY + 2, 2, 9);                      // orange root
-    rect(ctx, (cx + ox) | 0, baseY + 1, 1, len, 9);           // orange tongue
-    rect(ctx, (cx + ox) | 0, baseY + 1, 1, Math.max(1, len - 3), 5); // yellow core
-    if (flick > 0.4) rect(ctx, (cx + ox) | 0, baseY + len, 1, 2, 9); // spit tip
+    disc(ctx, cx + ox, baseY + 2, 2, 16);                     // blue root
+    rect(ctx, (cx + ox) | 0, baseY + 1, 1, len, 16);          // blue tongue
+    rect(ctx, (cx + ox) | 0, baseY + 1, 1, Math.max(1, len - 3), 13); // pale-blue core
+    if (flick > 0.4) rect(ctx, (cx + ox) | 0, baseY + len, 1, 2, 1);  // white spit tip
   }
 }
 

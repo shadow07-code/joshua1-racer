@@ -291,8 +291,8 @@ function driftBlocked(cars, c, pl = null) {
   return false;
 }
 
-// Knock a car off the road — used by RAMPAGE smashes and the post-rampage road
-// clear. The car flings sideways (away from `fromX`) and tumbles back, stops
+// Knock a car off the road — used by the clear-ahead grace window below. The
+// car flings sideways (away from `fromX`) and tumbles back, stops
 // driving, and no longer collides.
 export function smashCar(c, fromX = 0) {
   if (c.smashed) return;
@@ -314,9 +314,10 @@ export function knockCar(c, dir, fromBehind) {
 }
 
 export function updateTraffic(sys, dt, playerZ, map, cbs, clearAheadDist = 0, allowOncoming = false) {
-  // Spawn ahead so the road is always populated up to ~220m ahead. During the
-  // post-rampage grace window, push the spawn cursor past the cleared zone so no
-  // fresh cars appear in the player's path.
+  // Spawn ahead so the road is always populated up to ~220m ahead. During a
+  // clear-ahead grace window (clearAheadDist > 0; nothing asks for one since the
+  // rampage went), push the spawn cursor past the cleared zone so no fresh cars
+  // appear in the player's path.
   const ahead = playerZ + 220;
   if (clearAheadDist > 0 && sys.nextRowZ < playerZ + clearAheadDist) {
     sys.nextRowZ = playerZ + clearAheadDist;
@@ -334,14 +335,14 @@ export function updateTraffic(sys, dt, playerZ, map, cbs, clearAheadDist = 0, al
     }
     while (sys.nextOncomingZ < ahead) {
       if (clearAheadDist > 0 && sys.nextOncomingZ < playerZ + clearAheadDist) {
-        sys.nextOncomingZ = playerZ + clearAheadDist;   // respect the rampage grace
+        sys.nextOncomingZ = playerZ + clearAheadDist;   // respect the grace window
       }
       spawnOncoming(sys, map, playerZ);
     }
   }
 
   // Grace window: fling any car that's in the near-ahead corridor off the road so
-  // the path in front of the player stays clear for a moment after a rampage.
+  // the path in front of the player stays clear for a moment.
   if (clearAheadDist > 0) {
     for (const c of sys.list) {
       if (!c.smashed && c.z > playerZ + 2 && c.z < playerZ + clearAheadDist) {

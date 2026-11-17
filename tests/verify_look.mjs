@@ -172,7 +172,7 @@ const sameSet = (a, b) => a.size === b.size && [...a].every((k) => b.has(k));
   add("D2 ...and thin out as they age", alphas.every((a, i) => i === 0 || a < alphas[i - 1]));
   car.smoke = [{ x: 0, z: 493, age: 0.05, fire: true }];
   reset(); smoke.drawSmoke(ctx, map, 500, 0, car);
-  add("D3 rampage fire is untouched (bright, opaque)", REC.length === 1 && REC[0].c === PALETTE[9]);
+  add("D3 nitrous burn stays opaque, nitrous blue at the nozzle", REC.length === 1 && REC[0].c === PALETTE[16]);
 }
 
 console.log("");

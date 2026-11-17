@@ -1,5 +1,5 @@
-// Rampage booster pickups — an occasional nitrous canister sitting on the road.
-// Grabbing one instantly fires a RAMPAGE (the caller handles the effect). They
+// Nitrous pickups — an occasional nitrous canister sitting on the road.
+// Grabbing one instantly fires a NITROUS BOOST (the caller handles it). They
 // spawn endlessly at a configurable spacing and are culled once past the player.
 import { RACE } from "../config.js";
 import { project, VIEW_AHEAD } from "../road.js";

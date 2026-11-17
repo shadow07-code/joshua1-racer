@@ -112,8 +112,8 @@ for (let i = 0; i < 400; i++) {
 }
 const uniq = [...new Set(ids)].sort();
 add("no THREAD GATES goal can be selected on any day", !uniq.includes("gates"), uniq.join(","));
-add("every remaining goal is still reachable by the hash", uniq.length === 6, `${uniq.length}: ${uniq.join(",")}`);
-add("no COLLECT COINS goal can be selected on any day", !uniq.includes("coins"), uniq.join(","));
+add("every remaining goal is still reachable by the hash", uniq.length === 5, `${uniq.length}: ${uniq.join(",")}`);
+add("no COLLECT COINS or SMASH goal can be selected on any day", !uniq.includes("coins") && !uniq.includes("smash"), uniq.join(","));
 const labels = [...new Set(ids.map((_, i) => null))];
 add("no goal label mentions gates",
   !ids.some((id) => id === "gates"));

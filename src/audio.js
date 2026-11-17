@@ -453,11 +453,11 @@ export function playFlourish() {
 // Multi-oscillator engine voiced as a SWEET FERRARI rather than a raw F1 rasp:
 // two gently-detuned sawtooths (8c) through a low-Q (1.0) lowpass for a smooth,
 // refined tone, plus a light sub-octave square for body (not heavy growl). The
-// whole SFX bus also sits 40% lower so it never fights the music. During RAMPAGE
+// whole SFX bus also sits 40% lower so it never fights the music. During NITROUS
 // the filter opens for an exciting snarl — aggressive, but no longer ear-splitting.
 let engineOsc2 = null, engineGainSub = null, engineOscSub = null;
 let engineFilt = null;
-let _engineRampage = false;
+let _engineNitro = false;
 // Last-life "strain" — a detune wobble LFO patched onto the engine oscillators so
 // the motor sounds like it's labouring / about to give out on the final life.
 let _engineStrain = false, engineStrainLfo = null, engineStrainGain = null;
@@ -497,7 +497,7 @@ export function startEngine() {
   engineFilt.connect(engineGain); engineGain.connect(sfxGain);
   engineOscSub.connect(engineGainSub); engineGainSub.connect(sfxGain);
   engineOsc.start(); engineOsc2.start(); engineOscSub.start();
-  _engineRampage = false;
+  _engineNitro = false;
   // Fresh engine = no strain yet; the LFO refs are gone with the old oscillators,
   // so clear the flag and let the per-frame assert re-apply it if still needed.
   _engineStrain = false; engineStrainLfo = null; engineStrainGain = null;
@@ -559,8 +559,8 @@ export function setEngine(speed01) {
   engineOsc.frequency.setTargetAtTime(f, t, 0.06);
   engineOsc2.frequency.setTargetAtTime(f * 1.006, t, 0.06);
   engineOscSub.frequency.setTargetAtTime(f * st.subMul, t, 0.06);
-  // Filter opens with speed (rampage owns it while active — see setEngineRampage).
-  if (!_engineRampage) {
+  // Filter opens with speed (nitrous owns it while active — see setEngineNitro).
+  if (!_engineNitro) {
     engineFilt.frequency.setTargetAtTime(st.filtBase + st.filtRange * curve, t, 0.08);
   }
   const vol = (st.gBase + st.gRange * curve) * engineBoost();
@@ -583,13 +583,13 @@ export function engineWindDown(dur = 0.9) {
   }
 }
 
-export function setEngineRampage(on) {
-  if (!engineFilt || !ctx || _engineRampage === on) return;
-  _engineRampage = on;
+export function setEngineNitro(on) {
+  if (!engineFilt || !ctx || _engineNitro === on) return;
+  _engineNitro = on;
   const t = ctx.currentTime;
   if (on) {
     // Aggressive but no longer harsh: lower ceiling (2200, was 2600) + softer Q
-    // (2.0, was 2.6) keep the rampage snarl exciting without the ear-splitting rasp.
+    // (2.0, was 2.6) keep the nitrous snarl exciting without the ear-splitting rasp.
     engineFilt.frequency.setTargetAtTime(2200, t, 0.08);
     engineFilt.Q.setTargetAtTime(2.0, t, 0.08);
     engineGain.gain.setTargetAtTime(0.14 * engineBoost(), t, 0.06);
@@ -737,59 +737,6 @@ export function sfxSandwich() {
     g.gain.exponentialRampToValueAtTime(0.001, t + off + 0.13);
     o.connect(g); g.connect(sfxGain);
     o.start(t + off); o.stop(t + off + 0.15);
-  });
-}
-
-// RAMPAGE SMASH — metal giving way under the nitrous. A rampage smash used to
-// play only the combo blip, so the payoff for fourteen chained near misses
-// sounded exactly like one more near miss. This is a takedown: a low body thud,
-// a crunch of noise whose filter slams shut as it falls, and a bright clank on
-// top. Pitch and noise offset vary per hit, so a string of smashes lands as a
-// pile-up rather than a machine gun. Throttled: a shockwave can smash two at once.
-export function sfxSmash(pan = 0) {
-  if (!ctx || !throttle("smash", 60)) return;
-  const t = ctx.currentTime;
-  const out = sfxOut(pan);
-  const k = 0.88 + Math.random() * 0.24;
-  const o = ctx.createOscillator(); o.type = "square";
-  o.frequency.setValueAtTime(150 * k, t);
-  o.frequency.exponentialRampToValueAtTime(46 * k, t + 0.12);
-  const og = ctx.createGain(); og.gain.value = 0;
-  og.gain.linearRampToValueAtTime(0.20, t + 0.005);
-  og.gain.exponentialRampToValueAtTime(0.001, t + 0.15);
-  o.connect(og); og.connect(out);
-  o.start(t); o.stop(t + 0.17);
-  const src = ctx.createBufferSource(); src.buffer = getNoiseBuf();
-  const lp = ctx.createBiquadFilter(); lp.type = "lowpass"; lp.Q.value = 1.2;
-  lp.frequency.setValueAtTime(3600 * k, t);
-  lp.frequency.exponentialRampToValueAtTime(380, t + 0.16);
-  const ng = ctx.createGain(); ng.gain.value = 0;
-  ng.gain.linearRampToValueAtTime(0.30, t + 0.004);
-  ng.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
-  src.connect(lp); lp.connect(ng); ng.connect(out);
-  src.start(t, Math.random() * 0.6); src.stop(t + 0.2);
-  const src2 = ctx.createBufferSource(); src2.buffer = getNoiseBuf();
-  const bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 2800 * k; bp.Q.value = 7;
-  const cg = ctx.createGain(); cg.gain.value = 0;
-  cg.gain.linearRampToValueAtTime(0.16, t + 0.003);
-  cg.gain.exponentialRampToValueAtTime(0.001, t + 0.07);
-  src2.connect(bp); bp.connect(cg); cg.connect(out);
-  src2.start(t, Math.random() * 0.6); src2.stop(t + 0.08);
-}
-
-// RAMPAGE ENDING — two urgent low ticks with RACE.rampageWarnSeconds left, the
-// audio half of the red strobe on the meter and the car's aura. Deliberately
-// dark and dry: this is a warning, not a reward.
-export function sfxRampageWarn() {
-  if (!ctx) return;
-  const t = ctx.currentTime;
-  [0, 0.14].forEach((off) => {
-    const o = ctx.createOscillator(); o.type = "square"; o.frequency.value = 196;
-    const g = ctx.createGain(); g.gain.value = 0;
-    g.gain.linearRampToValueAtTime(0.15, t + off + 0.006);
-    g.gain.exponentialRampToValueAtTime(0.001, t + off + 0.10);
-    o.connect(g); g.connect(sfxGain);
-    o.start(t + off); o.stop(t + off + 0.12);
   });
 }
 
@@ -962,10 +909,10 @@ export function sfxPerfect() {
   });
 }
 
-// Rampage ARMED — a triumphant rising fanfare + a held shimmer note: the meter
-// is full and the nitrous is YOURS to unleash. Brighter and longer than the
-// charge blips so the moment clearly reads as "you earned it — now tap".
-export function sfxRampageReady() {
+// Nitrous ARMED — a triumphant rising fanfare + a held shimmer note: the meter
+// is full and the boost is YOURS to fire. Brighter and longer than the charge
+// blips so the moment clearly reads as "you earned it — now tap".
+export function sfxNitroReady() {
   if (!ctx) return;
   const t = ctx.currentTime;
   [392, 523, 659, 784, 1046].forEach((f, i) => {
@@ -985,9 +932,9 @@ export function sfxRampageReady() {
   o2.start(t + 0.2); o2.stop(t + 0.8);
 }
 
-// Rampage CHARGE — a short rising blip whose pitch climbs with `step` (0..3) so
-// the last few near-misses before a rampage audibly "spin up" the nitrous.
-export function sfxRampageCharge(step = 0) {
+// Nitrous CHARGE — a short rising blip whose pitch climbs with `step` (0..3) so
+// the last few near-misses before the boost arms audibly "spin up" the nitrous.
+export function sfxNitroCharge(step = 0) {
   if (!ctx) return;
   const t = ctx.currentTime;
   const base = 300 * Math.pow(2, Math.max(0, Math.min(3, step)) / 3);
@@ -999,40 +946,6 @@ export function sfxRampageCharge(step = 0) {
   g.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
   o.connect(g); g.connect(sfxGain);
   o.start(t); o.stop(t + 0.24);
-}
-
-// Shield EARNED — a bright ascending arpeggio (you powered up).
-export function sfxShieldUp() {
-  if (!ctx) return;
-  const t = ctx.currentTime;
-  [392, 523, 659, 880].forEach((f, i) => {
-    const o = ctx.createOscillator(); o.type = "square"; o.frequency.value = f;
-    const g = ctx.createGain(); g.gain.value = 0;
-    g.gain.linearRampToValueAtTime(0.16, t + i * 0.05 + 0.005);
-    g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.05 + 0.16);
-    o.connect(g); g.connect(sfxGain);
-    o.start(t + i * 0.05); o.stop(t + i * 0.05 + 0.18);
-  });
-}
-
-// Shield ABSORBS a hit — a metallic "whomp" (descending tone + filtered noise).
-export function sfxShieldHit() {
-  if (!ctx) return;
-  const t = ctx.currentTime;
-  const o = ctx.createOscillator(); o.type = "square";
-  o.frequency.setValueAtTime(700, t);
-  o.frequency.exponentialRampToValueAtTime(160, t + 0.22);
-  const g = ctx.createGain(); g.gain.value = 0;
-  g.gain.linearRampToValueAtTime(0.20, t + 0.01);
-  g.gain.exponentialRampToValueAtTime(0.001, t + 0.26);
-  o.connect(g); g.connect(sfxGain);
-  o.start(t); o.stop(t + 0.28);
-  const src = ctx.createBufferSource(); src.buffer = getNoiseBuf();
-  const filt = ctx.createBiquadFilter(); filt.type = "bandpass"; filt.frequency.value = 1400; filt.Q.value = 1.5;
-  const ng = ctx.createGain(); ng.gain.value = 0.16;
-  ng.gain.exponentialRampToValueAtTime(0.001, t + 0.18);
-  src.connect(filt); filt.connect(ng); ng.connect(sfxGain);
-  src.start(t); src.stop(t + 0.2);
 }
 
 export function sfxCrash() {
@@ -1135,26 +1048,6 @@ export function stopHeliSound() {
   try { heliLfo.stop(); } catch {}
   heliSrc.disconnect(); heliGain.disconnect(); heliLfo.disconnect(); heliLfoGain.disconnect();
   heliSrc = heliGain = heliLfo = heliLfoGain = null;
-}
-
-// Post-rampage shockwave — a deep concussive boom + high woosh.
-export function sfxShockwave() {
-  if (!ctx) return;
-  const t = ctx.currentTime;
-  const o = ctx.createOscillator(); o.type = "sine";
-  o.frequency.setValueAtTime(80, t);
-  o.frequency.exponentialRampToValueAtTime(25, t + 0.35);
-  const g = ctx.createGain(); g.gain.value = 0;
-  g.gain.linearRampToValueAtTime(0.30, t + 0.02);
-  g.gain.exponentialRampToValueAtTime(0.001, t + 0.40);
-  o.connect(g); g.connect(sfxGain);
-  o.start(t); o.stop(t + 0.42);
-  const src = ctx.createBufferSource(); src.buffer = getNoiseBuf();
-  const filt = ctx.createBiquadFilter(); filt.type = "bandpass"; filt.frequency.value = 600; filt.Q.value = 0.8;
-  const ng = ctx.createGain(); ng.gain.value = 0.18;
-  ng.gain.exponentialRampToValueAtTime(0.001, t + 0.30);
-  src.connect(filt); filt.connect(ng); ng.connect(sfxGain);
-  src.start(t); src.stop(t + 0.35);
 }
 
 // Compatibility no-ops (other modules may still call these).

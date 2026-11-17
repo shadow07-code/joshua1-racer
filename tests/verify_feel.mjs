@@ -180,52 +180,54 @@ function sysWithCars() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// E. RAMPAGE TIMER — drains, warns, and never blanks the row mid-boost
+// E. NITROUS TIMER — drains, never blanks mid-boost, and never cries wolf
 // ══════════════════════════════════════════════════════════════════════════════
 {
-  const base = { meter: 0, max: RACE.rampageNearMisses, cooldown: 0, cooldownMax: RACE.rampageCooldownPasses, armed: false };
-  // The old behaviour: nothing at all while a rampage ran.
+  const base = { meter: 0, max: RACE.nitroNearMisses, cooldown: 0, cooldownMax: RACE.nitroCooldownPasses, armed: false };
+  const BLUE = [PALETTE[13], PALETTE[16]];
   let widths = [];
   for (const left of [7, 5, 3, 1.5, 0.6, 0.1]) {
     reset();
-    hud.drawRampageMeter(ctx, { ...base, active: true, activeFrac: left / RACE.rampageDuration, activeLeft: left });
+    hud.drawNitroMeter(ctx, { ...base, active: true, activeFrac: left / RACE.nitroDuration });
     add(`timer visible with ${left}s left`, REC.length > 0, `${REC.length} draws`);
-    // The fill bar is the widest non-plate rect drawn in a hot colour.
-    const hot = REC.filter(r => [PALETTE[5], PALETTE[9], PALETTE[6], PALETTE[1]].includes(r.c));
+    // The fill bar is the widest rect drawn in nitrous blue.
+    const hot = REC.filter(r => BLUE.includes(r.c));
     widths.push(hot.length ? Math.max(...hot.map(r => r.w)) : 0);
   }
   add("the timer bar drains monotonically",
-    widths.every((w, i) => i === 0 || w <= widths[i - 1]), widths.join(" > "));
-
-  // Warning colours must appear only inside the warn window, and must do so at
-  // BOTH blink phases (otherwise half the time there is no warning at all).
-  const warnCols = (left, clock) => {
+    widths.every((w, i) => i === 0 || w <= widths[i - 1]) && widths[0] > widths[widths.length - 1], widths.join(" > "));
+  // It is only a speed boost: there is nothing to warn about, so no red, ever.
+  const cols = (left, clock) => {
     CLOCK = clock; reset();
-    hud.drawRampageMeter(ctx, { ...base, active: true, activeFrac: left / RACE.rampageDuration, activeLeft: left });
+    hud.drawNitroMeter(ctx, { ...base, active: true, activeFrac: left / RACE.nitroDuration });
     return new Set(REC.map(r => r.c));
   };
-  const isWarn = (s) => s.has(PALETTE[6]) || s.has(PALETTE[1]);
-  add("no red warning above the warn window", !isWarn(warnCols(3.0, 0)) && !isWarn(warnCols(3.0, 60)),
-    "");
-  add("red warning shows at both blink phases inside the window",
-    isWarn(warnCols(1.0, 0)) && isWarn(warnCols(1.0, 60)), "");
+  add("no red warning strobe anywhere in the boost",
+    [7, 3, 1.0, 0.2].every(l => [0, 60, 130].every(c => !cols(l, c).has(PALETTE[6]))), "");
+  add("the running bar is nitrous blue at both blink phases",
+    cols(3, 0).has(PALETTE[13]) && cols(3, 130).has(PALETTE[16]), "");
+  reset(); CLOCK = 0; hud.drawNitroMeter(ctx, { ...base, armed: true, active: false });
+  const armedA = new Set(REC.map(r => r.c));
+  reset(); CLOCK = 80; hud.drawNitroMeter(ctx, { ...base, armed: true, active: false });
+  const armedB = new Set(REC.map(r => r.c));
+  add("armed: the row strobes white / pale blue", armedA.has(PALETTE[1]) && armedB.has(PALETTE[13]), "");
   CLOCK = 0;
 
-  // The unarmed/idle behaviour must be untouched: a clean screen by default.
-  reset(); hud.drawRampageMeter(ctx, { ...base, active: false });
+  // The idle behaviour must be untouched: a clean screen by default.
+  reset(); hud.drawNitroMeter(ctx, { ...base, active: false });
   add("meter still hides when idle", REC.length === 0, `${REC.length} draws`);
-  reset(); hud.drawRampageMeter(ctx, { ...base, meter: 4, active: false });
+  reset(); hud.drawNitroMeter(ctx, { ...base, meter: 4, active: false });
   add("meter still shows while building", REC.length > 0, `${REC.length} draws`);
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
-// F. PLAYER EXTRAS — fence sparks and the rampage-expiry aura
+// F. PLAYER EXTRAS — fence sparks and the nitrous flames
 // ══════════════════════════════════════════════════════════════════════════════
 {
   const p = player.makePlayer();
   p.speed = PHYS.maxSpeed; p.x = 0;
-  // A spark is the only 2x1 gold/white rect drawPlayer emits (the ground shadow
-  // is 8-10px wide index 4; the rampage aura is 1x1). Match on that shape rather
+  // A spark is the only 2x1 gold/white rect drawPlayer emits (the nitrous
+  // flames are 1px wide). Match on that shape rather
   // than on "outside the car" — the spark deliberately STRADDLES the car's
   // outline column so it contrasts against every biome's edge strip.
   const sparks = () => REC.filter(r => r.w === 2 && r.h === 1
@@ -246,16 +248,16 @@ function sysWithCars() {
   add("sparks fly off the contact side only", sideOk);
   CLOCK = 0; p.edgeContact = 0; p.x = 0;
 
-  // The aura must switch to the red/white warning strobe as the boost dies.
-  const auraCols = (rampage, clock) => {
-    CLOCK = clock; p.rampage = rampage; p.invuln = 0; reset(); player.drawPlayer(ctx, p, map);
-    return new Set(REC.map(r => r.c));
-  };
-  const mid = auraCols(5, 0), end = auraCols(1.0, 0), end2 = auraCols(1.0, 45);
-  add("mid-rampage aura is gold/orange", mid.has(PALETTE[5]) && mid.has(PALETTE[9]) && !mid.has(PALETTE[6]), "");
-  add("expiring aura turns red/white at both phases",
-    end.has(PALETTE[6]) && end.has(PALETTE[1]) && end2.has(PALETTE[6]) && end2.has(PALETTE[1]), "");
-  CLOCK = 0;
+  // NITROUS flames: only while boosting, nitrous blue (not fire orange), behind
+  // the car; and no aura ring round it any more (it signalled invincibility).
+  const draw = (boost) => { p.boost = boost; p.invuln = 0; reset(); player.drawPlayer(ctx, p, map); return REC.filter(r => r.c !== "IMG"); };
+  const off = draw(0), on = draw(3);
+  add("no flames without a boost", off.length === 0, `${off.length} draws`);
+  add("boosting: blue nitrous flames, behind the car",
+    on.length > 0 && on.some(r => r.c === PALETTE[16]) && on.some(r => r.c === PALETTE[13])
+      && !on.some(r => r.c === PALETTE[9]) && on.every(r => r.y > PLAYER_Y + 4), JSON.stringify(on.slice(0, 3)));
+  add("no aura ring around the car", !on.some(r => r.y < PLAYER_Y - 8));
+  p.boost = 0; CLOCK = 0;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

@@ -168,8 +168,8 @@ let main = fs.readFileSync(path.join(ROOT, "src/main.js"), "utf8");
 main = main.replace(/from "\.\/([^"]+)"/g, (m, rel) =>
   rel === "audio.js" ? `from ${JSON.stringify(pathToFileURL(path.join(GEN, "audio_spy.mjs")).href)}`
                      : `from ${JSON.stringify(srcUrl(rel))}`);
-const exportNames = ["g", "STATES", "update", "render", "frame", "takeHit", "unleashRampage",
-  "newRaceSetup", "beginCountdown", "beginRace", "endRace", "playAgain", "registerSmash", "comboMult"];
+const exportNames = ["g", "STATES", "update", "render", "frame", "takeHit", "fireNitro",
+  "newRaceSetup", "beginCountdown", "beginRace", "endRace", "playAgain", "comboMult"];
 const present = exportNames.filter((n) => new RegExp(`(const|function|let) ${n}\\b`).test(main));
 main += `\nexport { ${present.join(", ")} };\n`;
 for (const extra of (globalThis.__EXTRA_EXPORTS || [])) {

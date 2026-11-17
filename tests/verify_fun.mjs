@@ -12,18 +12,17 @@ const WHITE = PALETTE[1], GOLD = PALETTE[5];
 const within = (r, x0, y0, x1, y1) => r.x >= x0 && r.x <= x1 && r.y >= y0 && r.y <= y1;
 // A fresh race, driven "blind" (no steering) for `settle` seconds to get up to
 // speed. Invulnerable while settling: the opening is busy enough that a blind
-// car WILL hit traffic. No booster canisters while it settles either: a blind
-// car that happens to run one over starts a RAMPAGE, and a crash test run
-// inside one is a smash, not a crash. Then every test-relevant state is put
-// back to clean.
+// car WILL hit traffic. No nitrous canisters while it settles either: a blind
+// car that happens to run one over starts a NITROUS BOOST, and every test
+// after it would start at the wrong speed. Then every test-relevant state is
+// put back to clean.
 const fresh = (settle = 0) => {
   H.seed(7); if (g.state !== STATES.TITLE) g.state = STATES.TITLE; H.tick(); H.startRace();
   for (let i = 0; i < Math.round(settle * 60); i++) { g.player.invuln = 99; g.player.lives = 3; g.pickups.list.length = 0; H.tick(); }
   if (settle) {
     H.run(0.5);   // let any freeze / shove from the settle finish
     Object.assign(g.player, { invuln: 0, lives: 3, bounce: 0 });
-    Object.assign(g, { combo: 0, comboTimer: 0, chainPts: 0, tallyTimer: 0, hitStop: 0, hitStopCool: 0, rampageMeter: 0, rampageArmed: false, crashFlash: 0, crashFx: 0 });
-    g.smashFx.length = 0;
+    Object.assign(g, { combo: 0, comboTimer: 0, chainPts: 0, tallyTimer: 0, hitStop: 0, hitStopCool: 0, nitroMeter: 0, nitroArmed: false, crashFlash: 0, crashFx: 0 });
   }
 };
 const liveCar = () => g.traffic.list.find((c) => !c.smashed && !c.oncoming);
@@ -60,50 +59,57 @@ if (sections.includes("0")) {
   const red = REC.list.filter((r) => r.c === PALETTE[6]).length;
   add("0b the freeze frame shows the red crash flash", red > 200, `${red} red cells`);
   add("0c ...and the white contact burst at the car", REC.list.some((r) => r.c === WHITE && Math.abs(r.y - PLAYER_Y) <= 8));
-  // Tap-unleashed rampage: its 80 ms freeze must show the unleash flash.
+  // Tap-fired nitrous: its 80 ms freeze must show the fire flash.
   fresh(8);
-  g.rampageArmed = true;
-  M.unleashRampage();
+  g.nitroArmed = true;
+  M.fireNitro();
   REC.on = true; REC.list = []; H.tick(); REC.on = false;
   const white = REC.list.filter((r) => r.c === WHITE && r.w === 2 && r.h === 2).length;
-  add("0d the rampage unleash freeze shows its white flash", g.hitStop > 0 && white > 200, `${white} white cells, hitStop ${g.hitStop}`);
+  add("0d the nitrous fire freeze shows its white flash", g.hitStop > 0 && white > 200, `${white} white cells, hitStop ${g.hitStop}`);
 }
 
-// ═══ 1. RAMPAGE SMASH — takedowns you can hear and see ═══════════════════════
+// ═══ 1. NITROUS BOOST — only a speed boost, and a hit is still a hit ═════════
 if (sections.includes("1")) {
-  fresh(6);
-  g.player.rampage = 7; g.player.boost = 7;
-  const s0 = H.audioCalls("sfxSmash").length, c0 = H.audioCalls("sfxCombo").length;
-  const car = liveCar(); car.z = g.player.z + 2; car.x = g.player.x;
-  REC.on = true; REC.list = [];
+  const btn = document.getElementById("btn-nitro");
+  fresh(10); quietRoad();
+  // Earn it: an unbroken chain of combo-tier shaves arms it.
+  let shaved = 0;
+  for (let i = 0; i < RACE.nitroNearMisses; i++) if (nearMiss()) shaved++;
   H.tick();
-  REC.on = false;
-  add("1a rampage smash plays the crunch (sfxSmash) once", H.audioCalls("sfxSmash").length - s0 === 1);
-  add("1b ...and still plays the combo blip", H.audioCalls("sfxCombo").length - c0 === 1);
-  add("1c a contact burst is spawned at the hit", g.smashFx.length === 1 && Math.abs(g.smashFx[0].sy - PLAYER_Y) < 12, JSON.stringify(g.smashFx));
-  const f = g.smashFx[0] || { sx: -99, sy: -99 };
-  const near = REC.list.filter((r) => within(r, f.sx - 8, f.sy - 8, f.sx + 8, f.sy + 8));
-  add("1d the burst is DRAWN on the frame of the hit (white pop)", near.some((r) => r.c === WHITE), `${near.length} rects near the hit`);
-  H.run(RACE.smashFxDur + 0.05);
-  add("1e the burst expires after smashFxDur", g.smashFx.length === 0);
-  // Exit shockwave: two cars ahead get the takedown beat too, and score nothing.
-  const sc = g.scoreState.score;
-  const ahead = g.traffic.list.filter((c) => !c.smashed && !c.oncoming).slice(0, 2);
-  ahead.forEach((c, i) => { c.z = g.player.z + 30 + i * 15; });
-  g.player.rampage = 1 / 120;
-  const s1 = H.audioCalls("sfxSmash").length;
+  add("1a an unbroken chain of nitroNearMisses shaves arms the nitrous", g.nitroArmed && shaved === RACE.nitroNearMisses, `armed ${g.nitroArmed}, ${shaved} shaves, meter ${g.nitroMeter}`);
+  add("1b ...calls NITRO READY! and shows the NITRO button", g.shieldMsg === "NITRO READY!" && btn.classList.contains("show"));
+  // Fire it with Enter (the button's desktop twin).
+  H.key("Enter"); H.key("Enter", "keyup"); H.tick();
+  add("1c firing starts the boost and hides the button", g.player.boost > 0 && !g.nitroArmed && g.shieldMsg === "NITRO!", `boost ${g.player.boost}`);
   H.tick();
-  add("1f exit shockwave: contact bursts on the cars it kicks out", g.smashFx.length >= 1, `${g.smashFx.length} bursts`);
-  add("1g exit shockwave: the crunch is triggered for each car it kicks out", H.audioCalls("sfxSmash").length - s1 === g.smashFx.length, `${H.audioCalls("sfxSmash").length - s1} calls`);
-  // Draw-only: burst never paints into the HUD strips.
-  REC.on = true; REC.list = [];
-  for (const p of [0, 0.1, 0.3, 0.6, 0.9]) hud.drawSmashBurst({ set fillStyle(v) { this.c = v; }, fillRect(x, y, w, h) { REC.list.push({ x, y, w, h, c: this.c }); } }, p, 80, PLAYER_Y);
-  REC.on = false;
-  add("1h burst stays local (within 22px of the hit)", REC.list.every((r) => Math.abs(r.x - 80) <= 22 && Math.abs(r.y - PLAYER_Y) <= 22));
-  let none = 0; hud.drawSmashBurst({ set fillStyle(v) {}, fillRect() { none++; } }, 1, 80, PLAYER_Y);
-  add("1i burst draws nothing once finished", none === 0);
+  add("1d ...the button is gone while it runs", !btn.classList.contains("show"));
+  H.run(3);
+  add("1e it is a real speed boost: past normal top speed, capped at boostFactor",
+    g.player.speed > PHYS.maxSpeed && g.player.speed <= PHYS.maxSpeed * PHYS.boostFactor + 1e-9, `speed ${g.player.speed.toFixed(2)} (top ${PHYS.maxSpeed})`);
+  // No invincibility: a car dead ahead is a crash like any other.
+  const lives0 = g.player.lives, sc0 = g.scoreState.score;
+  const car = { skin: SKIN, z: g.player.z + 1, x: g.player.x, laneIdx: 0, speed: 5, cruise: 5, passed: false, nearMissed: false,
+    driftVx: 0, pendingDriftVx: 0, signalT: 0, sigPhase: 0, closingVx: 0 };
+  g.traffic.list.push(car);
+  H.tick();
+  add("1f a hit during the boost costs a life (no invincibility)", g.player.lives === lives0 - 1, `lives ${lives0} -> ${g.player.lives}`);
+  add("1g ...nothing is smashed off the road, and no smash scores", !car.smashed && g.scoreState.score - sc0 < 50, `+${(g.scoreState.score - sc0).toFixed(1)}`);
+  add("1h ...and the hit puts the boost out", g.player.boost === 0);
+  // The frame the end is processed (after the impact freeze) locks the meter;
+  // passes after it burn the cooldown down as usual.
+  let k = 0; while (g.nitroOn && k++ < 60) H.tick();
+  add("1i the boost's end locks the meter for the cooldown", !g.nitroOn && g.nitroCooldown === RACE.nitroCooldownPasses, `cooldown ${g.nitroCooldown}`);
+  add("1j no smash machinery is left", M.registerSmash === undefined && M.unleashRampage === undefined && !("smashFx" in g) && RACE.rampageDuration === undefined);
+  // A nitrous canister fires one instantly, and it runs out on its own.
+  fresh(10); quietRoad();
+  g.pickups.list.push({ z: g.player.z + 2, x: g.player.x, alive: true, bob: 0 });
+  let n = 0; while (!g.nitroOn && n++ < 60) H.tick();
+  add("1k a nitrous canister fires a boost instantly", g.nitroOn && g.player.boost > 0 && g.nitrosUsed === 1, `boost ${g.player.boost}`);
+  H.run(RACE.nitroDuration + 0.2);
+  add("1l it runs out after nitroDuration", g.player.boost === 0 && !g.nitroOn);
+  H.run(8);
+  add("1m ...and the speed settles back under normal top speed", g.player.speed <= PHYS.maxSpeed + 1e-9, `speed ${g.player.speed.toFixed(2)}`);
 }
-
 
 // ═══ 2. CHAIN BANKED — a chain ends with a receipt ═══════════════════════════
 if (sections.includes("2")) {
@@ -539,15 +545,7 @@ if (sections.includes("a")) {
   const bump = H.audioCalls("sfxBump").slice(b0);
   add("a5 hitting the RIGHT fence thuds on the right", bump.length === 1 && bump[0][1] === 0.7, JSON.stringify(bump));
   H.run(0.8);
-  // Smash of a car on the left.
-  g.player.x = 0; g.player.rampage = 3; g.player.boost = 3;
-  const s0 = H.audioCalls("sfxSmash").length;
-  g.traffic.list.push({ skin: SKIN, z: g.player.z + 1, x: -6, laneIdx: 2, speed: 5, cruise: 5, passed: false, nearMissed: false,
-    driftVx: 0, pendingDriftVx: 0, signalT: 0, sigPhase: 0, closingVx: 0 });
-  H.tick();
-  const sm = H.audioCalls("sfxSmash").slice(s0);
-  add("a6 a smash left of centre crunches on the left", sm.length === 1 && sm[0][1] < 0, JSON.stringify(sm));
-  g.player.rampage = 0; g.player.boost = 0; H.run(0.5);
+  g.player.x = 0; H.run(0.5);
   // A browser with no StereoPannerNode: same sounds, mono, no crash.
   const AC = window.AudioContext.prototype, keep = AC.createStereoPanner;
   delete AC.createStereoPanner;
@@ -692,15 +690,6 @@ if (sections.includes("d")) {
   add("d3 the stamped plate is gold, and dark again 0.3 s later",
     plateGold && plateGold[0] === GOLD && plateLater && plateLater[0] === PALETTE[0],
     JSON.stringify({ plateGold, plateLater }));
-
-  // Rampage smashes climb the same ladder.
-  const car = { skin: SKIN, z: g.player.z + 20, x: g.player.x, laneIdx: 0, speed: 5, cruise: 5 };
-  g.combo = 2;
-  const b2 = tierCalls().length;
-  H.M.registerSmash(car);
-  H.M.registerSmash(car);
-  add("d4 a rampage smash that crosses a tier rings it too (once)",
-    JSON.stringify(tierCalls().slice(b2)) === "[2]", JSON.stringify(tierCalls().slice(b2)));
 
   // The zone banner: up top when the strip is free, below the stack when not.
   const label = "- " + g.biomeName + " -";

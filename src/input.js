@@ -61,7 +61,7 @@ window.addEventListener("keyup", (e) => {
 // controls that live up there — the sound toggles top-right and the pause button
 // top-left — so reaching for them never yanks the car sideways. (It was bottom-
 // half only, which wasted a lot of reachable screen; 0 = no dead zone at all.)
-// HTML overlays (the ◀▶ pads, the rampage button) sit above the canvas and
+// HTML overlays (the ◀▶ pads, the NITRO button) sit above the canvas and
 // swallow their own taps, so pressing them never steers either.
 const STEER_TOP_FRAC = 0.25;
 

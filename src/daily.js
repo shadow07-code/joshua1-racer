@@ -33,12 +33,12 @@ const KEY = "joshua1.daily.v1";
 // `distance` was unaffected (6009 vs the ~6000 it was set against), so it did not
 // move. A daily should want 2-4 runs, so the 'sum' targets sit above what any
 // single good run delivers — otherwise the day's goal falls out of the first
-// attempt and stops being a reason to come back. (The COINS goal went with the
-// coins on 2026-11-17, which reshuffled which goal falls on which date.)
+// attempt and stops being a reason to come back. (The COINS and SMASH goals went
+// with the coins and the rampage on 2026-11-17, which reshuffled which goal
+// falls on which date.)
 const GOALS = [
   { id: "dist",  mode: "sum",  stat: "distance", tiers: [8000, 14000, 20000],   label: n => "DRIVE " + n + "M" },
   { id: "pass",  mode: "sum",  stat: "passed",   tiers: [335, 600, 920],        label: n => "PASS " + n + " CARS" },
-  { id: "smash", mode: "sum",  stat: "smashed",  tiers: [12, 20, 30],           label: n => "SMASH " + n + " CARS" },
   { id: "combo", mode: "best", stat: "combo",    tiers: [15, 22, 30],           label: n => "REACH X" + n + " COMBO" },
   { id: "score", mode: "best", stat: "score",    tiers: [30000, 55000, 85000],  label: n => "SCORE " + n + " IN A RUN" },
   { id: "time",  mode: "best", stat: "time",     tiers: [60, 90, 120],          label: n => "SURVIVE " + n + " SECONDS" },
@@ -150,8 +150,7 @@ export function getDaily() {
 
 // Fold one finished run into today's progress.
 //
-// `run` carries the run summary: { distance, passed, smashed, combo, score,
-// time }. Returns { completed, prog, target, label, streak } — `completed` is
+// `run` carries the run summary: { distance, passed, combo, score, time }. Returns { completed, prog, target, label, streak } — `completed` is
 // true ONLY on the run that crosses the line, so the caller can fire the
 // celebration exactly once.
 export function applyRun(run) {

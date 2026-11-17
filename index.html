@@ -158,11 +158,11 @@
       border-width: 3px;
       border-radius: 7px;
     }
-    /* RAMPAGE button — a big round red slam-button sitting BOTTOM-CENTRE, in easy
-       thumb reach between the two steer arrows. Shown ONLY while the nitro meter
-       is armed, pulsing with a hot red glow so it's unmissable mid-flow.
+    /* NITRO button — a big round blue slam-button sitting BOTTOM-CENTRE, in easy
+       thumb reach between the two steer arrows. Shown ONLY while the nitrous
+       meter is armed, pulsing with a cold blue glow so it's unmissable mid-flow.
        Shown/hidden per-frame by main.js. */
-    #btn-rampage {
+    #btn-nitro {
       position: fixed;
       bottom: calc(env(safe-area-inset-bottom) + 13%);
       left: 50%;
@@ -173,34 +173,36 @@
       width: 78px;
       height: 78px;
       border-radius: 50%;
-      background: #D42D00;                 /* deep fire red */
+      background: #1078E0;                 /* nitrous blue */
       color: #fff;
-      border: 4px solid #FFA424;           /* amber flame rim */
+      border: 4px solid #80D0FC;           /* pale-blue rim */
       padding: 0;
       font: inherit;
-      font-size: 36px;
+      font-size: 15px;
+      font-weight: bold;
+      letter-spacing: 1px;
       line-height: 1;
       cursor: pointer;
       z-index: 10;                         /* above the steer pads */
-      animation: rampagePulse 0.55s ease-in-out infinite;
+      animation: nitroPulse 0.55s ease-in-out infinite;
       -webkit-tap-highlight-color: transparent;
       touch-action: none;
       user-select: none;
     }
-    #btn-rampage.show { display: inline-flex; }
-    #btn-rampage:active {
-      background: #FF8A14;                 /* flares bright orange on press */
+    #btn-nitro.show { display: inline-flex; }
+    #btn-nitro:active {
+      background: #5C94FC;                 /* flares bright on press */
       transform: translateX(-50%) translateY(3px) scale(0.94);
       box-shadow: 0 1px 0 rgba(0, 0, 0, 0.5) !important;
       animation: none;
     }
-    /* Breathes like a flame: deep fire red → bright orange, with a hot glow. */
-    @keyframes rampagePulse {
-      0%, 100% { box-shadow: 0 4px 0 rgba(0,0,0,0.5), 0 0 10px 3px rgba(212,45,0,0.6);  background: #D42D00; }
-      50%      { box-shadow: 0 4px 0 rgba(0,0,0,0.5), 0 0 26px 10px rgba(255,138,20,0.95); background: #FF5F00; }
+    /* Breathes like a nitrous burn: deep blue -> bright blue, with a cold glow. */
+    @keyframes nitroPulse {
+      0%, 100% { box-shadow: 0 4px 0 rgba(0,0,0,0.5), 0 0 10px 3px rgba(16,120,224,0.6);   background: #1078E0; }
+      50%      { box-shadow: 0 4px 0 rgba(0,0,0,0.5), 0 0 26px 10px rgba(128,208,252,0.95); background: #3C9CF0; }
     }
     @media (prefers-reduced-motion: reduce) {
-      #btn-rampage { animation: none; box-shadow: 0 4px 0 rgba(0,0,0,0.5), 0 0 18px 6px rgba(255,130,10,0.7); }
+      #btn-nitro { animation: none; box-shadow: 0 4px 0 rgba(0,0,0,0.5), 0 0 18px 6px rgba(128,208,252,0.7); }
     }
 
     /* Pause button — fixed top-left, below the score strip. display is toggled
@@ -665,9 +667,9 @@
        combo / sandwich-combo text). Shown only during a race (wired in main.js). -->
   <button id="btn-pause" title="Pause (P)" aria-label="Pause game">⏸</button>
 
-  <!-- Rampage slam-button — big and round, bottom-centre between the steer
-       arrows. Shown only while the nitro meter is armed (wired in main.js). -->
-  <button id="btn-rampage" aria-label="Unleash the armed rampage" title="Unleash rampage">🔥</button>
+  <!-- NITRO button — big and round, bottom-centre between the steer arrows.
+       Shown only while the nitrous meter is armed (wired in main.js). -->
+  <button id="btn-nitro" aria-label="Fire the armed nitrous boost" title="Fire nitrous (Enter)">NITRO</button>
 
   <!-- On-screen steering pads (shown during gameplay; wired by input.js) -->
   <div id="steer-controls" aria-hidden="true">
