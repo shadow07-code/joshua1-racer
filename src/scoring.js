@@ -13,10 +13,11 @@ export function makeScoreState() {
 }
 
 function hiKey(map, difficulty) {
-  // `.v2` namespace = a clean slate for the rebuilt (non-inflated) scoring. The
-  // old joshua1.hiscore.* bests (from the runaway-combo system, e.g. 45M) are
-  // abandoned, not read — so the personal-best chip starts fresh on the new scale.
-  return `joshua1.hiscore.v2.${map}.${difficulty}`;
+  // `.v3` namespace = a clean slate, reset with the global board when coins and
+  // the rampage left the scoring (2026-11-17). Older bests (v2: the coin +
+  // rampage era; the unversioned keys: the runaway-combo system, e.g. 45M) are
+  // abandoned, not read — so the personal-best chip starts fresh.
+  return `joshua1.hiscore.v3.${map}.${difficulty}`;
 }
 
 export function loadHiScore(map, difficulty) {

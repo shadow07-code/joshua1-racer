@@ -171,7 +171,7 @@ if (sections.includes("2")) {
 // ═══ 3. NEW BEST, LIVE — the record falls during the run, not after it ═══════
 if (sections.includes("3")) {
   fresh();
-  const hiKey = `joshua1.hiscore.v2.${g.scoreState.map}.${g.scoreState.difficulty}`;
+  const hiKey = `joshua1.hiscore.v3.${g.scoreState.map}.${g.scoreState.difficulty}`;
   const raceWith = (hi, world) => {
     if (hi) H.LS.set(hiKey, String(hi)); else H.LS.delete(hiKey);
     g.state = STATES.TITLE; H.tick();
@@ -288,13 +288,13 @@ if (sections.includes("4")) {
     g.player.lives = 1; g.player.invuln = 0;
     const c2 = liveCar(); c2.z = g.player.z + 1; c2.x = g.player.x;
     H.tick(); H.run(0.3);
-    H.LS.delete("joshua1.lb.pending.v2");
+    H.LS.delete("joshua1.lb.pending.v3");
     const sm = H.audioCalls("startMusic").length;
     if (how === "pause button") { for (const fn of document.getElementById("btn-pause")._l.click || []) fn({}); }
     else { H.key("", "blur"); }
     add(`4p ${how} mid-wreck goes straight to the results`, g.state === STATES.GAME_OVER, g.state);
     await new Promise((r) => setTimeout(r, 0));          // (the submit is async)
-    const sent = JSON.parse(H.LS.get("joshua1.lb.pending.v2") || "null");
+    const sent = JSON.parse(H.LS.get("joshua1.lb.pending.v3") || "null");
     add(`4q ...with the run submitted (queued offline)`, sent && sent.score === Math.floor(g.scoreState.score), JSON.stringify(sent));
     add(`4r ...and no music revived`, H.audioCalls("startMusic").length === sm);
   }

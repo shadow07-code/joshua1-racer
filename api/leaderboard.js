@@ -12,15 +12,17 @@
 //   UPSTASH_REDIS_REST_URL  / UPSTASH_REDIS_REST_TOKEN     (Upstash integration)
 //   KV_REST_API_URL         / KV_REST_API_TOKEN            (Vercel KV alias)
 
-// v2 = a clean board for the rebuilt (non-inflated) scoring. The old v1 sorted
-// set (with the runaway-combo scores, e.g. ANTONY 4.7M) is simply abandoned —
-// no destructive delete needed; new honest scores compete on a fresh key.
-const LB_KEY = "joshua1:lb:v2";
-const META_KEY = "joshua1:lb:meta:v2";
+// v3 = a clean board for the scoring after coins (+50 each) and the rampage's
+// smash points left the game (2026-11-17), so old scores can't be matched any
+// more. Each older set (v1: the runaway-combo scores, e.g. ANTONY 4.7M; v2:
+// the coin + rampage era, record 286191) is simply abandoned — no destructive
+// delete needed; new scores compete on a fresh key.
+const LB_KEY = "joshua1:lb:v3";
+const META_KEY = "joshua1:lb:meta:v3";
 // The reigning champion's GHOST — their run recorded as [z, x] pairs, so every
 // other player can race the #1 line instead of only reading a number. Written
 // only by a submit that actually lands at rank 1; ~2-3 KB for a 2-minute run.
-const GHOST_KEY = "joshua1:lb:ghost:v2";
+const GHOST_KEY = "joshua1:lb:ghost:v3";
 const TOP_N = 20;
 const MAX_GHOST_SAMPLES = 1500;         // matches ghost.js's own cap
 

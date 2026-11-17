@@ -20,7 +20,9 @@ const RIVAL_BODY = recolorBody(SPR_FERRARI_BASE, 7, 6, 8, 19, 5, 21);
 
 const SAMPLE_SEC = 0.4;                 // seconds between recorded samples
 const MAX_SAMPLES = 1500;               // ~10 minutes; guards runaway storage
-const KEY_PREFIX = "joshua1.ghost.v1";
+// `.v2` = reset with the personal bests (2026-11-17): a v1 ghost replays a best
+// scored under the old rules, which is no longer the best to beat.
+const KEY_PREFIX = "joshua1.ghost.v2";
 
 function key(map, difficulty) { return `${KEY_PREFIX}.${map}.${difficulty}`; }
 
