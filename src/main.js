@@ -23,7 +23,7 @@ import {
   getMusicTrack, setMusicTrack,
 } from "./audio.js";
 import { drawRoad, drawDistanceHaze, drawNightShade, dayNight, distToY, biomeAt, project, sunShadow } from "./road.js";
-import { makePlayer, updatePlayer, drawPlayer, drawPlayerLights, beamAnchor, playerBox, applyCollisionLoss } from "./entities/player.js";
+import { makePlayer, updatePlayer, drawPlayer, drawPlayerLights, beamAnchor, playerBox, applyCollisionLoss, paceSpeed } from "./entities/player.js";
 import { makeTrafficSystem, updateTraffic, drawTraffic, drawNightLights, checkTrafficHit, prepopulateTraffic, knockCar, pullSpawnToHorizon } from "./entities/traffic.js";
 import { getDaily, applyRun as applyDailyRun } from "./daily.js";
 import { makePickupSystem, updatePickups, drawPickups, checkPickup } from "./entities/pickups.js";
@@ -123,6 +123,7 @@ const g = {
   densityTopDone: false,// one-time +20% density 30s after top speed is reached
   topTime: 0,           // seconds since top speed reached (drives the 30s bump)
   topSpeedKmh: 0,
+  paceKmh: 0,           // top speed WITHOUT nitrous — what difficulty keys on
   combo: 0,             // near-miss STREAK count (drives the capped combo multiplier)
   comboTimer: 0,        // seconds left before the combo lapses
   comboFlash: 0,        // brief screen-edge flash on each combo step
@@ -440,6 +441,7 @@ function newRaceSetup() {
   g.densityTopDone = false;
   g.topTime = 0;
   g.topSpeedKmh = 0;   // track highest speed reached (in km/h display units)
+  g.paceKmh = 0;       // ...and the same without nitrous (drives difficulty)
   g.combo = 0;
   g.comboTimer = 0;
   g.comboFlash = 0;
@@ -929,9 +931,17 @@ function updateRace(dt) {
   setEngine(speed01);
   setMusicTempoFactor(speed01);
 
-  // Track highest speed reached (in display km/h).
+  // Track highest speed reached (in display km/h) — the real top speed, nitrous
+  // included: a stat for the results and the leaderboard.
   const currentKmh = Math.round(speed01 * (PHYS.topSpeedKmh || 200));
   if (currentKmh > g.topSpeedKmh) g.topSpeedKmh = currentKmh;
+  // ...and the run's PACE: the same high-water mark with nitrous taken off.
+  // Everything that makes the run harder keys on THIS (the density knee and
+  // top-speed bumps, the chopper, wrong-way cars, canisters), so firing a boost
+  // early never ages the run. Nitrous is only a speed boost.
+  const pace = paceSpeed(g.player);
+  const paceKmh = Math.round(pace / PHYS.maxSpeed * (PHYS.topSpeedKmh || 200));
+  if (paceKmh > g.paceKmh) g.paceKmh = paceKmh;
 
   // ── Density scaling ──
   // Two layers that MULTIPLY into the final densityMul:
@@ -945,16 +955,16 @@ function updateRace(dt) {
   // Every row still leaves a gap lane open, so the road stays threadable at any
   // density, and densityMax caps the product exactly as before.
   const kneeSpan = Math.max(1, PHYS.topSpeedKmh - PHYS.kneeKmh);
-  // Driven by topSpeedKmh (a high-water mark), so easing off never rewinds the
+  // Driven by paceKmh (a high-water mark), so easing off never rewinds the
   // difficulty the player has already earned their way into.
-  const kneeF = Math.max(0, Math.min(1, (g.topSpeedKmh - PHYS.kneeKmh) / kneeSpan));
+  const kneeF = Math.max(0, Math.min(1, (g.paceKmh - PHYS.kneeKmh) / kneeSpan));
   // Below the knee the ramp is INERT (1.0) — the opening has to stay a clean
   // weave. Clamping kneeF alone is not enough: it floors at 0, which would still
   // apply densityRampFrom from the first second of the run.
-  const kneeRamp = g.topSpeedKmh < PHYS.kneeKmh
+  const kneeRamp = g.paceKmh < PHYS.kneeKmh
     ? 1
     : RACE.densityRampFrom + (RACE.densityRampToTop - RACE.densityRampFrom) * kneeF;
-  if (!g.hitTopSpeed && g.player.speed >= PHYS.maxSpeed * RACE.topSpeedThreshold) {
+  if (!g.hitTopSpeed && pace >= PHYS.maxSpeed * RACE.topSpeedThreshold) {
     g.hitTopSpeed = true;
     g.topTime = 0;
   }
@@ -1062,7 +1072,7 @@ function updateRace(dt) {
         sfxPickup();
       }
     },
-  }, 0, g.topSpeedKmh >= RACE.oncomingFromKmh);
+  }, 0, g.paceKmh >= RACE.oncomingFromKmh);
 
   // Wrong-way horn — one blast per car, fired as it bears down (no HUD warning:
   // the whole point is that it ambushes you). Edge-triggered off the distance.
@@ -1112,7 +1122,7 @@ function updateRace(dt) {
   }
   // Police helicopter kicks in once the player crosses 150 km/h — it drops
   // flaming barrels on the road ahead (collision handled below, costs a life).
-  updateCops(g.cops, dt, g.player.z, g.player.x, g.player.speed, g.map, { onDrop: sfxBarrelDrop });
+  updateCops(g.cops, dt, g.player.z, g.player.x, pace, g.map, { onDrop: sfxBarrelDrop });
   // Helicopter rotor sound — on when choppers are on-screen, off otherwise.
   const helisOnScreen = g.cops.active && g.cops.helis.length > 0;
   if (helisOnScreen && !g._heliSoundOn) { startHeliSound(); g._heliSoundOn = true; }
@@ -1144,7 +1154,7 @@ function updateRace(dt) {
   // Occasional nitrous canister pickups.
   // Boosters only start appearing once the player has genuinely hit 150 km/h —
   // the same knee the density ramp starts from.
-  updatePickups(g.pickups, g.player.z, g.map, dt, g.topSpeedKmh >= PHYS.kneeKmh);
+  updatePickups(g.pickups, g.player.z, g.map, dt, g.paceKmh >= PHYS.kneeKmh);
 
 
   // ── Collisions ── (the same with or without nitrous: a hit is a hit)

@@ -109,6 +109,16 @@ if (sections.includes("1")) {
   add("1l it runs out after nitroDuration", g.player.boost === 0 && !g.nitroOn);
   H.run(8);
   add("1m ...and the speed settles back under normal top speed", g.player.speed <= PHYS.maxSpeed + 1e-9, `speed ${g.player.speed.toFixed(2)}`);
+  // An early boost never ages the run: difficulty keys on the PACE (speed with
+  // the nitrous taken off), while the top-speed stat keeps the real figure.
+  fresh(8); quietRoad();
+  g.nitroArmed = true; M.fireNitro();
+  for (let i = 0; i < 60 * 5; i++) { g.player.invuln = 99; H.tick(); }
+  add("1n an early boost hits 200+ km/h (the stat records it)", g.topSpeedKmh > 200, `top ${g.topSpeedKmh}`);
+  add("1o ...but the run's pace stays below the knee", g.paceKmh < PHYS.kneeKmh, `pace ${g.paceKmh}`);
+  add("1p ...so nothing harder unlocked: no density ramp, top-speed bump, chopper, wrong-way cars or canisters",
+    g.densityMul === 1 && !g.hitTopSpeed && !g.cops.active && g.paceKmh < RACE.oncomingFromKmh && g.pickups.nextZ == null,
+    JSON.stringify({ d: g.densityMul, top: g.hitTopSpeed, cops: g.cops.active, pace: g.paceKmh, can: g.pickups.nextZ }));
 }
 
 // ═══ 2. CHAIN BANKED — a chain ends with a receipt ═══════════════════════════

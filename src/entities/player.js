@@ -56,6 +56,13 @@ function rampTarget(raceTime) {
   return kneeTop + (PHYS.maxSpeed - kneeTop) * ((raceTime - p2End) / p3Dur);
 }
 
+// The car's PACE: its speed with any nitrous overspeed taken off (capped at the
+// normal ramp target). main.js keys difficulty on this, so a boost never ages
+// the run. Below the target (after a crash, say) it is simply the speed.
+export function paceSpeed(p) {
+  return Math.min(p.speed, rampTarget(p.raceTime));
+}
+
 export function updatePlayer(p, dt, input, map, callbacks) {
   p.raceTime += dt;
 
